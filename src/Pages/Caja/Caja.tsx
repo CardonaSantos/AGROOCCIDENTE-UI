@@ -17,8 +17,8 @@ import { MovimientoCajaItem } from "./MovimientosCajaInterface";
 import MovimientoCajaPage from "./Movimientos/movimiento-caja-page";
 import { VentaLigadaACaja } from "./VentasCaja/interface";
 import { Proveedor } from "./Movimientos/types";
-import { getCuentasBancariasArray, getProveedores } from "./Movimientos/api";
-import { CuentaBancaria } from "./Movimientos/movimientos-financieros";
+import { getProveedores } from "./Movimientos/api";
+// import { CuentaBancaria } from "./Movimientos/movimientos-financieros";
 import CajaForm from "./caja-form";
 import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
 import { CuentasBancariasSelect } from "@/Types/CuentasBancarias/CuentasBancariasSelect";
@@ -83,7 +83,7 @@ function Caja() {
     getCajaAbierta();
     getMontoAnterior();
     handleGetProveedores();
-    getCuentasBancarias();
+    // getCuentasBancarias();
   }, []);
 
   const handleChangeGeneric = (
@@ -264,24 +264,21 @@ function Caja() {
     }
   };
 
-  const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>(
-    []
-  );
-  const getCuentasBancarias = async () => {
-    const dt = await getCuentasBancariasArray();
-    setCuentasBancarias(dt);
-  };
   console.log("El monto anterior es: ", cajaMontoAnterior);
 
   const {
-    data: cuentas = [], // ✅ siempre array
+    data: cuentas = [],
     isError,
     error,
   } = useApiQuery<CuentasBancariasSelect[]>(
     ["cuentas-bancarias-select"],
     "/cuentas-bancarias/get-simple-select",
-    undefined,
-    { initialData: [] } // o placeholderData: []
+    undefined, // o {}
+    {
+      initialData: [],
+      enabled: true, // 👈 fuerza el fetch
+      refetchOnMount: "always", // opcional, asegura que pegue al server al montar
+    }
   );
 
   useEffect(() => {
@@ -289,6 +286,7 @@ function Caja() {
       toast.error(getApiErrorMessageAxios(error));
     }
   }, [isError, error]);
+  console.log("cuentas bancarias en caja main page es: ", cuentas);
 
   return (
     <div className="container mx-auto">
@@ -351,7 +349,7 @@ function Caja() {
                   reloadContext={reloadContext}
                   userID={userID}
                   getMovimientosCaja={refreshMovimientos}
-                  cuentasBancarias={cuentasBancarias}
+                  cuentasBancarias={cuentas}
                 />
               </div>
             </div>

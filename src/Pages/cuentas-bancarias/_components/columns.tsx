@@ -2,7 +2,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { Pencil, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { CuentaBancariaResumen } from "../Interfaces/CuentaBancariaResumen";
 
@@ -32,15 +32,15 @@ export const buildColumns = (actions: {
     header: "Tipo",
     cell: ({ row }) => <Badge>{row.original.tipo}</Badge>,
   },
-  {
-    accessorKey: "saldoActual",
-    header: "Saldo",
-    cell: ({ row }) =>
-      new Intl.NumberFormat("es-GT", {
-        style: "currency",
-        currency: "GTQ",
-      }).format(row.original.saldoActual),
-  },
+  // {
+  //   accessorKey: "saldoActual",
+  //   header: "Saldo",
+  //   cell: ({ row }) =>
+  //     new Intl.NumberFormat("es-GT", {
+  //       style: "currency",
+  //       currency: "GTQ",
+  //     }).format(row.original.saldoActual),
+  // },
   {
     accessorKey: "ultimoMovimiento",
     header: "Último mov.",
@@ -64,13 +64,6 @@ export const buildColumns = (actions: {
     header: "Acciones",
     cell: ({ row }) => (
       <div className="flex gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => actions.onView(row.original)}
-        >
-          <Eye className="h-4 w-4" />
-        </Button>
         <Button
           variant="ghost"
           size="icon"

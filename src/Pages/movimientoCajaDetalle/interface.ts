@@ -9,6 +9,14 @@ export interface UsuarioSlim {
   correo: string;
 }
 
+enum ComprobanteTipo {
+  DEPOSITO_BOLETA = "DEPOSITO_BOLETA",
+  TRANSFERENCIA = "TRANSFERENCIA",
+  CHEQUE = "CHEQUE",
+  TARJETA_VOUCHER = "TARJETA_VOUCHER",
+  OTRO = "OTRO",
+}
+
 export interface ProveedorSlim {
   id: number;
   nombre: string;
@@ -54,6 +62,11 @@ export interface MovimientoCajaDetail {
   proveedor: ProveedorSlim | null;
 
   caja: CajaSlimDetail | null; // puede ser null si el movimiento no quedó ligado a una caja
+
+  //comprobante
+  comprobanteTipo?: ComprobanteTipo | null;
+  comprobanteFecha?: string | null;
+  comprobanteNumero?: string | null;
 
   //nuevo
   clasificacion?: string; // ClasificacionAdmin

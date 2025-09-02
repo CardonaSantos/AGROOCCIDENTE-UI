@@ -8,7 +8,8 @@ import {
   StyleSheet,
   Font,
 } from "@react-pdf/renderer";
-import logo from "../../../assets/LOGOPNG.png";
+import logo from "@/assets/Agroservicio.png";
+
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import localizedFormat from "dayjs/plugin/localizedFormat";
@@ -225,10 +226,6 @@ const WarrantyTicket: React.FC<TicketProps> = ({ garantia }) => {
                     <View style={styles.signatureLine} />
                     <Text style={styles.signatureLabel}>Firma del Cliente</Text>
                   </View>
-
-                  <Text style={styles.footer}>
-                    NOVA SISTEMAS S.A. - Tecnología a tu alcance
-                  </Text>
                 </Page>
               ))}
           </Document>

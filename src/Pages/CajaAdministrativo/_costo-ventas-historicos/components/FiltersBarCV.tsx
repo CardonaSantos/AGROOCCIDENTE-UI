@@ -5,6 +5,7 @@ import Select from "react-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SucursalOption } from "../../interfaces/FlujoCajaHsitoricoTypes";
+import { es } from "date-fns/locale";
 
 export type FiltersBarCVProps = {
   from: Date | null;
@@ -32,6 +33,7 @@ export function FiltersBarCV({
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-muted-foreground" />
             <DatePicker
+              locale={es}
               selectsRange
               startDate={from ?? undefined}
               endDate={to ?? undefined}
@@ -40,7 +42,7 @@ export function FiltersBarCV({
                 onChangeRange(start, end);
               }}
               isClearable
-              className="w-full rounded-md border px-3 py-2 text-sm"
+              className="w-full rounded-md border px-3 py-2 text-sm text-black"
               placeholderText="Rango de fechas"
               dateFormat="dd/MM/yyyy"
             />
@@ -55,6 +57,7 @@ export function FiltersBarCV({
                 onChange={(opt) => onChangeSucursal(opt as SucursalOption)}
                 placeholder="Seleccione una sucursal"
                 classNamePrefix="react-select"
+                className="text-black"
                 noOptionsMessage={() => "Sin resultados"}
               />
             </div>

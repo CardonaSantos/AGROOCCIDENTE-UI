@@ -30,6 +30,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useStore } from "@/components/Context/ContextSucursal";
+import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 
 type Option = { label: string; value: string };
 
@@ -45,6 +46,9 @@ export default function CreatePedidoCard({
   pageProd,
   setPageProd,
   totalPages,
+  openCreate,
+
+  setOpenCreate,
 }: {
   sucursalId: number;
   userId: number;
@@ -58,6 +62,9 @@ export default function CreatePedidoCard({
   pageProd: number;
   setPageProd: React.Dispatch<React.SetStateAction<number>>;
   totalPages: number;
+
+  setOpenCreate: React.Dispatch<React.SetStateAction<boolean>>;
+  openCreate: boolean;
 }) {
   const prioridadesOptions = Object.values(PedidoPrioridad).map((p) => ({
     value: p,
@@ -350,11 +357,39 @@ export default function CreatePedidoCard({
         <Button variant="outline" onClick={reset} disabled={submitting}>
           Limpiar
         </Button>
-        <Button onClick={handleSubmit} disabled={!canSend}>
+        <Button
+          onClick={() => {
+            setOpenCreate(true);
+          }}
+          disabled={!canSend}
+        >
           {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Guardar Pedido
         </Button>
       </CardFooter>
+
+      <AdvancedDialog
+        type="confirmation"
+        title="Registrar Pedido"
+        description="¿Estás seguro de querer registrar este pedido con esta información?"
+        onOpenChange={setOpenCreate}
+        open={openCreate}
+        confirmButton={{
+          label: "Si, continuar y registrar pedido",
+          disabled: submitting,
+          loading: submitting,
+          loadingText: "Registrando pedido...",
+          onClick: () => handleSubmit(),
+        }}
+        cancelButton={{
+          label: "Cancelar",
+          disabled: submitting,
+          loadingText: "Cancelando...",
+          onClick: () => {
+            setOpenCreate(false);
+          },
+        }}
+      />
     </Card>
   );
 }

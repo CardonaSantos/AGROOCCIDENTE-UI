@@ -178,7 +178,9 @@ export default function CompraDetalle() {
 
   const [observaciones, setObservaciones] = useState<string>("");
   const [proveedores, setProveedor] = useState<Proveedores[]>([]);
-  const [proveedorSelected, setProveedorSelected] = useState<string>("");
+  const [proveedorSelected, setProveedorSelected] = useState<
+    string | undefined
+  >(undefined);
 
   const [cuentasBancarias, setCuentasBancarias] = useState<CuentasBancarias[]>(
     []
@@ -291,7 +293,7 @@ export default function CompraDetalle() {
       compraId,
       usuarioId,
       observaciones,
-      proveedorId: parseInt(proveedorSelected),
+      proveedorId: Number(proveedorSelected),
       metodoPago,
       cuentaBancariaId: parseInt(cuentaBancariaSelected),
     };
@@ -367,6 +369,11 @@ export default function CompraDetalle() {
       </Badge>
     );
   };
+
+  useEffect(() => {
+    const id = registro?.proveedor?.id;
+    setProveedorSelected(id ? String(id) : undefined);
+  }, [registro?.proveedor?.id]);
 
   // === Render condicional ===
   if (loading) {
@@ -854,12 +861,9 @@ export default function CompraDetalle() {
                   <SelectValue placeholder="Seleccione un proveedor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {proveedores.map((proveedor) => (
-                    <SelectItem
-                      key={proveedor.id}
-                      value={proveedor.id.toString()}
-                    >
-                      {proveedor.nombre}
+                  {proveedores.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>

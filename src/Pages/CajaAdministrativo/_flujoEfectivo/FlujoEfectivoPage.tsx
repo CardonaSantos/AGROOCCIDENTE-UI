@@ -1,21 +1,19 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { AlertCircle } from "lucide-react";
-
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SucursalOption } from "../interfaces/FlujoCajaHsitoricoTypes";
 import { FlujoEfectivoResponseUI } from "./Interface/flujoEfectivo";
-import { getSucursalesOptions } from "../API/apiFlujoSucursal";
 import { getFlujoEfectivo } from "./API/flujoEfectivo";
 import { FiltersBarFE } from "./_components/FiltersBarFE";
 import { ResumenGridFE } from "./_components/ResumenGridFE";
 import { ChartsFE } from "./_components/ChartsFE";
 import { DetalleTableFE } from "./_components/DetalleTableFE";
+import useGetSucursales from "@/hooks/getSucursales/use-sucursales";
 
 const TZGT = "America/Guatemala";
 dayjs.extend(utc);
@@ -31,9 +29,6 @@ export default function FlujoEfectivoPage() {
   );
 
   const [sucursal, setSucursal] = useState<SucursalOption | null>(null);
-  const [sucursalesOptions, setSucursalesOptions] = useState<SucursalOption[]>(
-    []
-  );
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,18 +46,12 @@ export default function FlujoEfectivoPage() {
     [range.to]
   );
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const opts = await getSucursalesOptions();
-        setSucursalesOptions(opts);
-        if (!sucursal && opts.length > 0) setSucursal(opts[0]);
-      } catch {
-        // ignore
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { data: sucursales = [] } = useGetSucursales();
+
+  const optionsSucursales: SucursalOption[] = sucursales.map((s) => ({
+    label: s.nombre,
+    value: s.id,
+  }));
 
   const fetchData = async () => {
     if (!fromYMD || !toYMD) return;
@@ -98,7 +87,7 @@ export default function FlujoEfectivoPage() {
         to={range.to}
         onChangeRange={(from, to) => setRange({ from, to })}
         sucursal={sucursal}
-        sucursalesOptions={sucursalesOptions}
+        sucursalesOptions={optionsSucursales}
         onChangeSucursal={setSucursal}
         onSearch={fetchData}
       />

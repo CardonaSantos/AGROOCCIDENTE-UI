@@ -270,9 +270,9 @@ function InventarioStockPage() {
           <TabsTrigger value="inventario" className="w-1/2 text-center">
             Inventario
           </TabsTrigger>
-          <TabsTrigger value="stocks" className="w-1/2 text-center">
+          {/* <TabsTrigger value="stocks" className="w-1/2 text-center">
             Stocks
-          </TabsTrigger>
+          </TabsTrigger> */}
         </TabsList>
 
         <TabsContent value="inventario" className="w-full">

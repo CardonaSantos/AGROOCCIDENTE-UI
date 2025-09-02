@@ -8,7 +8,8 @@ import {
   StyleSheet,
   Font,
 } from "@react-pdf/renderer";
-import logo from "../../assets/ferrecentro.png";
+import logo from "@/assets/Agroservicio.png";
+
 import { VentaHistorialPDF } from "@/Types/PDF/VentaHistorialPDF";
 import dayjs from "dayjs";
 import "dayjs/locale/es";

@@ -74,14 +74,20 @@ export default function PedidosMainPage() {
 
   const productos = productosResp?.data ?? [];
 
+  const [openCreate, setOpenCreate] = useState<boolean>(false);
+
   // ---------- Crear pedido ----------
   const crearPedidoMut = useMutation({
     mutationFn: (body: PedidoCreate) => createPedido(body),
     onSuccess: () => {
       toast.success("Pedido creado");
       refetchPedidos();
+      setOpenCreate(false);
     },
-    onError: (e: any) => toast.error(e?.message ?? "Error al crear pedido"),
+    onError: (e: any) => {
+      toast.error(e?.message ?? "Error al crear pedido");
+      setOpenCreate(false);
+    },
   });
 
   const deletePedidoMut = useMutation({
@@ -146,6 +152,8 @@ export default function PedidosMainPage() {
       {/* --- Crear Pedido --- */}
       <TabsContent value="gPedido" className="space-y-4">
         <CreatePedidoCard
+          openCreate={openCreate}
+          setOpenCreate={setOpenCreate}
           search={search}
           setSearch={setSearch}
           sucursalId={sucursalId}

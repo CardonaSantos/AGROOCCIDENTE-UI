@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useStore } from "@/components/Context/ContextSucursal"; // Asumiendo que esta ruta es correcta
 import { motion } from "framer-motion";
@@ -25,14 +25,20 @@ import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
 import { WarrantyList } from "./garantiasMap/warranty-list";
 import { GarantiaDto } from "./interfacesTable";
 import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
+import { useApiMutation } from "@/hooks/genericoCall/genericoCallHook";
 // Sub-componentes para la sección de detalles
-
+type OptionType = { value: number; label: string };
 export default function ReceiveWarrantyPage() {
-  const userID = useStore((state) => state.userId) ?? 0;
-  const sucursalID = useStore((state) => state.sucursalId) ?? 0;
+  // Store
+  const userID = useStore((s) => s.userId) ?? 0;
+  const sucursalID = useStore((s) => s.sucursalId) ?? 0;
 
+  // Server data
   const [providers, setProviders] = useState<ProveedoresResponse[]>([]);
   const [ventas, setVentas] = useState<VentasHistorial>([]);
+  const [garantias, setGarantias] = useState<GarantiaDto[]>([]);
+
+  // UI state
   const [ventaSelected, setVentaSelected] = useState<VentaHistorialItem | null>(
     null
   );
@@ -41,11 +47,15 @@ export default function ReceiveWarrantyPage() {
   const [productSelected, setProductSelected] = useState<ProductoVenta | null>(
     null
   );
-  const [openSelectedProduct, setOpenSelectedProduct] =
-    useState<boolean>(false);
+  const [openSelectedProduct, setOpenSelectedProduct] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<ProductoVentaToTable | null>(null);
   const [openProductDialog, setOpenProductDialog] = useState(false);
+  const [selecProviderID, setSelecProviderID] = useState<OptionType | null>(
+    null
+  );
+
+  // Form
   const [formData, setFormData] = useState<GarantiaFormData>({
     clienteId: 0,
     productoId: 0,
@@ -60,105 +70,142 @@ export default function ReceiveWarrantyPage() {
     ventaProductoID: 1,
   });
 
-  const [selecProviderID, setSelecProviderID] = useState<OptionType | null>(
-    null
-  );
-
-  const [garantias, setGarantias] = useState<GarantiaDto[]>([]);
-
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        const [providersData, ventasResponse, garantias] = await Promise.all([
-          fetchProvidersToWarranty(),
-          fetchVentas(),
-          fetchAllGarantias(),
-        ]);
-        setProviders(providersData);
-        setVentas(ventasResponse);
-        setGarantias(garantias);
-      } catch (error) {
-        console.error("Error loading initial data:", error);
-        toast.error("Error al cargar datos iniciales");
-      }
-    };
-    loadInitialData();
+  // Inicializar/recargar data
+  const loadInitialData = useCallback(async () => {
+    try {
+      const [providersData, ventasResponse, garantiasData] = await Promise.all([
+        fetchProvidersToWarranty(),
+        fetchVentas(),
+        fetchAllGarantias(),
+      ]);
+      setProviders(providersData);
+      setVentas(ventasResponse);
+      setGarantias(garantiasData);
+    } catch (error) {
+      console.error("Error loading initial data:", error);
+      toast.error("Error al cargar datos iniciales");
+    }
   }, []);
 
   useEffect(() => {
-    setFormData((prev) => ({ ...prev, usuarioIdRecibe: userID }));
-  }, [userID]);
+    loadInitialData();
+  }, [loadInitialData]);
 
-  type OptionType = { value: number; label: string };
-
-  const providerOptionSelect: OptionType[] = providers.map((prov) => ({
-    label: prov.nombre,
-    value: prov.id, // ← NUMBER
-  }));
-
-  const optionsVenta = ventas.map((v) => ({
-    label: `Venta No. #${v.id} | Cliente: ${v.cliente.nombre} | Productos: ${v.productos.length}`,
-    value: v.id,
-  }));
-
-  const handleChangeSelectVenta = (opt: OptionType | null) => {
-    if (!opt) {
-      setVentaSelected(null);
-      return;
-    }
-    const venta = ventas.find((v) => v.id === opt.value) ?? null;
-    setVentaSelected(venta);
-  };
-
-  const handleChangeProvider = useCallback(
-    (selectedOption: OptionType | null) => {
-      setSelecProviderID(selectedOption);
-      setFormData((prevFormData) => ({
-        ...prevFormData,
-        proveedorId: selectedOption ? selectedOption.value : 0,
-      }));
-    },
-    []
-  );
-
-  console.log("El formData", formData);
-
-  // await submitWarrantyRegistration(formData)
-  const [isSubmittingGarantia, setIsSubmittingGarantia] =
-    useState<boolean>(false);
-  const handleSubmitRegistGarantia = async () => {
-    if (isSubmittingGarantia) return;
-    setIsSubmittingGarantia(true);
-    console.log("El payload es: ", formData);
-    console.log("El cantidadDevuelta es: ", formData.cantidad);
-
-    toast.promise(
-      submitWarrantyRegistration({
-        ...formData,
-        cantidadDevuelta: formData.cantidad,
-      }),
-      {
-        loading: "Registrando garantía...",
-        success: "Registro insertado correctamente",
-        error: (error) => getApiErrorMessageAxios(error),
-      }
-    );
-    setIsSubmittingGarantia(false);
-    setFormData({
-      clienteId: 0,
-      productoId: 0,
-      comentario: "",
-      proveedorId: 0,
-      descripcionProblema: "",
+  // Sincronizar userID/sucursalID en el form si cambian
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
       usuarioIdRecibe: userID,
       sucursalId: sucursalID,
-      estado: "",
-      ventaId: 1,
-      cantidad: 1,
-      ventaProductoID: 1,
+    }));
+  }, [userID, sucursalID]);
+
+  // Select options
+  const providerOptionSelect = useMemo<OptionType[]>(
+    () => providers.map((prov) => ({ label: prov.nombre, value: prov.id })),
+    [providers]
+  );
+
+  const optionsVenta = useMemo<OptionType[]>(
+    () =>
+      ventas.map((v) => ({
+        label: `Venta No. #${v.id} | Cliente: ${v.cliente.nombre} | Productos: ${v.productos.length}`,
+        value: v.id,
+      })),
+    [ventas]
+  );
+
+  // Handlers
+  const handleChangeSelectVenta = useCallback(
+    (opt: OptionType | null) => {
+      if (!opt) {
+        setVentaSelected(null);
+        return;
+      }
+      const venta = ventas.find((v) => v.id === opt.value) ?? null;
+      setVentaSelected(venta);
+    },
+    [ventas]
+  );
+
+  const handleChangeProvider = useCallback((selected: OptionType | null) => {
+    setSelecProviderID(selected);
+    setFormData((prev) => ({
+      ...prev,
+      proveedorId: selected ? selected.value : 0,
+    }));
+  }, []);
+
+  // Crear garantía
+  const [isSubmittingGarantia, setIsSubmittingGarantia] = useState(false);
+  const handleSubmitRegistGarantia = useCallback(async () => {
+    if (isSubmittingGarantia) return;
+    setIsSubmittingGarantia(true);
+    try {
+      await toast.promise(
+        submitWarrantyRegistration({
+          ...formData,
+          cantidadDevuelta: formData.cantidad,
+        }),
+        {
+          loading: "Registrando garantía...",
+          success: "Registro insertado correctamente",
+          error: (error) => getApiErrorMessageAxios(error),
+        }
+      );
+
+      // Reset form mínimo
+      setFormData((prev) => ({
+        ...prev,
+        clienteId: 0,
+        productoId: 0,
+        comentario: "",
+        proveedorId: 0,
+        descripcionProblema: "",
+        estado: "",
+        ventaId: 1,
+        cantidad: 1,
+        ventaProductoID: 1,
+        // mantener usuarioIdRecibe / sucursalId sincronizados por efecto
+      }));
+      setSelectedProduct(null);
+
+      // Refrescar data
+      await loadInitialData();
+    } finally {
+      setIsSubmittingGarantia(false);
+    }
+  }, [formData, isSubmittingGarantia, loadInitialData]);
+
+  // Delete garantía
+  const [garantiaSelected, setGarantiaSelected] = useState<number | null>(null);
+  const [isOpenDelete, setIsOpenDelete] = useState(false);
+
+  // IMPORTANTE: el endpoint depende del id seleccionado
+  const deleteEndpoint =
+    garantiaSelected != null
+      ? `/warranty/${garantiaSelected}`
+      : "/warranty/__unset__";
+
+  const eliminarGarantia = useApiMutation<void, void>("delete", deleteEndpoint);
+
+  const handleDelete = useCallback(() => {
+    if (garantiaSelected == null) {
+      toast.error("Selecciona una garantía válida");
+      return;
+    }
+    eliminarGarantia.mutate(undefined, {
+      onSuccess: async () => {
+        toast.success("Garantía eliminada");
+        await loadInitialData();
+        setIsOpenDelete(false);
+      },
+      onError: (err) => {
+        toast.error(getApiErrorMessageAxios(err));
+        setIsOpenDelete(false);
+      },
     });
-    setSelectedProduct(null);
-  };
+  }, [garantiaSelected, eliminarGarantia, loadInitialData]);
 
   return (
     <motion.div {...DesvanecerHaciaArriba} className="w-full">
@@ -207,7 +254,14 @@ export default function ReceiveWarrantyPage() {
           />
         </TabsContent>
         <TabsContent value="warranties" className="w-full">
-          <WarrantyList garantias={garantias} />
+          <WarrantyList
+            handleDelete={handleDelete}
+            garantias={garantias}
+            setGarantiaSelected={setGarantiaSelected}
+            isOpenDelete={isOpenDelete}
+            setIsOpenDelete={setIsOpenDelete}
+            eliminarGarantia={eliminarGarantia}
+          />
         </TabsContent>
       </Tabs>
     </motion.div>

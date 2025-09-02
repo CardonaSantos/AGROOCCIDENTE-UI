@@ -203,7 +203,6 @@ function HistoricoGlobal() {
               dateFormat="dd/MM/yyyy"
               placeholderText="Selecciona rango"
               className="h-10 w-[280px] sm:w-[320px] rounded-md border border-input bg-background pl-9 pr-9 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 focus:ring-offset-2"
-              calendarClassName="rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
               popperClassName="z-50"
               popperPlacement="bottom-start"
               showPopperArrow={false}

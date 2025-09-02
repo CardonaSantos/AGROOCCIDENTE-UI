@@ -104,9 +104,14 @@ interface CartCheckoutProps {
 
   setReferenciaPago: React.Dispatch<React.SetStateAction<string>>;
   referenciaPago: string;
+
+  setApellidos: React.Dispatch<React.SetStateAction<string>>;
+  apellidos: string;
 }
 
 export default function CartCheckout({
+  apellidos,
+  setApellidos,
   cart,
   paymentMethod,
   setPaymentMethod,
@@ -466,10 +471,24 @@ export default function CartCheckout({
                           id="nombre"
                           value={nombre}
                           onChange={(e) => setNombre(e.target.value)}
-                          placeholder="Nombre completo"
+                          placeholder="Nombre"
                           className="h-8 text-xs"
                         />
                       </div>
+
+                      <div>
+                        <Label htmlFor="apellidos" className="text-xs">
+                          Apellidos
+                        </Label>
+                        <Input
+                          id="apellidos"
+                          value={apellidos}
+                          onChange={(e) => setApellidos(e.target.value)}
+                          placeholder="Apellidos"
+                          className="h-8 text-xs"
+                        />
+                      </div>
+
                       <div>
                         <Label htmlFor="telefono" className="text-xs">
                           Teléfono

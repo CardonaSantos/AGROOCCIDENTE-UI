@@ -1,9 +1,13 @@
-import { useEffect, useState, ChangeEvent, FormEvent } from "react";
+import { useEffect, useMemo, useState, ChangeEvent, FormEvent } from "react";
+import { Link } from "react-router-dom";
+import axios from "axios";
+import { toast } from "sonner";
+
+// shadcn/ui
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import axios from "axios";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -18,12 +22,10 @@ import {
   TableBody,
   TableCaption,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, Edit } from "lucide-react";
 import {
   Pagination,
   PaginationContent,
@@ -39,7 +41,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Link } from "react-router-dom";
 import {
   Select,
   SelectContent,
@@ -47,632 +48,566 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 
-const API_URL = import.meta.env.VITE_API_URL;
+// icons
+import {
+  UserPlus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  Trash2,
+  Save,
+  X,
+} from "lucide-react";
 
+const API_URL = import.meta.env.VITE_API_URL as string;
+
+// ================= Types =================
 interface ClienteResponse {
   id: number;
   nombre: string;
+  apellidos: string;
   telefono: string;
   dpi: string;
   direccion: string;
   observaciones?: string;
   actualizadoEn: string;
-  _count: {
-    compras: number;
-  };
+  _count: { compras: number };
 }
 
-// Define form data structure
 interface FormData {
   nombre: string;
+  apellidos?: string;
   telefono?: string;
   direccion?: string;
   dpi?: string;
   observaciones?: string;
 }
 
-interface FormDataEdit {
-  id: number;
-  nombre: string;
+interface FormDataEdit
+  extends Required<Pick<ClienteResponse, "id" | "nombre">> {
+  apellidos?: string;
   telefono?: string;
   direccion?: string;
   dpi?: string;
   observaciones?: string;
 }
 
-// Define form errors structure
-interface FormErrors {
-  nombre?: string;
-  dpi?: string;
-  telefono?: string;
+// ================ Edit Dialog ================
+function EditCustomerDialog({
+  open,
+  onOpenChange,
+  value,
+  onChange,
+  onSave,
+  onAskDelete,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  value: FormDataEdit;
+  onChange: (patch: Partial<FormDataEdit>) => void;
+  onSave: () => void;
+  onAskDelete: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold text-center">
+            Editar cliente
+          </DialogTitle>
+          <DialogDescription className="text-center">
+            Actualiza sólo los campos necesarios.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="edit-nombre">Nombre</Label>
+            <Input
+              id="edit-nombre"
+              value={value.nombre}
+              onChange={(e) => onChange({ nombre: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-apellidos">Apellidos</Label>
+            <Input
+              id="edit-apellidos"
+              value={value.apellidos ?? ""}
+              onChange={(e) => onChange({ apellidos: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-telefono">Teléfono</Label>
+            <Input
+              id="edit-telefono"
+              value={value.telefono ?? ""}
+              onChange={(e) => onChange({ telefono: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-dpi">DPI</Label>
+            <Input
+              id="edit-dpi"
+              value={value.dpi ?? ""}
+              onChange={(e) => onChange({ dpi: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="edit-direccion">Dirección</Label>
+            <Input
+              id="edit-direccion"
+              value={value.direccion ?? ""}
+              onChange={(e) => onChange({ direccion: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="edit-observaciones">Observaciones</Label>
+            <Textarea
+              id="edit-observaciones"
+              value={value.observaciones ?? ""}
+              onChange={(e) => onChange({ observaciones: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
+          <Button variant="destructive" onClick={onAskDelete} className="gap-2">
+            <Trash2 className="h-4 w-4" /> Eliminar
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="gap-2"
+          >
+            <X className="h-4 w-4" /> Cancelar
+          </Button>
+          <Button onClick={onSave} className="gap-2">
+            <Save className="h-4 w-4" /> Guardar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-export default function CreateCustomer() {
+// ================ Page ================
+export default function ClientesPageRefactor() {
   const [formData, setFormData] = useState<FormData>({
     nombre: "",
+    apellidos: "",
     telefono: "",
     direccion: "",
     dpi: "",
     observaciones: "",
   });
 
-  const [formDataEdit, setFormDataEdit] = useState<FormDataEdit>({
-    nombre: "",
-    telefono: "",
-    direccion: "",
-    dpi: "",
-    id: 0,
-    observaciones: "",
-  });
-
-  const [errors, setErrors] = useState<FormErrors>({});
   const [clientes, setClientes] = useState<ClienteResponse[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const handleChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
-  };
+  const [search, setSearch] = useState("");
+  const [orderBy, setOrderBy] = useState<"more" | "less">("more");
 
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
-    if (!formData.nombre.trim()) newErrors.nombre = "El nombre es requerido";
-    if (formData.dpi && !/^\d{13}$/.test(formData.dpi))
-      newErrors.dpi = "El DPI debe tener 13 dígitos";
-    if (formData.telefono && !/^\d{8}$/.test(formData.telefono))
-      newErrors.telefono = "El teléfono debe tener 8 dígitos";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  // pagination
+  const [page, setPage] = useState(1);
+  const perPage = 15;
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (validateForm()) {
-      try {
-        const response = await axios.post(`${API_URL}/client`, formData);
-        if (response.status === 201) {
-          getCustomers();
-          toast.success("Cliente creado");
-          setFormData({
-            nombre: "",
-            telefono: "",
-            direccion: "",
-            dpi: "",
-            observaciones: "",
-          });
-        } else {
-          throw new Error("Fallo al crear cliente");
-        }
-      } catch (error) {
-        toast.error("Error al crear el cliente");
-      }
-    }
-  };
+  const API = API_URL;
 
-  const getCustomers = async () => {
+  const fetchClientes = async () => {
     try {
-      const response = await axios.get(`${API_URL}/client/get-all-customers`);
-      if (response.status === 200) {
-        setClientes(response.data);
-      }
-    } catch (error) {
-      console.log(error);
+      setLoading(true);
+      const res = await axios.get<ClienteResponse[]>(
+        `${API}/client/get-all-customers`
+      );
+      setClientes(res.data);
+    } catch (e) {
+      console.error(e);
       toast.error("Error al conseguir clientes");
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    getCustomers();
+    fetchClientes();
   }, []);
 
-  const [searchTermn, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<"more" | "less">("more");
-
-  // Filtrado y ordenación combinados
-  const filteredClientes = [...clientes]
-    .filter(
-      (cliente) =>
-        cliente.nombre
-          .toLocaleLowerCase()
-          .includes(searchTermn.toLocaleLowerCase()) ||
-        cliente.dpi.includes(searchTermn) ||
-        cliente.direccion
-          .toLocaleLowerCase()
-          .trim()
-          .includes(searchTermn.toLocaleLowerCase()) ||
-        cliente.telefono.includes(searchTermn)
-    )
-    .sort((a, b) => {
-      return filterType === "more"
-        ? b._count.compras - a._count.compras // Descendente para más compras
-        : a._count.compras - b._count.compras; // Ascendente para menos compras
-    });
-
-  //PARA ELA PAGINACION
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
-  const totalPages = Math.ceil(filteredClientes.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredClientes.slice(
-    indexOfFirstItem,
-    indexOfLastItem
-  );
-  const onPageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  const [openSection, setOpenSection] = useState(false);
-  const [openConfirmDelete, setOpenConfirmDelete] = useState(false);
-  const handleEditClick = (client: FormDataEdit) => {
-    setFormDataEdit({
-      nombre: client.nombre || "",
-      telefono: client.telefono || "",
-      direccion: client.direccion || "",
-      dpi: client.dpi || "",
-      id: client.id,
-      observaciones: client.observaciones || "",
-    });
-    setOpenSection(true);
-  };
-
-  const handleClose = () => {
-    setOpenSection(false);
-  };
-
-  const handleSubmitEditCustomer = async () => {
+  const onCreateSubmit = async (e: FormEvent) => {
+    e.preventDefault();
     try {
-      const response = await axios.patch(
-        `${API_URL}/client/${formDataEdit.id}`,
-        formDataEdit
-      );
-
-      if (response.status === 200) {
-        toast.success("Cliente actualizado correctamente");
-        handleClose();
-        getCustomers();
+      const res = await axios.post(`${API}/client`, formData);
+      if (res.status === 201) {
+        toast.success("Cliente creado");
+        setFormData({
+          nombre: "",
+          apellidos: "",
+          telefono: "",
+          direccion: "",
+          dpi: "",
+          observaciones: "",
+        });
+        fetchClientes();
       }
-    } catch (error) {
-      console.log(error);
+    } catch (e) {
+      console.error(e);
+      toast.error("Error al crear el cliente");
+    }
+  };
+
+  // filtering + ordering + pagination (memoized)
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    const list = clientes.filter(
+      (c) =>
+        c.nombre.toLowerCase().includes(q) ||
+        (c.apellidos ?? "").toLowerCase().includes(q) ||
+        (c.direccion ?? "").toLowerCase().includes(q) ||
+        (c.telefono ?? "").includes(q) ||
+        (c.dpi ?? "").includes(q)
+    );
+
+    list.sort((a, b) =>
+      orderBy === "more"
+        ? b._count.compras - a._count.compras
+        : a._count.compras - b._count.compras
+    );
+    return list;
+  }, [clientes, search, orderBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const currentItems = filtered.slice((page - 1) * perPage, page * perPage);
+
+  // edit state
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [editData, setEditData] = useState<FormDataEdit>({ id: 0, nombre: "" });
+
+  const handleEditClick = (c: ClienteResponse) => {
+    setEditData({
+      id: c.id,
+      nombre: c.nombre,
+      apellidos: c.apellidos || "",
+      telefono: c.telefono || "",
+      direccion: c.direccion || "",
+      dpi: c.dpi || "",
+      observaciones: c.observaciones || "",
+    });
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      const res = await axios.patch(`${API}/client/${editData.id}`, editData);
+      if (res.status === 200) {
+        toast.success("Cliente actualizado");
+        setEditOpen(false);
+        fetchClientes();
+      }
+    } catch (e) {
+      console.error(e);
       toast.error("Error al actualizar el cliente");
     }
   };
 
   const handleDeleteCustomer = async () => {
     try {
-      const response = await axios.delete(
-        `${API_URL}/client/${formDataEdit.id}`
-      );
-      if (response.status === 200) {
-        toast.success("Usuario eliminado correctamente");
-        getCustomers();
-        setOpenConfirmDelete(false);
-        handleClose();
+      const res = await axios.delete(`${API}/client/${editData.id}`);
+      if (res.status === 200) {
+        toast.success("Cliente eliminado");
+        setConfirmDeleteOpen(false);
+        setEditOpen(false);
+        fetchClientes();
       }
-    } catch (error) {
-      console.log(error);
+    } catch (e) {
+      console.error(e);
       toast.error("Error al eliminar cliente");
     }
   };
 
-  return (
-    <Tabs defaultValue="crear-cliente" className="w-full ">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="crear-cliente">Crear Cliente</TabsTrigger>
-        <TabsTrigger value="clientes">Clientes</TabsTrigger>
-      </TabsList>
-      {/* Formulario para crear cliente */}
-      <TabsContent value="crear-cliente">
-        <Card className="shadow-md pt-5">
-          <CardContent className="space-y-2">
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-6 max-w-2xl mx-auto p-6 bg-card rounded-lg"
-            >
-              <h2 className="text-lg font-bold text-center mb-6">
-                Crear Nuevo Cliente
-              </h2>
+  const onCreateChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="nombre">Nombre</Label>
+  return (
+    <Tabs defaultValue="crear" className="w-full">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="crear" className="gap-2">
+          <UserPlus className="h-4 w-4" /> Crear
+        </TabsTrigger>
+        <TabsTrigger value="lista">Clientes</TabsTrigger>
+      </TabsList>
+
+      {/* Crear */}
+      <TabsContent value="crear">
+        <Card className="shadow-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Crear cliente</CardTitle>
+            <CardDescription>
+              Ingresa los datos básicos. Sólo el nombre es obligatorio.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={onCreateSubmit}
+              className="grid gap-4 max-w-2xl mx-auto"
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="nombre">Nombre *</Label>
                   <Input
                     id="nombre"
                     name="nombre"
                     value={formData.nombre}
-                    onChange={handleChange}
-                    className={errors.nombre ? "border-destructive" : ""}
+                    onChange={onCreateChange}
                   />
-                  {errors.nombre && (
-                    <p className="text-sm text-destructive">{errors.nombre}</p>
-                  )}
                 </div>
+                <div className="space-y-1">
+                  <Label htmlFor="apellidos">Apellidos</Label>
+                  <Input
+                    id="apellidos"
+                    name="apellidos"
+                    value={formData.apellidos ?? ""}
+                    onChange={onCreateChange}
+                  />
+                </div>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="dpi">DPI (opcional)</Label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="dpi">DPI</Label>
                   <Input
                     id="dpi"
                     name="dpi"
-                    value={formData.dpi}
-                    onChange={handleChange}
-                    className={errors.dpi ? "border-destructive" : ""}
+                    value={formData.dpi ?? ""}
+                    onChange={onCreateChange}
                   />
-                  {errors.dpi && (
-                    <p className="text-sm text-destructive">{errors.dpi}</p>
-                  )}
                 </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="telefono">Teléfono (opcional)</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="telefono">Teléfono</Label>
                   <Input
                     id="telefono"
                     name="telefono"
-                    value={formData.telefono}
-                    onChange={handleChange}
-                    className={errors.telefono ? "border-destructive" : ""}
-                  />
-                  {errors.telefono && (
-                    <p className="text-sm text-destructive">
-                      {errors.telefono}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="direccion">Dirección (opcional)</Label>
-                  <Input
-                    id="direccion"
-                    name="direccion"
-                    value={formData.direccion}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="block sm:col-span-2">
-                  <Label htmlFor="observaciones">Observaciones</Label>
-                  <Textarea
-                    id="observaciones"
-                    name="observaciones"
-                    value={formData.observaciones}
-                    onChange={handleChange}
-                    className="w-full"
+                    value={formData.telefono ?? ""}
+                    onChange={onCreateChange}
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="w-full">
-                Crear Cliente
-              </Button>
+              <div className="space-y-1">
+                <Label htmlFor="direccion">Dirección</Label>
+                <Input
+                  id="direccion"
+                  name="direccion"
+                  value={formData.direccion ?? ""}
+                  onChange={onCreateChange}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="observaciones">Observaciones</Label>
+                <Textarea
+                  id="observaciones"
+                  name="observaciones"
+                  value={formData.observaciones ?? ""}
+                  onChange={onCreateChange}
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="submit" className="min-w-40">
+                  Guardar
+                </Button>
+              </div>
             </form>
           </CardContent>
         </Card>
       </TabsContent>
 
-      {/* Tabla de clientes */}
-      <TabsContent value="clientes">
-        <div className="my-3 ">
-          <Input
-            className="my-2"
-            onChange={(e) => setSearchTerm(e.target.value)}
-            value={searchTermn}
-            placeholder="Buscar por Nombre, DPI, Teléfono, Dirección..."
-          />
-          <Select
-            onValueChange={(value) => setFilterType(value as "more" | "less")}
-          >
-            <SelectTrigger className="w-full max-w-md">
-              <SelectValue placeholder="Selecciona un filtro" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="more">Más Compras</SelectItem>
-              <SelectItem value="less">Menos Compras</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Card className="shadow-xl">
-          <CardHeader>
-            <CardTitle>Clientes disponibles</CardTitle>
-            <CardDescription>
-              Visualiza y gestiona la información de los clientes existentes.
-            </CardDescription>
+      {/* Lista */}
+      <TabsContent value="lista">
+        <Card className="shadow-md">
+          <CardHeader className="pb-2">
+            <CardTitle>Clientes</CardTitle>
+            <CardDescription>Busca, ordena y edita.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <Table>
-              <TableCaption>Clientes disponibles</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">No. Cliente</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Telefono</TableHead>
-                  <TableHead className="text-right">DPI</TableHead>
-                  <TableHead className="text-right">Dirección</TableHead>
-                  <TableHead className="text-right">Compras hechas</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {currentItems &&
-                  currentItems.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell className="font-medium">
-                        {client.id ?? "ID no disponible"}
-                      </TableCell>
-                      <TableCell>
-                        {client.nombre || "Nombre no disponible"}
-                      </TableCell>
-                      <TableCell>
-                        {client.telefono || "Teléfono no disponible"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {client.dpi || "DPI no disponible"}
-                      </TableCell>
+          <CardContent className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <div className="relative w-full sm:max-w-md">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nombre, apellidos, DPI, teléfono o dirección"
+                  className="pl-8"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <Select
+                value={orderBy}
+                onValueChange={(v) => setOrderBy(v as "more" | "less")}
+              >
+                <SelectTrigger className="w-full sm:w-52">
+                  <SelectValue placeholder="Orden" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="more">Más compras primero</SelectItem>
+                  <SelectItem value="less">Menos compras primero</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-                      <TableCell className="text-right">
-                        {client.direccion || "Dirección no disponible"}
+            <div className="rounded-xl border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">No.</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Apellidos</TableHead>
+                    <TableHead>Teléfono</TableHead>
+                    <TableHead>DPI</TableHead>
+                    <TableHead>Dirección</TableHead>
+                    <TableHead className="text-right">Compras</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        Cargando...
                       </TableCell>
+                    </TableRow>
+                  )}
+                  {!loading && currentItems.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        Sin resultados
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {currentItems.map((c) => (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-medium">{c.id}</TableCell>
+                      <TableCell>{c.nombre || "—"}</TableCell>
+                      <TableCell>{c.apellidos || "—"}</TableCell>
+                      <TableCell>{c.telefono || "—"}</TableCell>
+                      <TableCell>{c.dpi || "—"}</TableCell>
+                      <TableCell>{c.direccion || "—"}</TableCell>
                       <TableCell className="text-right">
-                        <Link to={`/cliente-historial-compras/${client.id}`}>
-                          <Button variant={"outline"}>
-                            {client._count?.compras ?? 0}
+                        <Link to={`/cliente-historial-compras/${c.id}`}>
+                          <Button variant="outline">
+                            {c._count?.compras ?? 0}
                           </Button>
                         </Link>
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
-                          onClick={() => handleEditClick(client)}
-                          variant={"outline"}
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleEditClick(c)}
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit3 className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-              </TableBody>
-              <Dialog open={openSection} onOpenChange={setOpenSection}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle className="text-lg font-semibold text-center">
-                      Editar Información del Cliente
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="flex flex-col gap-4">
-                    <label>
-                      Nombre:
-                      <input
-                        type="text"
-                        value={formDataEdit.nombre}
-                        onChange={(e) =>
-                          setFormDataEdit({
-                            ...formDataEdit,
-                            nombre: e.target.value,
-                          })
-                        }
-                        className="border p-2 rounded w-full bg-transparent"
-                      />
-                    </label>
-                    <label>
-                      Teléfono:
-                      <input
-                        type="text"
-                        value={formDataEdit.telefono}
-                        onChange={(e) =>
-                          setFormDataEdit({
-                            ...formDataEdit,
-                            telefono: e.target.value,
-                          })
-                        }
-                        className="border p-2 rounded w-full bg-transparent"
-                      />
-                    </label>
-                    <label>
-                      Dirección:
-                      <input
-                        type="text"
-                        value={formDataEdit.direccion}
-                        onChange={(e) =>
-                          setFormDataEdit({
-                            ...formDataEdit,
-                            direccion: e.target.value,
-                          })
-                        }
-                        className="border p-2 rounded w-full bg-transparent"
-                      />
-                    </label>
+                </TableBody>
+                <TableCaption>Clientes disponibles</TableCaption>
+              </Table>
+            </div>
 
-                    <label>
-                      Observaciones:
-                      <Textarea
-                        value={formDataEdit.observaciones}
-                        onChange={(e) =>
-                          setFormDataEdit({
-                            ...formDataEdit,
-                            observaciones: e.target.value,
-                          })
-                        }
-                        className="border p-2 rounded w-full bg-transparent"
-                      />
-                    </label>
-
-                    <label>
-                      DPI:
-                      <input
-                        type="text"
-                        value={formDataEdit.dpi}
-                        onChange={(e) =>
-                          setFormDataEdit({
-                            ...formDataEdit,
-                            dpi: e.target.value,
-                          })
-                        }
-                        className="border p-2 rounded w-full bg-transparent"
-                      />
-                    </label>
-                  </div>
-                  <div className="flex justify-end items-center gap-2 mt-4">
-                    <Button
-                      variant={"destructive"}
-                      className="px-5 py-2 rounded"
-                      // onClick={handleDeleteCustomer}
-                      onClick={() => setOpenConfirmDelete(true)}
-                    >
-                      Eliminar Cliente
-                    </Button>
-
-                    <Button
-                      variant={"outline"}
-                      className="px-4 py-2 rounded"
-                      onClick={handleClose}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      variant={"default"}
-                      className="px-4 py-2 rounded"
-                      onClick={() => {
-                        handleSubmitEditCustomer();
-                      }}
-                    >
-                      Guardar Cambios
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <Dialog
-                open={openConfirmDelete}
-                onOpenChange={setOpenConfirmDelete}
-              >
-                <DialogContent className="max-w-md mx-auto">
-                  <DialogHeader>
-                    <DialogTitle className="text-lg font-semibold text-center">
-                      Confirmación de eliminación de cliente
-                    </DialogTitle>
-                    <DialogDescription className="text-center mt-2 text-sm text-gray-600">
-                      Esta acción es permanente. Al eliminar este cliente, se
-                      borrará completamente de la base de datos, incluyendo
-                      todos sus registros de compras.
-                    </DialogDescription>
-                    <DialogDescription className="text-center mt-1 text-base font-medium">
-                      ¿Estás seguro de que deseas continuar?
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="flex justify-center items-center gap-4 mt-6">
-                    <Button
-                      variant={"outline"}
-                      className="px-4 py-2 rounded w-full"
-                      onClick={() => setOpenConfirmDelete(false)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      variant={"destructive"}
-                      className="px-4 py-2 rounded w-full"
-                      onClick={handleDeleteCustomer}
-                    >
-                      Sí, eliminar
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <TableFooter></TableFooter>
-            </Table>
-          </CardContent>
-          <CardFooter className="flex justify-center items-center">
+            {/* Pagination */}
             <div className="flex items-center justify-center py-4">
               <Pagination>
                 <PaginationContent>
                   <PaginationItem>
-                    <Button onClick={() => onPageChange(1)}>Primero</Button>
-                  </PaginationItem>
-                  <PaginationItem>
                     <PaginationPrevious
-                      onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </PaginationPrevious>
                   </PaginationItem>
 
-                  {/* Sistema de truncado */}
-                  {currentPage > 3 && (
-                    <>
-                      <PaginationItem>
-                        <PaginationLink onClick={() => onPageChange(1)}>
-                          1
-                        </PaginationLink>
-                      </PaginationItem>
-                      <PaginationItem>
-                        <span className="text-muted-foreground">...</span>
-                      </PaginationItem>
-                    </>
-                  )}
-
-                  {Array.from({ length: totalPages }, (_, index) => {
-                    const page = index + 1;
-                    if (
-                      page === currentPage ||
-                      (page >= currentPage - 1 && page <= currentPage + 1)
-                    ) {
-                      return (
-                        <PaginationItem key={index}>
-                          <PaginationLink
-                            onClick={() => onPageChange(page)}
-                            isActive={page === currentPage}
-                          >
-                            {page}
-                          </PaginationLink>
-                        </PaginationItem>
-                      );
-                    }
-                    return null;
-                  })}
-
-                  {currentPage < totalPages - 2 && (
-                    <>
-                      <PaginationItem>
-                        <span className="text-muted-foreground">...</span>
-                      </PaginationItem>
-                      <PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(
+                      (p) =>
+                        p === 1 || p === totalPages || Math.abs(p - page) <= 1
+                    )
+                    .map((p, idx, arr) => (
+                      <PaginationItem key={p}>
+                        {idx > 0 && p - (arr[idx - 1] as number) > 1 ? (
+                          <span className="px-2">…</span>
+                        ) : null}
                         <PaginationLink
-                          onClick={() => onPageChange(totalPages)}
+                          isActive={p === page}
+                          onClick={() => setPage(p)}
                         >
-                          {totalPages}
+                          {p}
                         </PaginationLink>
                       </PaginationItem>
-                    </>
-                  )}
+                    ))}
 
                   <PaginationItem>
                     <PaginationNext
                       onClick={() =>
-                        onPageChange(Math.min(totalPages, currentPage + 1))
+                        setPage((p) => Math.min(totalPages, p + 1))
                       }
                     >
                       <ChevronRight className="h-4 w-4" />
                     </PaginationNext>
                   </PaginationItem>
-                  <PaginationItem>
-                    <Button
-                      variant={"destructive"}
-                      onClick={() => onPageChange(totalPages)}
-                    >
-                      Último
-                    </Button>
-                  </PaginationItem>
                 </PaginationContent>
               </Pagination>
             </div>
-          </CardFooter>
+          </CardContent>
+          <CardFooter />
         </Card>
       </TabsContent>
+
+      {/* Edit dialog */}
+      <EditCustomerDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        value={editData}
+        onChange={(patch) => setEditData((prev) => ({ ...prev, ...patch }))}
+        onSave={handleSaveEdit}
+        onAskDelete={() => setConfirmDeleteOpen(true)}
+      />
+
+      {/* Confirm delete */}
+      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar cliente?</DialogTitle>
+            <DialogDescription>
+              Esta acción es permanente. Se eliminará el cliente y sus registros
+              asociados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDeleteOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteCustomer}>
+              Sí, eliminar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Tabs>
   );
 }

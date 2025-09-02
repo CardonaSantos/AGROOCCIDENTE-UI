@@ -108,6 +108,8 @@ interface CartItem {
 type Client = {
   id: number;
   nombre: string;
+  apellidos: string;
+
   telefono: string;
   dpi: string;
   iPInternet: string;
@@ -166,6 +168,8 @@ export default function PuntoVenta() {
   //CLIENTE
   const [activeTab, setActiveTab] = useState("existing");
   const [nombre, setNombre] = useState<string>("");
+  const [apellidos, setApellidos] = useState<string>("");
+
   const [dpi, setDpi] = useState<string>("");
   const [imei, setImei] = useState<string>("");
   const [telefono, setTelefono] = useState<string>("");
@@ -255,6 +259,8 @@ export default function PuntoVenta() {
         0
       ),
       nombre: nombre.trim(),
+      apellidos: apellidos.trim(),
+
       telefono: telefono.trim(),
       direccion: direccion.trim(),
       dpi: dpi.trim(),
@@ -296,6 +302,7 @@ export default function PuntoVenta() {
         setventaResponse(response.data);
         setSelectedCustomerID(null);
         setNombre("");
+        setApellidos("");
         setTelefono("");
         setDireccion("");
         setDpi("");
@@ -382,7 +389,7 @@ export default function PuntoVenta() {
 
   const customerOptions = clients.map((customer) => ({
     value: customer.id,
-    label: `${customer.nombre} ${
+    label: `${customer.nombre} ${customer?.apellidos ?? ""} ${
       customer.telefono ? `(${customer.telefono})` : ""
     } ${customer.dpi ? `DPI: ${customer.dpi}` : ""}
     ${customer.iPInternet ? `IP: ${customer.iPInternet}` : ""}
@@ -413,6 +420,8 @@ export default function PuntoVenta() {
 
         {/* Componente de Carrito y Checkout */}
         <CartCheckout
+          apellidos={apellidos}
+          setApellidos={setApellidos}
           cart={cart}
           setReferenciaPago={setReferenciaPago}
           referenciaPago={referenciaPago}

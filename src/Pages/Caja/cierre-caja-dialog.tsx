@@ -63,33 +63,109 @@ type CierreCajaDialogProps = {
   cuentas: CuentasBancariasSelect[];
 };
 
+const ComprobanteTipoZ = z.enum([
+  "DEPOSITO_BOLETA",
+  "TRANSFERENCIA",
+  "CHEQUE",
+  "TARJETA_VOUCHER",
+  "OTRO",
+]);
+
 // ------------------------------------------------------
 // Schema (sin dependencias fuertes de `previa` para evitar
 // problemas al rehidratar el resolver). Hacemos clamps en UI + server.
 // ------------------------------------------------------
-const schemaBase = z.object({
-  modo: z.enum([
-    "SIN_DEPOSITO",
-    "DEPOSITO_PARCIAL",
-    "DEPOSITO_TODO",
-    "CAMBIO_TURNO",
-  ] as const),
-  comentarioFinal: z.string().optional(),
+// const schemaBase = z.object({
+//   modo: z.enum([
+//     "SIN_DEPOSITO",
+//     "DEPOSITO_PARCIAL",
+//     "DEPOSITO_TODO",
+//     "CAMBIO_TURNO",
+//   ] as const),
+//   comentarioFinal: z.string().optional(),
 
-  // Depósito
-  cuentaBancariaId: z.number().optional(),
-  montoParcial: z.number().optional(),
+//   // Depósito
+//   cuentaBancariaId: z.number().optional(),
+//   montoParcial: z.number().optional(),
 
-  // Nuevos
-  dejarEnCaja: z.number().min(0, "No puede ser negativo"),
-  asentarVentas: z.boolean(), // <- antes tenía .default(true)
+//   // Nuevos
+//   dejarEnCaja: z.number().min(0, "No puede ser negativo"),
+//   asentarVentas: z.boolean(), // <- antes tenía .default(true)
 
-  // Cambio de turno
-  abrirSiguiente: z.boolean().optional(),
-  usuarioInicioSiguienteId: z.number().optional(),
-  fondoFijoSiguiente: z.number().optional(),
-  comentarioAperturaSiguiente: z.string().optional(),
-});
+//   // Cambio de turno
+//   abrirSiguiente: z.boolean().optional(),
+//   usuarioInicioSiguienteId: z.number().optional(),
+//   fondoFijoSiguiente: z.number().optional(),
+//   comentarioAperturaSiguiente: z.string().optional(),
+// });
+
+const schemaBase = z
+  .object({
+    modo: z.enum([
+      "SIN_DEPOSITO",
+      "DEPOSITO_PARCIAL",
+      "DEPOSITO_TODO",
+      "CAMBIO_TURNO",
+    ] as const),
+    comentarioFinal: z.string().optional(),
+
+    // Depósito
+    cuentaBancariaId: z.number().optional(),
+    montoParcial: z.number().optional(),
+
+    // Nuevos (boleta/transferencia)
+    comprobanteTipo: ComprobanteTipoZ.optional(),
+    comprobanteNumero: z.string().trim().optional(),
+    comprobanteFecha: z.string().trim().optional(), // "YYYY-MM-DD" del <input type="date">
+
+    // Nuevos
+    dejarEnCaja: z.number().min(0, "No puede ser negativo"),
+    asentarVentas: z.boolean(),
+
+    // Cambio de turno
+    abrirSiguiente: z.boolean().optional(),
+    usuarioInicioSiguienteId: z.number().optional(),
+    fondoFijoSiguiente: z.number().optional(),
+    comentarioAperturaSiguiente: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const requiereDeposito =
+      data.modo === "DEPOSITO_PARCIAL" || data.modo === "DEPOSITO_TODO";
+
+    if (requiereDeposito) {
+      if (!data.cuentaBancariaId) {
+        ctx.addIssue({
+          path: ["cuentaBancariaId"],
+          code: z.ZodIssueCode.custom,
+          message: "Cuenta bancaria requerida",
+        });
+      }
+      if (!data.comprobanteTipo) {
+        ctx.addIssue({
+          path: ["comprobanteTipo"],
+          code: z.ZodIssueCode.custom,
+          message: "Tipo de comprobante requerido",
+        });
+      }
+      if (!data.comprobanteNumero || data.comprobanteNumero.trim().length < 3) {
+        ctx.addIssue({
+          path: ["comprobanteNumero"],
+          code: z.ZodIssueCode.custom,
+          message: "Número de comprobante requerido (mín. 3 caract.)",
+        });
+      }
+    }
+
+    if (data.modo === "DEPOSITO_PARCIAL") {
+      if (!data.montoParcial || data.montoParcial <= 0) {
+        ctx.addIssue({
+          path: ["montoParcial"],
+          code: z.ZodIssueCode.custom,
+          message: "Monto debe ser > 0",
+        });
+      }
+    }
+  });
 
 type CierreCajaFormData = z.infer<typeof schemaBase>;
 
@@ -98,16 +174,14 @@ export function CierreCajaDialog({
   onOpenChange,
   registroCajaId,
   usuarioCierreId,
-  cuentasBancarias,
+  // cuentasBancarias,
   onClosed,
   reloadContext,
+  cuentas,
 }: CierreCajaDialogProps) {
   const [previa, setPrevia] = useState<PreviaCierreResponse | null>(null);
   const [isLoadingPrevia, setIsLoadingPrevia] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Resolver estable (no depende de `previa`)
-  // const resolver = useMemo(() => zodResolver(schemaBase), []);
 
   const form = useForm<CierreCajaFormData>({
     resolver: zodResolver(schemaBase),
@@ -118,6 +192,8 @@ export function CierreCajaDialog({
       asentarVentas: true, // <- default aquí
     },
   });
+
+  console.log("cuentas bancarias en cerrar caja son: ", cuentas);
 
   const watched = form.watch();
 
@@ -179,16 +255,37 @@ export function CierreCajaDialog({
       : null;
 
   // Enviar
+  // Enviar
   const onSubmit: SubmitHandler<CierreCajaFormData> = async (data) => {
     if (!previa) return;
 
+    // Recalcular con los valores actuales del form (robusto)
+    const enCajaLocal = Number(previa.enCaja ?? 0);
+    const dejarEnCajaLocal = Number(data.dejarEnCaja ?? 0);
+    const disponibleOperableLocal = Math.max(0, enCajaLocal - dejarEnCajaLocal);
+
+    const esDeposito =
+      data.modo === "DEPOSITO_PARCIAL" || data.modo === "DEPOSITO_TODO";
+
+    let depositoCalculadoLocal = 0;
+    if (data.modo === "DEPOSITO_TODO") {
+      depositoCalculadoLocal = disponibleOperableLocal;
+    } else if (data.modo === "DEPOSITO_PARCIAL") {
+      const v = Number(data.montoParcial || 0);
+      depositoCalculadoLocal = Math.min(
+        Math.max(v, 0),
+        disponibleOperableLocal
+      );
+    }
+
     // Validaciones ligeras; el server re-clamp y valida igualmente
-    if (requiereDeposito && !data.cuentaBancariaId) {
+    if (esDeposito && !data.cuentaBancariaId) {
       form.setError("cuentaBancariaId", {
         message: "Cuenta bancaria requerida",
       });
       return;
     }
+
     if (
       data.modo === "DEPOSITO_PARCIAL" &&
       (!data.montoParcial || data.montoParcial <= 0)
@@ -197,11 +294,36 @@ export function CierreCajaDialog({
       return;
     }
 
+    if (esDeposito && depositoCalculadoLocal <= 0) {
+      toast.error("No hay disponible para depositar.");
+      return;
+    }
+
+    // Reglas del comprobante cuando hay depósito
+    if (esDeposito) {
+      if (!data.comprobanteTipo) {
+        form.setError("comprobanteTipo", {
+          message: "Tipo de comprobante requerido",
+        });
+        return;
+      }
+      if (!data.comprobanteNumero?.trim()) {
+        form.setError("comprobanteNumero", {
+          message: "Número de comprobante requerido",
+        });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const payload: CerrarCajaV2Dto & {
         dejarEnCaja?: number;
         asentarVentas?: boolean;
+        // nuevos (si tu DTO ya los tiene tipados, puedes quitar estas extensiones)
+        comprobanteTipo?: string;
+        comprobanteNumero?: string;
+        comprobanteFecha?: string;
       } = {
         registroCajaId,
         usuarioCierreId,
@@ -211,13 +333,31 @@ export function CierreCajaDialog({
         asentarVentas: Boolean(data.asentarVentas ?? true),
       };
 
-      if (["DEPOSITO_PARCIAL", "DEPOSITO_TODO"].includes(data.modo)) {
+      if (esDeposito) {
         payload.cuentaBancariaId = data.cuentaBancariaId!;
+
+        // normaliza número (trim + upper + colapsa espacios, limita a 64)
+        const num = (data.comprobanteNumero ?? "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toUpperCase()
+          .slice(0, 64);
+
+        payload.comprobanteTipo = data.comprobanteTipo!;
+        payload.comprobanteNumero = num;
+
+        // transforma "YYYY-MM-DD" a ISO (medianoche local)
+        if (data.comprobanteFecha) {
+          payload.comprobanteFecha = new Date(
+            `${data.comprobanteFecha}T00:00:00`
+          ).toISOString();
+        }
+
         if (data.modo === "DEPOSITO_PARCIAL") {
-          payload.montoParcial = Math.min(
-            Number(data.montoParcial || 0),
-            disponibleOperable
-          );
+          payload.montoParcial = depositoCalculadoLocal;
+        } else {
+          // asegura no enviar campo sobrante
+          delete (payload as any).montoParcial;
         }
       }
 
@@ -392,7 +532,7 @@ export function CierreCajaDialog({
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {cuentasBancarias.map((cuenta) => (
+                              {cuentas.map((cuenta) => (
                                 <SelectItem
                                   key={cuenta.id}
                                   value={cuenta.id.toString()}
@@ -411,6 +551,80 @@ export function CierreCajaDialog({
                         </FormItem>
                       )}
                     />
+                  )}
+
+                  {requiereDeposito && (
+                    <>
+                      {/* Tipo de comprobante */}
+                      <FormField
+                        control={form.control}
+                        name="comprobanteTipo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tipo de comprobante *</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Seleccione el tipo" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {ComprobanteTipoZ.options.map((t) => (
+                                  <SelectItem key={t} value={t}>
+                                    {t.replace("_", " ")}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Número de comprobante */}
+                      <FormField
+                        control={form.control}
+                        name="comprobanteNumero"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Número de comprobante *</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Ej. 123456 / REF-ABCD"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value)}
+                                maxLength={64}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Fecha del comprobante (opcional) */}
+                      <FormField
+                        control={form.control}
+                        name="comprobanteFecha"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              Fecha del comprobante (opcional)
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="date"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
                   )}
 
                   {/* Monto parcial */}

@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Link, Outlet } from "react-router-dom";
 import { ModeToggle } from "../mode-toggle";
-import nv2 from "@/assets/FerePng.png";
 
 import {
   DropdownMenu,
@@ -47,7 +46,7 @@ import localizedFormat from "dayjs/plugin/localizedFormat";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
-
+import logo from "@/assets/Agroservicio.png";
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 dayjs.locale("es");
@@ -78,13 +77,6 @@ interface Notificacion {
   referenciaId: number | null;
   fechaCreacion: string;
 }
-interface Usuario {
-  id: number;
-  nombre: string;
-  rol: string;
-  activo: boolean;
-  correo: string;
-}
 
 export default function Layout2({ children }: LayoutProps) {
   // Store POS (Zustand) setters
@@ -105,8 +97,6 @@ export default function Layout2({ children }: LayoutProps) {
   const socket = useSocket();
   const [sucursalInfo, setSucursalInfo] = useState<Sucursal>();
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
-  const [usuario, setUsuario] = useState<Usuario | null>(null);
-  console.log("State sin usar: ", setUsuario);
 
   // Decodificar y setear datos del POS al iniciar
   useEffect(() => {
@@ -193,9 +183,16 @@ export default function Layout2({ children }: LayoutProps) {
     window.location.reload();
   };
 
-  // Datos finales del usuario a mostrar (backend > store)
-  const nombreUsuario = usuario?.nombre || posNombre || "??";
-  const correoUsuario = usuario?.correo || posCorreo || "??";
+  // util para iniciales
+  function getInitials(name?: string | null) {
+    if (!name) return "??";
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return "??";
+    const a = words[0]?.[0] ?? "";
+    const b = words[1]?.[0] ?? words[0]?.[1] ?? ""; // si no hay 2da palabra, toma 2da letra de la 1ra
+    const initials = (a + b).toUpperCase();
+    return initials || "??";
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -206,7 +203,7 @@ export default function Layout2({ children }: LayoutProps) {
             <div className="flex items-center space-x-2">
               <Link to="/">
                 <img
-                  src={nv2}
+                  src={logo}
                   alt="Logo"
                   className="h-10 w-10 md:h-14 md:w-14"
                 />
@@ -327,26 +324,29 @@ export default function Layout2({ children }: LayoutProps) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    className="bg-transparent border-none hover:bg-transparent"
+                    variant="ghost"
                     size="icon"
+                    className="rounded-full p-0"
+                    aria-label="User menu"
                   >
-                    <User className="h-5 w-5" />
-                    <span className="sr-only">User menu</span>
-                    <Avatar className="bg-[#29daa5] border-2 border-transparent dark:border-white dark:bg-transparent">
-                      <AvatarFallback className="bg-[#2be6ae] text-white font-bold dark:bg-transparent dark:text-[#2be6ae]">
-                        {nombreUsuario.slice(0, 2).toUpperCase() || "??"}
+                    <Avatar className="h-8 w-8">
+                      {" "}
+                      {/* Si tuvieras imagen, la pones aquí con <AvatarImage src="..." /> */}
+                      <AvatarFallback className="h-8 w-8 bg-[#29daa5] text-white font-semibold uppercase flex items-center justify-center">
+                        {getInitials(posNombre)}
                       </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
+
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem>
                     <User className="mr-2 h-4 w-4" />
-                    <span>{nombreUsuario}</span>
+                    <span>{posNombre}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <AtSign className="mr-2 h-4 w-4" />
-                    <span>{correoUsuario}</span>
+                    <span>{posCorreo}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />

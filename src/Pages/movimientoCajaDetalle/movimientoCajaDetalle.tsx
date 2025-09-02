@@ -32,6 +32,7 @@ import { formattMonedaGT } from "@/utils/formattMoneda";
 import { formateDateWithMinutes } from "@/Crm/Utils/FormateDate";
 import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
 import { getMovimientoCajaDetail } from "./api";
+import { ReplaceUnderlines } from "@/utils/UtilsII";
 
 // Animaciones
 const containerVariants = {
@@ -505,42 +506,90 @@ export default function MovimientoFinancieroDetail() {
                   Información Bancaria
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-xs font-medium">Cuenta Bancaria</p>
-                  <p className="text-xs text-muted-foreground">
-                    {movimiento.cuentaBancaria
-                      ? `${movimiento.cuentaBancaria.banco || "N/A"}${
-                          movimiento.cuentaBancaria.alias
-                            ? ` / ${movimiento.cuentaBancaria.alias}`
-                            : ""
-                        }`
-                      : "N/A"}
-                  </p>
-                  {movimiento.cuentaBancaria?.numeroMasked && (
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {movimiento.cuentaBancaria.numeroMasked}
-                    </p>
-                  )}
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs font-medium">Número de Boleta</p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {movimiento.numeroBoleta || "—"}
-                  </p>
-                </div>
-                {movimiento.metodoPago && (
-                  <>
-                    <Separator />
+
+              <CardContent>
+                {/* 1 col en mobile, 2 cols desde md */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* Columna izquierda */}
+                  <div className="space-y-3">
                     <div>
-                      <p className="text-xs font-medium">Método de Pago</p>
+                      <p className="text-xs font-medium">Cuenta Bancaria</p>
                       <p className="text-xs text-muted-foreground">
-                        {movimiento.metodoPago}
+                        {movimiento.cuentaBancaria
+                          ? `${movimiento.cuentaBancaria.banco || "N/A"}${
+                              movimiento.cuentaBancaria.alias
+                                ? ` / ${movimiento.cuentaBancaria.alias}`
+                                : ""
+                            }`
+                          : "N/A"}
                       </p>
+                      {movimiento.cuentaBancaria?.numeroMasked && (
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {movimiento.cuentaBancaria.numeroMasked}
+                        </p>
+                      )}
                     </div>
-                  </>
-                )}
+
+                    {movimiento.metodoPago && (
+                      <>
+                        <Separator />
+                        <div>
+                          <p className="text-xs font-medium">Método de Pago</p>
+                          <p className="text-xs text-muted-foreground">
+                            {movimiento.metodoPago}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Columna derecha */}
+                  <div className="space-y-3">
+                    {movimiento.comprobanteFecha && (
+                      <>
+                        <div>
+                          <p className="text-xs font-medium">
+                            Comprobante Fecha
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formateDateWithMinutes(
+                              movimiento.comprobanteFecha
+                            )}
+                          </p>
+                        </div>
+                        <Separator />
+                      </>
+                    )}
+
+                    {movimiento.comprobanteNumero && (
+                      <>
+                        <div>
+                          <p className="text-xs font-medium">
+                            Comprobante Número
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {movimiento.comprobanteNumero}
+                          </p>
+                        </div>
+                        <Separator />
+                      </>
+                    )}
+
+                    {/** Si prefieres, condiciona por `comprobanteTipo` en lugar de `comprobanteNumero` */}
+                    {movimiento.comprobanteTipo && (
+                      <div>
+                        <p className="text-xs font-medium">
+                          Tipo de Comprobante
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {ReplaceUnderlines(
+                            String(movimiento.comprobanteTipo)
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
