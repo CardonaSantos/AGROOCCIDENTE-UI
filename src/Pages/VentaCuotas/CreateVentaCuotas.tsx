@@ -569,7 +569,7 @@ export default function CreateVentaCuotaForm() {
         <CreditRecordsTable
           userId={userId}
           sucursalId={sucursalId}
-          getCredits={getRegistCredits}
+          getRegistCredits={getRegistCredits}
           records={creditos}
         />
       </TabsContent>

@@ -60,13 +60,6 @@ export interface Categorias {
   nombre: string;
 }
 
-export type CroppedImage = {
-  fileName: string;
-  blob: Blob;
-  url: string;
-  originalIndex: number;
-};
-
 //INTERFACES PARA CATEGORIAS
 export interface Category {
   id: number;

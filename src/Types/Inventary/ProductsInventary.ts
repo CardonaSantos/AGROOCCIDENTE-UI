@@ -1,7 +1,5 @@
-import {
-  RolPrecio,
-  TipoPrecio,
-} from "@/Pages/Inventario/preciosInterfaces.interface";
+import { RolPrecio } from "@/Pages/Edit/EditProduct";
+import { TipoPrecio } from "@/Pages/producto/interfaces/preciosCreateInterfaces";
 
 type Proveedor = {
   nombre: string;

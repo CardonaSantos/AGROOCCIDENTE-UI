@@ -24,23 +24,8 @@ import {
   ClipboardList,
   Mail,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import {
-  getCajasAbiertas,
-  getCuentasBancariasArrray,
-  getProveedores,
-  getRegistroCompra,
-  recepcionarCompraAuto,
-} from "./API/api";
-import {
-  CompraPedidoUI,
-  CompraRegistroUI,
-} from "./Interfaces/RegistroCompraInterface";
-import { EstadoCompra } from "./API/interfaceQuery";
-import { formattMonedaGT } from "@/utils/formattMoneda";
-import { formattFechaWithMinutes } from "../Utils/Utils";
-import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -60,8 +45,25 @@ import {
 import { Label } from "@/components/ui/label";
 import ReactSelectComponent from "react-select";
 import { useStore } from "@/components/Context/ContextSucursal";
+import { formattMonedaGT } from "@/utils/formattMoneda";
+import { formattFechaWithMinutes } from "../Utils/Utils";
 import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
+import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
+
+import {
+  CompraPedidoUI,
+  CompraRegistroUI,
+} from "./Interfaces/RegistroCompraInterface";
 import { CompraRequisicionUI } from "./Interfaces/Interfaces1";
+import { EstadoCompra } from "./API/interfaceQuery";
+
+// ⬇️ hooks genéricos (React Query + Axios client base)
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useApiMutation,
+  useApiQuery,
+} from "@/hooks/genericoCall/genericoCallHook";
 
 interface Option {
   label: string;
@@ -73,54 +75,25 @@ const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.1,
-    },
+    transition: { staggerChildren: 0.1, delayChildren: 0.1 },
   },
 };
-
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.3 },
-  },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
 };
-
 const tableVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: {
-      duration: 0.3,
-      staggerChildren: 0.05,
-    },
+    transition: { duration: 0.3, staggerChildren: 0.05 },
   },
 };
-
 const rowVariants = {
   hidden: { opacity: 0, x: -20 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.2 },
-  },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.2 } },
 };
-
-interface Proveedores {
-  id: number;
-  nombre: string;
-}
-
-interface CuentasBancarias {
-  id: number;
-  nombre: string;
-  numero: number;
-  banco: string;
-}
 
 // 1) Tipos y helpers arriba del componente (o en un archivo de utils compartido)
 type MetodoPago =
@@ -145,10 +118,10 @@ const METODO_PAGO_OPTIONS: Array<{
 
 export interface CajaConSaldo {
   id: number;
-  fechaApertura: string; // ISO date string
-  estado: string; // puedes ajustar los posibles estados
-  actualizadoEn: string; // ISO date string
-  saldoInicial: number; // conviene tiparlo como number en vez de string
+  fechaApertura: string;
+  estado: string;
+  actualizadoEn: string;
+  saldoInicial: number;
   usuarioInicioId: number;
   disponibleEnCaja: number;
 }
@@ -157,7 +130,6 @@ export default function CompraDetalle() {
   // === Helpers ===
   const isBankMethod = (m?: MetodoPago | "") =>
     m === "TRANSFERENCIA" || m === "TARJETA" || m === "CHEQUE";
-
   const isCashMethod = (m?: MetodoPago | "") =>
     m === "EFECTIVO" || m === "CONTADO";
 
@@ -165,62 +137,112 @@ export default function CompraDetalle() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const sucursalId = useStore((state) => state.sucursalId) ?? 0;
-  const compraId = Number.isFinite(Number(id)) ? Number(id) : 1;
+  const compraId = Number.isFinite(Number(id)) ? Number(id) : 0;
 
-  // === States ===
-  const [registro, setRegistro] = useState<CompraRegistroUI | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  // === Dialog/UI states ===
   const [openSendStock, setOpenSendStock] = useState(false);
   const [openFormDialog, setOpenFormDialog] = useState(false);
-  const [isSubmiting, setIsSubmiting] = useState(false);
 
   const [observaciones, setObservaciones] = useState<string>("");
-  const [proveedores, setProveedor] = useState<Proveedores[]>([]);
   const [proveedorSelected, setProveedorSelected] = useState<
     string | undefined
   >(undefined);
 
-  const [cuentasBancarias, setCuentasBancarias] = useState<CuentasBancarias[]>(
-    []
-  );
   const [metodoPago, setMetodoPago] = useState<MetodoPago | "">("");
   const [cuentaBancariaSelected, setCuentaBancariaSelected] =
     useState<string>("");
-
-  const [cajasDisponibles, setCajasDisponibles] = useState<CajaConSaldo[]>([]);
   const [cajaSelected, setCajaSelected] = useState<string | null>(null);
-  // === Derived values === (coloca esto DESPUÉS de tener `registro`)
 
-  // === Data Loader ===
-  const getData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const queryClient = useQueryClient();
 
-      const data = await getRegistroCompra(compraId);
-      setRegistro(data);
+  // === QUERIES ===============================================================
 
-      const providers = await getProveedores();
-      setProveedor(providers);
-
-      const cBancarias = await getCuentasBancariasArrray();
-      setCuentasBancarias(cBancarias);
-
-      const cajasDisponibles = await getCajasAbiertas(sucursalId);
-      setCajasDisponibles(cajasDisponibles);
-    } catch (err) {
-      setError("Error al cargar el registro de compra");
-      console.error(err);
-    } finally {
-      setLoading(false);
+  // 1) Registro de compra (detalle)
+  const registroQ = useApiQuery<CompraRegistroUI>(
+    ["compra", compraId],
+    `/compra-requisicion/get-registro/${compraId}`,
+    undefined,
+    {
+      enabled: Number.isFinite(compraId) && compraId > 0,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      // onError: () => toast.error("Error al cargar el registro de compra"),
     }
-  }, [compraId, sucursalId]);
-  const montoRecepcion = Number(
-    registro?.resumen?.subtotal ?? registro?.total ?? 0
   );
-  // === Effects ===
+
+  // 2) Proveedores
+  const proveedoresQ = useApiQuery<Array<{ id: number; nombre: string }>>(
+    ["proveedores"],
+    "/proveedor",
+    undefined,
+    {
+      staleTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      // onError: () => toast.error("Error al cargar proveedores"),
+    }
+  );
+
+  // 3) Cuentas bancarias (select simple)
+  const cuentasQ = useApiQuery<Array<{ id: number; nombre: string }>>(
+    ["cuentas-bancarias", "simple-select"],
+    "cuentas-bancarias/get-simple-select",
+    undefined,
+    {
+      staleTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      // onError: () => toast.error("Error al cargar cuentas bancarias"),
+    }
+  );
+
+  console.log("Las cuentas bancarias son:_ ", cuentasQ);
+
+  // 4) Cajas abiertas por sucursal
+  const cajasQ = useApiQuery<CajaConSaldo[]>(
+    ["cajas-disponibles", sucursalId],
+    `/caja/cajas-disponibles/${sucursalId}`,
+    undefined,
+    {
+      enabled: !!sucursalId,
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      // onError: () => toast.error("Error al cargar cajas disponibles"),
+    }
+  );
+
+  // === MUTATION: recepcionar compra =========================================
+  const recepcionarM = useApiMutation<
+    any, // respuesta del server
+    {
+      compraId: number;
+      usuarioId: number;
+      proveedorId: number;
+      observaciones?: string;
+      metodoPago: string;
+      cuentaBancariaId?: number;
+      registroCajaId?: number;
+    }
+  >("post", `/compra-requisicion/${compraId}/recepcionar`, undefined, {
+    onSuccess: async () => {
+      // Refrescar detalle + (opcional) listados relacionados
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["compra", compraId] }),
+        queryClient.invalidateQueries({ queryKey: ["compras"] }), // comodín por si hay listados cacheados
+      ]);
+    },
+  });
+
+  // === DERIVED ===============================================================
+  const registro = registroQ.data ?? null;
+  const proveedores = proveedoresQ.data ?? [];
+  const cuentasBancarias = cuentasQ.data ?? [];
+  const cajasDisponibles = cajasQ.data ?? [];
+
+  const montoRecepcion = useMemo(
+    () => Number(registro?.resumen?.subtotal ?? registro?.total ?? 0),
+    [registro]
+  );
+
+  // Autoresolver de cuenta/caja según método
   useEffect(() => {
     if (!isBankMethod(metodoPago) && cuentaBancariaSelected) {
       setCuentaBancariaSelected("");
@@ -250,84 +272,96 @@ export default function CompraDetalle() {
     }
   }, [metodoPago, cajasDisponibles, montoRecepcion, cajaSelected]);
 
+  // Set default proveedor desde el registro
   useEffect(() => {
-    if (!Number.isFinite(compraId) || compraId <= 0) {
-      setError("ID de compra inválido");
-      return;
-    }
-    getData();
-  }, [compraId, getData]);
+    const idProv = registro?.proveedor?.id;
+    setProveedorSelected(idProv ? String(idProv) : undefined);
+  }, [registro?.proveedor?.id]);
 
-  // === Handlers ===
+  // === Handlers ==============================================================
   const onBack = () => navigate(-1);
 
   const handleSelectCaja = (option: Option | null) => {
-    if (option) {
-      setCajaSelected(option.value ?? null);
-    } else {
-      setCajaSelected(null);
-    }
+    setCajaSelected(option ? option.value : null);
   };
 
-  console.log("banco seleccionado es: ", cuentaBancariaSelected);
-
-  const sendtToStock = async () => {
-    if (!registro || isSubmiting) return;
-    setIsSubmiting(true);
+  const sendtToStock = useCallback(async () => {
+    if (!registro || recepcionarM.isPending) return;
 
     const usuarioId = registro.usuario.id ?? 1;
 
+    if (!proveedorSelected) {
+      toast.error("Seleccione un proveedor");
+      return;
+    }
     if (!metodoPago) {
       toast.error("Seleccione un método de pago");
-      setIsSubmiting(false);
       return;
     }
-
     if (isBankMethod(metodoPago) && !cuentaBancariaSelected) {
       toast.error("Seleccione una cuenta bancaria para este método");
-      setIsSubmiting(false);
       return;
-    }
-
-    const payload: any = {
-      compraId,
-      usuarioId,
-      observaciones,
-      proveedorId: Number(proveedorSelected),
-      metodoPago,
-      cuentaBancariaId: parseInt(cuentaBancariaSelected),
-    };
-
-    console.log("el payload es: ", payload);
-
-    if (isBankMethod(metodoPago)) {
-      payload.cuentaBancariaId = parseInt(cuentaBancariaSelected);
     }
     if (isCashMethod(metodoPago)) {
       if (!cajaSelected) {
         toast.error("Seleccione una caja con saldo suficiente.");
-        setIsSubmiting(false);
         return;
       }
+      const cajaSel = cajasDisponibles.find(
+        (c) => String(c.id) === String(cajaSelected)
+      );
+      if (!cajaSel || Number(cajaSel.disponibleEnCaja) < montoRecepcion) {
+        toast.error("La caja seleccionada no tiene saldo suficiente.");
+        return;
+      }
+    }
+
+    const payload: {
+      compraId: number;
+      usuarioId: number;
+      proveedorId: number;
+      observaciones?: string;
+      metodoPago: string;
+      cuentaBancariaId?: number;
+      registroCajaId?: number;
+    } = {
+      compraId,
+      usuarioId,
+      proveedorId: Number(proveedorSelected),
+      observaciones,
+      metodoPago,
+    };
+
+    if (isBankMethod(metodoPago)) {
+      payload.cuentaBancariaId = parseInt(cuentaBancariaSelected);
+    }
+    if (isCashMethod(metodoPago) && cajaSelected) {
       payload.registroCajaId = parseInt(cajaSelected);
     }
 
-    try {
-      await toast.promise(recepcionarCompraAuto(payload), {
-        loading: "Recepcionando compra...",
-        success: "Compra recepcionada y enviada a stock",
-        error: (error) => getApiErrorMessageAxios(error),
-      });
-      await getData();
-      setOpenSendStock(false);
-      setObservaciones("");
-    } finally {
-      setIsSubmiting(false);
-      setOpenFormDialog(false);
-    }
-  };
+    await toast.promise(recepcionarM.mutateAsync(payload), {
+      loading: "Recepcionando compra...",
+      success: "Compra recepcionada y enviada a stock",
+      error: (error) => getApiErrorMessageAxios(error),
+    });
 
-  // === UI Utils ===
+    setOpenSendStock(false);
+    setOpenFormDialog(false);
+    setObservaciones("");
+  }, [
+    registro,
+    recepcionarM,
+    compraId,
+    proveedorSelected,
+    observaciones,
+    metodoPago,
+    cuentaBancariaSelected,
+    cajaSelected,
+    cajasDisponibles,
+    montoRecepcion,
+  ]);
+
+  // === UI Utils ==============================================================
   const optionsCajas: Option[] = cajasDisponibles.map((c) => ({
     label: `Caja #${c.id} · Inicial ${formattMonedaGT(
       c.saldoInicial
@@ -358,10 +392,8 @@ export default function CompraDetalle() {
         color: "text-blue-600",
       },
     };
-
     const config = variants[estado] || variants.ESPERANDO_ENTREGA;
     const Icon = config.icon;
-
     return (
       <Badge variant={config.variant} className="gap-1">
         <Icon className={`h-3 w-3 ${config.color}`} />
@@ -370,17 +402,15 @@ export default function CompraDetalle() {
     );
   };
 
-  useEffect(() => {
-    const id = registro?.proveedor?.id;
-    setProveedorSelected(id ? String(id) : undefined);
-  }, [registro?.proveedor?.id]);
+  // === Loading / Error screens ==============================================
+  const loadingHard = registroQ.isPending; // primera carga del registro
+  const errorHard = registroQ.isError && !registro;
 
-  // === Render condicional ===
-  if (loading) {
+  if (loadingHard) {
     return (
       <div className="min-h-screen bg-background p-2 sm:p-4 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-sm text-muted-foreground">
             Cargando registro de compra...
           </p>
@@ -389,36 +419,35 @@ export default function CompraDetalle() {
     );
   }
 
-  if (error || !registro) {
+  if (errorHard) {
     return (
       <div className="min-h-screen bg-background p-2 sm:p-4 flex items-center justify-center">
         <div className="text-center">
           <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-semibold mb-2">Error</h2>
           <p className="text-sm text-muted-foreground">
-            {error || "Registro no encontrado"}
+            {(registroQ.error as Error)?.message || "Registro no encontrado"}
           </p>
-          {onBack && (
-            <Button
-              variant="outline"
-              onClick={onBack}
-              className="mt-4 bg-transparent"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            onClick={onBack}
+            className="mt-4 bg-transparent"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Volver
+          </Button>
         </div>
       </div>
     );
   }
 
-  // === Derived values ===
+  if (!registro) return null;
+
+  // === Derived values (ya con datos) ========================================
   const addedToStock: boolean = ["RECIBIDO", "RECIBIDO_PARCIAL"].includes(
     registro.estado
   );
 
-  // caja seleccionada tiene saldo suficiente?
   const cajaSel = cajasDisponibles.find(
     (c) => String(c.id) === String(cajaSelected)
   );
@@ -436,11 +465,7 @@ export default function CompraDetalle() {
     (!requiereBanco || !!cuentaBancariaSelected) &&
     (!requiereCaja || (!!cajaSelected && cajaTieneSaldo));
 
-  // Debug logs
-  console.log("El proveedor es: ", proveedorSelected);
-  console.log("El registro de compra es: ", registro);
-  console.log("La caja seleccionada es: ", cajaSelected);
-
+  // === RENDER ================================================================
   return (
     <motion.div
       variants={containerVariants}
@@ -451,16 +476,14 @@ export default function CompraDetalle() {
       <div className="mx-auto max-w-7xl space-y-4">
         {/* Header */}
         <motion.div variants={itemVariants} className="flex items-center gap-3">
-          {onBack && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-              className="h-8 w-8 p-0"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="h-8 w-8 p-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div>
             <h1 className="text-xl font-semibold">
               Registro de Compra #{registro.id}
@@ -472,7 +495,7 @@ export default function CompraDetalle() {
           <div className="ml-auto">{getEstadoBadge(registro.estado)}</div>
         </motion.div>
 
-        {/* Información General */}
+        {/* Info General */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <motion.div variants={itemVariants}>
             <Card className="h-full">
@@ -539,7 +562,7 @@ export default function CompraDetalle() {
           </motion.div>
         </div>
 
-        {/* Información de Usuario y Proveedor */}
+        {/* Usuario / Proveedor */}
         <div className="grid gap-4 md:grid-cols-2">
           <motion.div variants={itemVariants}>
             <Card>
@@ -597,16 +620,15 @@ export default function CompraDetalle() {
           </motion.div>
         </div>
 
-        {/* Información de Origen */}
+        {/* Origen */}
         {registro.origen === "REQUISICION" && registro.requisicion && (
           <RequisicionInfo requisicion={registro.requisicion} />
         )}
-
         {registro.origen === "PEDIDO" && registro.pedido && (
           <PedidoInfo pedido={registro.pedido} />
         )}
 
-        {/* Información de Factura */}
+        {/* Factura */}
         {registro.conFactura && registro.factura && (
           <motion.div variants={itemVariants}>
             <Card>
@@ -636,7 +658,7 @@ export default function CompraDetalle() {
           </motion.div>
         )}
 
-        {/* Resumen de Compra */}
+        {/* Resumen */}
         <motion.div variants={itemVariants}>
           <Card>
             <CardHeader className="pb-3">
@@ -677,7 +699,7 @@ export default function CompraDetalle() {
           </Card>
         </motion.div>
 
-        {/* Detalles de Productos */}
+        {/* Detalles */}
         <motion.div variants={itemVariants}>
           <Card>
             <CardHeader className="pb-3">
@@ -705,6 +727,15 @@ export default function CompraDetalle() {
                         <h4 className="text-sm font-medium">
                           {detalle.producto.nombre}
                         </h4>
+
+                        {/* Si tus types ya incluyen 'presentacion', puedes mostrarla */}
+                        {/* {detalle.presentacion && (
+                          <Badge variant="secondary" className="text-[11px]">
+                            {detalle.presentacion.nombre}
+                            {detalle.presentacion.sku ? ` · ${detalle.presentacion.sku}` : ""}
+                          </Badge>
+                        )} */}
+
                         <Badge
                           variant="secondary"
                           className="text-xs flex items-center gap-1"
@@ -772,7 +803,7 @@ export default function CompraDetalle() {
           </Card>
         </motion.div>
 
-        {/* Información de Auditoría */}
+        {/* Auditoría */}
         <motion.div variants={itemVariants}>
           <Card>
             <CardHeader className="pb-3">
@@ -799,6 +830,7 @@ export default function CompraDetalle() {
             </CardContent>
           </Card>
         </motion.div>
+
         <motion.div variants={itemVariants}>
           <Button
             disabled={addedToStock}
@@ -808,6 +840,8 @@ export default function CompraDetalle() {
           </Button>
         </motion.div>
       </div>
+
+      {/* Confirmación (segunda pantalla) */}
       <AdvancedDialog
         type="warning"
         onOpenChange={setOpenSendStock}
@@ -817,19 +851,20 @@ export default function CompraDetalle() {
         question="¿Estás seguro de que deseas continuar? Esta acción no se puede deshacer."
         confirmButton={{
           label: "Sí, confirmar entrada de stock",
-          disabled: isSubmiting,
-          loading: isSubmiting,
+          disabled: recepcionarM.isPending,
+          loading: recepcionarM.isPending,
           loadingText: "Añadiendo productos al stock...",
           onClick: sendtToStock,
         }}
         cancelButton={{
           label: "Cancelar",
-          disabled: isSubmiting,
+          disabled: recepcionarM.isPending,
           loadingText: "Cancelando...",
           onClick: () => setOpenSendStock(false),
         }}
       />
 
+      {/* Form previo a confirmar */}
       <Dialog open={openFormDialog} onOpenChange={setOpenFormDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -839,6 +874,7 @@ export default function CompraDetalle() {
               stock.
             </DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="observaciones">Observaciones</Label>
@@ -861,7 +897,7 @@ export default function CompraDetalle() {
                   <SelectValue placeholder="Seleccione un proveedor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {proveedores.map((p) => (
+                  {(proveedores ?? []).map((p) => (
                     <SelectItem key={p.id} value={String(p.id)}>
                       {p.nombre}
                     </SelectItem>
@@ -894,6 +930,7 @@ export default function CompraDetalle() {
               )}
             </div>
 
+            {/* Caja */}
             {isCashMethod(metodoPago) && (
               <div className="space-y-2">
                 <Label>Seleccionar caja (saldo disponible)</Label>
@@ -906,8 +943,6 @@ export default function CompraDetalle() {
                         null
                       : null
                   }
-                  // si tu wrapper lo soporta:
-                  // isOptionDisabled={isOptionDisabled}
                   isClearable
                   isSearchable
                   className="text-black"
@@ -935,6 +970,7 @@ export default function CompraDetalle() {
               </div>
             )}
 
+            {/* Banco */}
             {isBankMethod(metodoPago) && (
               <div className="space-y-2">
                 <Label htmlFor="cuentaBancaria">
@@ -948,7 +984,7 @@ export default function CompraDetalle() {
                     <SelectValue placeholder="Seleccione una cuenta bancaria" />
                   </SelectTrigger>
                   <SelectContent>
-                    {cuentasBancarias.map((c) => (
+                    {(cuentasBancarias ?? []).map((c) => (
                       <SelectItem key={c.id} value={c.id.toString()}>
                         {c.nombre}
                       </SelectItem>

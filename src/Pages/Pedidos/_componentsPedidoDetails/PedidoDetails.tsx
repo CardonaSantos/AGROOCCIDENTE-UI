@@ -13,7 +13,7 @@ import {
   MapPin,
   Text,
 } from "lucide-react";
-
+import { motion } from "framer-motion";
 import Select from "react-select";
 import { useState, useEffect } from "react";
 import { formattMonedaGT } from "@/utils/formattMoneda";
@@ -27,6 +27,8 @@ import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 import { toast } from "sonner";
 import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
 import { useProveedoresSelect } from "@/hooks/getProveedoresSelect/proveedores";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
+import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
 
 interface SendPedidoToCompraDto {
   proveedorId: number;
@@ -113,14 +115,26 @@ export default function PedidoDetails() {
   );
 
   return (
-    <div className="space-y-6 w-full">
+    <motion.div className="space-y-2 container" {...DesvanecerHaciaArriba}>
+      <PageHeader
+        title="Detalles del pedido"
+        subtitle=""
+        fallbackBackTo="/"
+        sticky={false}
+      />
       {/* ---- Datos Generales ---- */}
       <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex justify-between items-center text-xl">
-            <span>Pedido #{pedido.folio}</span>
-            <Badge variant="secondary">{pedido.estado}</Badge>
-          </CardTitle>
+        <CardHeader className="grid grid-cols-2">
+          <div className="">
+            <CardTitle className="flex justify-between items-center text-xl">
+              <span>Pedido #{pedido.folio}</span>
+              <Badge variant="secondary">{pedido.estado}</Badge>
+            </CardTitle>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={() => refetchPedido()}>Refrescar</Button>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
@@ -210,36 +224,90 @@ export default function PedidoDetails() {
         </CardHeader>
         <CardContent>
           <ul className="divide-y">
-            {pedido.lineas.map((linea) => (
-              <li key={linea.id} className="py-3 flex items-center gap-4">
-                {linea.producto.imagenUrl ? (
-                  <img
-                    src={linea.producto.imagenUrl}
-                    alt={linea.producto.nombre}
-                    className="h-14 w-14 object-cover rounded"
-                  />
-                ) : (
-                  <div className="h-14 w-14 flex items-center justify-center rounded bg-gray-100 text-gray-400">
-                    📦
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium">{linea.producto.nombre}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Código: {linea.producto.codigoProducto}
-                  </p>
-                  <p className="text-sm">Cantidad: {linea.cantidad}</p>
-                  {linea.notas && (
-                    <p className="text-xs italic text-muted-foreground">
-                      Nota: {linea.notas}
-                    </p>
+            {pedido.lineas.map((linea) => {
+              const img = linea.producto.imagenUrl;
+              const esPresentacion = !!linea.presentacionId;
+              const fechaVence = linea.fechaExpiracion
+                ? new Date(linea.fechaExpiracion).toLocaleDateString()
+                : null;
+
+              return (
+                <li key={linea.id} className="py-3 flex items-center gap-4">
+                  {img ? (
+                    <img
+                      src={img}
+                      alt={linea.producto.nombre}
+                      className="h-14 w-14 object-cover rounded"
+                    />
+                  ) : (
+                    <div className="h-14 w-14 flex items-center justify-center rounded bg-gray-100 text-gray-400">
+                      📦
+                    </div>
                   )}
-                </div>
-                <div className="text-right text-sm font-semibold">
-                  {formattMonedaGT(linea.subtotal)}
-                </div>
-              </li>
-            ))}
+
+                  <div className="flex-1 min-w-0">
+                    {/* Nombre de producto y, si aplica, nombre de la presentación */}
+                    <p className="font-medium truncate">
+                      {linea.producto.nombre}
+                      {esPresentacion && (
+                        <>
+                          {" "}
+                          —{" "}
+                          <span className="font-normal">
+                            {linea.presentacion?.nombre}
+                          </span>
+                        </>
+                      )}
+                    </p>
+
+                    {/* Códigos / metadatos */}
+                    <p className="text-xs text-muted-foreground">
+                      Código prod.: {linea.producto.codigoProducto}
+                      {esPresentacion && (
+                        <>
+                          {" · "}Tipo: {linea.presentacion?.tipoPresentacion}
+                          {linea.presentacion?.sku && (
+                            <>
+                              {" · "}SKU: {linea.presentacion.sku}
+                            </>
+                          )}
+                          {linea.presentacion?.codigoBarras && (
+                            <>
+                              {" · "}CB: {linea.presentacion.codigoBarras}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </p>
+
+                    {/* Cantidad + fecha de vencimiento + notas */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      <span>Cantidad: {linea.cantidad}</span>
+                      {fechaVence && (
+                        <span className="text-muted-foreground">
+                          Vence: {fechaVence}
+                        </span>
+                      )}
+                      {linea.notas && (
+                        <span className="italic text-muted-foreground truncate">
+                          Nota: {linea.notas}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Totales (PU y Subtotal) */}
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground">
+                      PU: {formattMonedaGT(linea.precioUnitario)}
+                    </div>
+                    <div className="text-sm font-semibold">
+                      {formattMonedaGT(linea.subtotal)}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </CardContent>
       </Card>
@@ -312,6 +380,6 @@ export default function PedidoDetails() {
           />
         </div>
       </AdvancedDialog>
-    </div>
+    </motion.div>
   );
 }

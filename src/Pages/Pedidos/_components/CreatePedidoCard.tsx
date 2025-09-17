@@ -15,7 +15,6 @@ import { Loader2 } from "lucide-react";
 import { ProductoToPedidoList } from "../Interfaces/productsList.interfaces";
 import {
   PedidoCreate,
-  PedidoLineaUI,
   PedidoPrioridad,
   TipoPedido,
 } from "../Interfaces/createPedido.interfaces";
@@ -32,6 +31,22 @@ import { toast } from "sonner";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 
+/** === UI Linea: permite producto O presentación === */
+export type PedidoLineaUI = {
+  tipo: "PRODUCTO" | "PRESENTACION";
+  productoId: number;
+  presentacionId?: number;
+  /** Cantidad solicitada (en unidades base para producto, en #presentaciones para presentación). */
+  cantidad: number;
+  /** Override de precio unitario (opcional). */
+  precioUnitarioOverride?: number | null;
+  /** Sólo UI */
+  showNota?: boolean;
+  notas?: string;
+  fechaVencimiento: string;
+  actualizarCosto?: boolean;
+};
+
 type Option = { label: string; value: string };
 
 export default function CreatePedidoCard({
@@ -47,7 +62,6 @@ export default function CreatePedidoCard({
   setPageProd,
   totalPages,
   openCreate,
-
   setOpenCreate,
 }: {
   sucursalId: number;
@@ -62,7 +76,6 @@ export default function CreatePedidoCard({
   pageProd: number;
   setPageProd: React.Dispatch<React.SetStateAction<number>>;
   totalPages: number;
-
   setOpenCreate: React.Dispatch<React.SetStateAction<boolean>>;
   openCreate: boolean;
 }) {
@@ -70,16 +83,13 @@ export default function CreatePedidoCard({
     value: p,
     label: p,
   }));
-
   const tiposOptions = Object.values(TipoPedido).map((t) => ({
     value: t,
     label: t,
   }));
-
   const sucursalIDStore = useStore((state) => state.sucursalId) ?? 0;
   const [clienteId, setClienteId] = useState<number | null>(null);
   const [observaciones, setObservaciones] = useState("");
-  // const [lineas, setLineas] = useState<PedidoLinea[]>([]);
   const [lineas, setLineas] = useState<PedidoLineaUI[]>([]);
   const [sucursalId, setSucursalId] = useState<number | null>(null);
   const [prioridad, setPrioridad] = useState<PedidoPrioridad>(
@@ -87,46 +97,153 @@ export default function CreatePedidoCard({
   );
   const [tipo, setTipo] = useState<TipoPedido>(TipoPedido.INTERNO);
 
-  const selectedLines = useMemo(
-    () =>
-      lineas.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad })),
-    [lineas]
-  );
+  /** Helpers para llave estable por línea */
+  const keyFor = (l: PedidoLineaUI) =>
+    l.tipo === "PRODUCTO" ? `P-${l.productoId}` : `PP-${l.presentacionId}`;
 
+  /** === Totales === */
   const totals = useMemo(() => {
-    return {
-      items: lineas.length,
-      total: lineas.reduce((acc, item) => {
-        const producto = productos.find((p) => p.id === item.productoId);
-        return acc + (producto?.precioCostoActual ?? 0) * item.cantidad;
-      }, 0),
-    };
+    let items = lineas.length;
+    let total = 0;
+
+    for (const l of lineas) {
+      const prod = productos.find((p) => p.id === l.productoId);
+      if (l.tipo === "PRODUCTO") {
+        const unit =
+          l.precioUnitarioOverride ?? (prod ? prod.precioCostoActual : 0);
+        total += unit * l.cantidad;
+      } else {
+        const pres = prod?.presentaciones.find(
+          (pp) => pp.id === l.presentacionId
+        );
+        const unit =
+          l.precioUnitarioOverride ?? pres?.costoReferencialPresentacion ?? 0;
+        total += unit * l.cantidad;
+      }
+    }
+    return { items, total };
   }, [lineas, productos]);
 
-  const toggle = (checked: boolean, productId: number) => {
+  /** === Mutadores de líneas === */
+  const upsertProduct = (productoId: number, checked: boolean) => {
+    const producto = productos.find((p) => p.id === productoId);
     setLineas((prev) => {
+      const exists = prev.find(
+        (x) => x.tipo === "PRODUCTO" && x.productoId === productoId
+      );
       if (checked) {
-        if (prev.some((l) => l.productoId === productId)) return prev;
-        const producto = productos.find((p) => p.id === productId);
-        if (!producto) return prev;
+        if (exists) return prev;
         return [
           ...prev,
           {
-            productoId: productId,
+            tipo: "PRODUCTO",
+            productoId,
             cantidad: 1,
-            precioCostoActual: producto.precioCostoActual,
+            precioUnitarioOverride: producto?.precioCostoActual ?? 0,
+            fechaVencimiento: "",
+            actualizarCosto: false,
+            notas: "",
           },
         ];
       }
-      return prev.filter((l) => l.productoId !== productId);
+      return prev.filter(
+        (x) => !(x.tipo === "PRODUCTO" && x.productoId === productoId)
+      );
     });
   };
 
-  const changeQty = (productId: number, qty: number) => {
+  const handleChangeFechaVencimiento = (rowKey: string, date: string) => {
     setLineas((prev) =>
       prev.map((l) =>
-        l.productoId === productId ? { ...l, cantidad: qty } : l
+        keyFor(l) === rowKey ? { ...l, fechaVencimiento: date } : l
       )
+    );
+  };
+
+  const upsertPresentacion = (
+    productoId: number,
+    presentacionId: number,
+    checked: boolean
+  ) => {
+    const producto = productos.find((p) => p.id === productoId);
+    const presentacion = producto?.presentaciones.find(
+      (pp) => pp.id === presentacionId
+    ); // ✅ fix
+
+    setLineas((prev) => {
+      const exists = prev.find(
+        (x) =>
+          x.tipo === "PRESENTACION" &&
+          x.productoId === productoId &&
+          x.presentacionId === presentacionId
+      );
+      if (checked) {
+        if (exists) return prev;
+        return [
+          ...prev,
+          {
+            tipo: "PRESENTACION",
+            productoId,
+            presentacionId,
+            cantidad: 1,
+            precioUnitarioOverride:
+              presentacion?.costoReferencialPresentacion ?? null,
+            fechaVencimiento: "",
+            actualizarCosto: false,
+          },
+        ];
+      }
+      return prev.filter(
+        (x) =>
+          !(
+            x.tipo === "PRESENTACION" &&
+            x.productoId === productoId &&
+            x.presentacionId === presentacionId
+          )
+      );
+    });
+  };
+  const toggleActPrecioProduct = (rowKey: string, checked: boolean) => {
+    setLineas((prev) =>
+      prev.map((l) =>
+        keyFor(l) === rowKey ? { ...l, actualizarCosto: checked } : l
+      )
+    );
+  };
+
+  const changeQty = (rowKey: string, qty: number | null) => {
+    setLineas((prev) =>
+      prev.map((l) =>
+        keyFor(l) === rowKey ? { ...l, cantidad: qty ?? l.cantidad } : l
+      )
+    );
+  };
+
+  const changePrice = (rowKey: string, price?: number | null) => {
+    setLineas((prev) =>
+      prev.map((l) =>
+        keyFor(l) === rowKey
+          ? {
+              ...l,
+              precioUnitarioOverride:
+                typeof price === "number" && price >= 0 ? price : null,
+            }
+          : l
+      )
+    );
+  };
+
+  const toggleNote = (rowKey: string) => {
+    setLineas((prev) =>
+      prev.map((l) =>
+        keyFor(l) === rowKey ? { ...l, showNota: !l.showNota } : l
+      )
+    );
+  };
+
+  const setNote = (rowKey: string, val: string) => {
+    setLineas((prev) =>
+      prev.map((l) => (keyFor(l) === rowKey ? { ...l, notas: val } : l))
     );
   };
 
@@ -135,23 +252,77 @@ export default function CreatePedidoCard({
     setObservaciones("");
     setLineas([]);
   };
-
+  console.log("Las lineas seleccionadas son: ", lineas);
   const canSend = lineas.length > 0 && !submitting;
 
+  /** === Submit === */
   const handleSubmit = async () => {
     if (lineas.length === 0) {
       toast.info("No se puede enviar una lista vacía");
       return;
     }
+    // ✅ Valida con el precio efectivo (override ?? base)
+    const hasInvalid = lineas.some((l) => {
+      const prod = productos.find((p) => p.id === l.productoId);
+      const pres = prod?.presentaciones.find(
+        (pp) => pp.id === l.presentacionId
+      );
+      const efectivo =
+        l.precioUnitarioOverride ??
+        (l.tipo === "PRODUCTO"
+          ? prod?.precioCostoActual
+          : pres?.costoReferencialPresentacion) ??
+        0;
+      return efectivo <= 0;
+    });
+
+    if (hasInvalid) {
+      toast.warning("Alguna línea no tiene precio costo válido.");
+      return;
+    }
+
     const body: PedidoCreate = {
-      sucursalId: sucursalId ? sucursalId : sucursalIDStore,
+      sucursalId: sucursalId ?? sucursalIDStore,
       clienteId: tipo === TipoPedido.CLIENTE ? clienteId : null,
-      usuarioId: userId, // ✅ usar la prop userId
+      usuarioId: userId,
       observaciones: observaciones?.trim() || undefined,
-      lineas: lineas.map(({ showNota, ...l }) => l), // ✅ quitamos showNota
       prioridad,
       tipo,
+      lineas: lineas.map((l) => {
+        const prod = productos.find((p) => p.id === l.productoId);
+        const pres = prod?.presentaciones.find(
+          (pp) => pp.id === l.presentacionId
+        );
+
+        // ✅ precioCostoActual que mandas al server = override ?? base
+        const precioCostoActual =
+          l.precioUnitarioOverride ??
+          (l.tipo === "PRODUCTO"
+            ? prod?.precioCostoActual
+            : pres?.costoReferencialPresentacion) ??
+          0;
+
+        return {
+          productoId: l.productoId,
+          ...(l.tipo === "PRESENTACION"
+            ? { presentacionId: l.presentacionId }
+            : {}),
+          cantidad: l.cantidad,
+          ...(l.precioUnitarioOverride != null
+            ? { precioUnitario: l.precioUnitarioOverride }
+            : {}),
+          ...(l.notas ? { notas: l.notas } : {}),
+          precioCostoActual,
+          ...(l.fechaVencimiento
+            ? { fechaVencimiento: l.fechaVencimiento }
+            : {}),
+          ...(l.actualizarCosto ? { actualizarCosto: l.actualizarCosto } : {}),
+          ...(l.tipo ? { tipo: l.tipo } : {}),
+        };
+      }),
     };
+
+    console.log("El dto a enviar es: ", body);
 
     await onSubmit(body);
     reset();
@@ -162,15 +333,15 @@ export default function CreatePedidoCard({
       <CardHeader>
         <CardTitle>Generar Pedido</CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-6">
-        {/* --- FILTROS SUPERIORES --- */}
+        {/* Filtros */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {/* Tipo de pedido */}
           <div className="space-y-1">
             <Label>Tipo de Pedido</Label>
             <Select
               value={tipo}
-              onValueChange={(val) => setTipo(val as TipoPedido)}
+              onValueChange={(v) => setTipo(v as TipoPedido)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccione tipo de pedido" />
@@ -185,12 +356,11 @@ export default function CreatePedidoCard({
             </Select>
           </div>
 
-          {/* Prioridad */}
           <div className="space-y-1">
             <Label>Prioridad</Label>
             <Select
               value={prioridad}
-              onValueChange={(val) => setPrioridad(val as PedidoPrioridad)}
+              onValueChange={(v) => setPrioridad(v as PedidoPrioridad)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccione prioridad" />
@@ -205,7 +375,6 @@ export default function CreatePedidoCard({
             </Select>
           </div>
 
-          {/* Sucursal */}
           <div className="space-y-1">
             <Label>Sucursal</Label>
             <ReactSelect
@@ -213,11 +382,10 @@ export default function CreatePedidoCard({
               options={sucursalesOptions}
               onChange={(opt) => setSucursalId(opt ? Number(opt?.value) : null)}
               isClearable
-              placeholder="Seleccione una sucursal a asignar (default esta)"
+              placeholder="Asignar sucursal (por defecto, la actual)"
             />
           </div>
 
-          {/* Cliente (solo si tipo = CLIENTE) */}
           {tipo === TipoPedido.CLIENTE && (
             <div className="space-y-1">
               <Label>Cliente</Label>
@@ -243,14 +411,18 @@ export default function CreatePedidoCard({
           />
         </div>
 
-        {/* Lista de productos */}
+        {/* === Tabla productos/presentaciones === */}
         <ProductsList
           search={search}
           setSearch={setSearch}
           productos={productos}
-          selectedLines={selectedLines}
-          onToggle={toggle}
+          selectedLines={lineas}
+          onToggleProduct={upsertProduct}
+          onTogglePresentacion={upsertPresentacion}
           onQtyChange={changeQty}
+          onPriceChange={changePrice}
+          handleChangeFechaVencimiento={handleChangeFechaVencimiento}
+          toggleActPrecioProduct={toggleActPrecioProduct}
         />
 
         {/* Paginación server-side */}
@@ -281,9 +453,9 @@ export default function CreatePedidoCard({
         )}
 
         {/* Totales */}
-        <div className="flex items-center justify-between rounded-md border p-3 text-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-md border p-3 text-sm">
           <div className="text-muted-foreground">
-            Productos seleccionados:{" "}
+            Ítems seleccionados:{" "}
             <span className="font-medium">{totals.items}</span>
           </div>
           <div className="text-muted-foreground">
@@ -292,38 +464,42 @@ export default function CreatePedidoCard({
           </div>
         </div>
 
-        {/* Productos seleccionados */}
+        {/* Resumen y notas por renglón */}
         <div className="rounded-md border p-3 space-y-3">
-          <h4 className="font-medium">Productos en este pedido</h4>
-
+          <h4 className="font-medium">Renglones seleccionados</h4>
           <div className="max-h-60 overflow-y-auto pr-2">
             <ul className="divide-y">
               {lineas.map((l) => {
-                const producto = productos.find((p) => p.id === l.productoId);
-                const nombre = producto?.nombre ?? `ID ${l.productoId}`;
-                const tieneNota = l.notas && l.notas.trim().length > 0;
+                const rowKey = keyFor(l);
+                const prod = productos.find((p) => p.id === l.productoId);
+                const pres =
+                  l.tipo === "PRESENTACION"
+                    ? prod?.presentaciones.find(
+                        (pp) => pp.id === l.presentacionId
+                      )
+                    : undefined;
+                const nombre =
+                  l.tipo === "PRODUCTO"
+                    ? prod?.nombre ?? `Producto ${l.productoId}`
+                    : `${prod?.nombre ?? "Producto"} - ${
+                        pres?.nombre ?? `Pres. ${l.presentacionId}`
+                      }`;
 
                 return (
-                  <li key={l.productoId} className="py-2 space-y-2">
+                  <li key={rowKey} className="py-2 space-y-2">
                     <div className="flex items-center justify-between">
-                      <div>
+                      <div className="min-w-0">
                         <span className="font-medium">{nombre}</span>
                         <span className="ml-2 text-sm text-muted-foreground">
-                          Cantidad: {l.cantidad}
+                          Cant.: {l.cantidad}
+                          {l.precioUnitarioOverride != null &&
+                            ` · Q ${l.precioUnitarioOverride.toFixed(2)}`}
                         </span>
                       </div>
                       <Button
-                        variant={tieneNota ? "secondary" : "outline"}
+                        variant={l.showNota ? "secondary" : "outline"}
                         size="sm"
-                        onClick={() =>
-                          setLineas((prev) =>
-                            prev.map((pl) =>
-                              pl.productoId === l.productoId
-                                ? { ...pl, showNota: !pl.showNota }
-                                : pl
-                            )
-                          )
-                        }
+                        onClick={() => toggleNote(rowKey)}
                       >
                         {l.showNota ? "Ocultar nota" : "➕ Nota"}
                       </Button>
@@ -331,17 +507,9 @@ export default function CreatePedidoCard({
 
                     {l.showNota && (
                       <Textarea
-                        placeholder="Nota para este producto"
+                        placeholder="Nota para este renglón"
                         value={l.notas ?? ""}
-                        onChange={(e) =>
-                          setLineas((prev) =>
-                            prev.map((pl) =>
-                              pl.productoId === l.productoId
-                                ? { ...pl, notas: e.target.value }
-                                : pl
-                            )
-                          )
-                        }
+                        onChange={(e) => setNote(rowKey, e.target.value)}
                         rows={2}
                       />
                     )}
@@ -357,12 +525,7 @@ export default function CreatePedidoCard({
         <Button variant="outline" onClick={reset} disabled={submitting}>
           Limpiar
         </Button>
-        <Button
-          onClick={() => {
-            setOpenCreate(true);
-          }}
-          disabled={!canSend}
-        >
+        <Button onClick={() => setOpenCreate(true)} disabled={!canSend}>
           {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Guardar Pedido
         </Button>
@@ -385,9 +548,7 @@ export default function CreatePedidoCard({
           label: "Cancelar",
           disabled: submitting,
           loadingText: "Cancelando...",
-          onClick: () => {
-            setOpenCreate(false);
-          },
+          onClick: () => setOpenCreate(false),
         }}
       />
     </Card>

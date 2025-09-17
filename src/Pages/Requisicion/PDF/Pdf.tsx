@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import type { RequisitionPrintable } from "../requisicion.interfaces";
+import type { RequisitionPrintable } from "../newMap/requisicion.interfaces";
 import { getOneRequisicion } from "../requisicion.api";
 import { useParams } from "react-router-dom";
 import dayjs from "dayjs";

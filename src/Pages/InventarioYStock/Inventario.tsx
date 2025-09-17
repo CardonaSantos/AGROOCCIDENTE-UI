@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertCircle,
   Ban,
@@ -12,7 +11,6 @@ import {
   Clock,
   InfinityIcon,
   MapPin,
-  PlusCircle,
   Search,
   Tag,
   TagIcon,
@@ -25,8 +23,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Boxes } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import SelectM from "react-select";
 import {
   Select,
   SelectContent,
@@ -42,26 +38,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   ArrowDownUp,
   Barcode,
-  Box,
   ChevronLeft,
   ChevronRight,
-  Coins,
   Edit,
   Eye,
-  FileText,
 } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
 import { SimpleProvider } from "@/Types/Proveedor/SimpleProveedor";
 import { ProductsInventary } from "@/Types/Inventary/ProductsInventary";
 import {
@@ -87,14 +72,11 @@ import dayjs from "dayjs";
 import "dayjs/locale/es";
 import utc from "dayjs/plugin/utc";
 import localizedFormat from "dayjs/plugin/localizedFormat";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ImageCropperUploader } from "../Cropper";
-import AddPrices from "../Inventario/AddPrices";
 import { formattMonedaGT } from "@/utils/formattMoneda";
-import { Category, CroppedImage, ProductCreate } from "./interfaces.interface";
-import { PrecioProductoInventario } from "../Inventario/preciosInterfaces.interface";
+import { Category, ProductCreate } from "./interfaces.interface";
 import CreateCategory from "./CreateCategory";
+import { motion } from "framer-motion";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,6 +86,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 dayjs.extend(utc);
 dayjs.extend(localizedFormat);
@@ -117,11 +101,6 @@ interface InventarioProps {
   products: ProductsInventary[];
   categorias: Category[];
   proveedores: SimpleProvider[];
-  onAddProduct: (
-    productCreate: ProductCreate,
-    preciosProducto: PrecioProductoInventario[],
-    croppedImages: CroppedImage[]
-  ) => Promise<void>;
   openCategory: boolean;
   setOpenCategory: React.Dispatch<React.SetStateAction<boolean>>;
   loadInventoryData: () => Promise<void>;
@@ -137,18 +116,11 @@ interface InventarioProps {
   productCreate: ProductCreate;
   setProductCreate: React.Dispatch<React.SetStateAction<ProductCreate>>;
   //croper de imagenes
-  croppedImages: CroppedImage[];
-  setCroppedImages: React.Dispatch<React.SetStateAction<CroppedImage[]>>;
   //Para precios del producto creando
-  preciosProducto: PrecioProductoInventario[];
-  setPreciosProducto: React.Dispatch<
-    React.SetStateAction<PrecioProductoInventario[]>
-  >;
 }
 
 export default function Inventario({
   categorias,
-  onAddProduct,
   products,
   proveedores,
   //para dialog de category
@@ -159,15 +131,9 @@ export default function Inventario({
   createCategory,
   deleteCategory,
   updateOneCategory,
-  productCreate,
-  setProductCreate,
-  //croper images
-  setCroppedImages,
-  croppedImages,
-  //precios del producto
-  preciosProducto,
-  setPreciosProducto,
-}: InventarioProps) {
+}: //croper images
+//precios del producto
+InventarioProps) {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
@@ -272,10 +238,13 @@ export default function Inventario({
   }, 0);
 
   return (
-    <div className="container mx-auto p-4 shadow-xl">
-      <h1 className="text-lg font-bold mb-4 text-center">
-        Administrador de inventario
-      </h1>
+    <motion.div className="container mx-auto" {...DesvanecerHaciaArriba}>
+      <PageHeader
+        title="Inventario General"
+        subtitle="Gestione sus productos y stocks"
+        sticky={false}
+        fallbackBackTo="/"
+      />
       <div className="bg-muted/50 p-6 rounded-xl mb-6 shadow-sm border border-border/40 backdrop-blur-sm">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6">
           <div className="flex items-center space-x-2 mb-4 md:mb-0">
@@ -291,268 +260,14 @@ export default function Inventario({
           <div className="flex space-x-2">
             <Button
               className="flex items-center space-x-2 transition-all hover:shadow-md"
-              onClick={() => setOpenCategory(true)}
+              asChild
+              // onClick={() => setOpenCategory(true)}
             >
-              <Tag className="h-4 w-4" />
-              <span>Categorías</span>
+              <Link to={`/crear-producto`}>
+                <Tag className="h-4 w-4" />
+                <span>Producto y categorias</span>
+              </Link>
             </Button>
-
-            <Dialog>
-              <DialogTrigger>
-                <Button className="flex items-center space-x-2 transition-all hover:shadow-md">
-                  <PlusCircle className="h-4 w-4" />
-                  <span>Añadir Producto</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[95vh] w-full">
-                <DialogHeader>
-                  <DialogTitle className="text-center">
-                    Añadir nuevo producto
-                  </DialogTitle>
-                </DialogHeader>
-
-                <Tabs defaultValue="account" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="account">Producto</TabsTrigger>
-                    <TabsTrigger value="password">Imagenes</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="account" className="mt-4">
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                      }}
-                      className="overflow-hidden"
-                    >
-                      <ScrollArea className="h-[calc(95vh-220px)]">
-                        <div className="space-y-4 p-1">
-                          {/* Todo el contenido del formulario permanece igual */}
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="nombre" className="text-sm">
-                                Producto
-                              </Label>
-                              <div className="relative">
-                                <Box className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                                <Input
-                                  onChange={(e) =>
-                                    setProductCreate({
-                                      ...productCreate,
-                                      nombre: e.target.value,
-                                    })
-                                  }
-                                  value={productCreate.nombre}
-                                  id="nombre"
-                                  name="nombre"
-                                  placeholder="Nombre del producto"
-                                  className="pl-9 h-9 shadow-sm rounded-md"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="categorias" className="text-sm">
-                                Categoría
-                              </Label>
-                              <SelectM
-                                placeholder="Seleccionar categoría..."
-                                isMulti
-                                name="categorias"
-                                options={categorias.map((categoria) => ({
-                                  value: categoria.id,
-                                  label: categoria.nombre,
-                                }))}
-                                className="basic-multi-select text-black"
-                                classNamePrefix="select"
-                                onChange={(selectedOptions) => {
-                                  const selectedIds = selectedOptions.map(
-                                    (option) => option.value
-                                  );
-                                  setProductCreate({
-                                    ...productCreate,
-                                    categorias: selectedIds,
-                                  });
-                                }}
-                                value={categorias
-                                  .filter((categoria) =>
-                                    productCreate.categorias.includes(
-                                      categoria.id
-                                    )
-                                  )
-                                  .map((categoria) => ({
-                                    value: categoria.id,
-                                    label: categoria.nombre,
-                                  }))}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Fila 2: Códigos */}
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label
-                                htmlFor="codigoProducto"
-                                className="text-sm"
-                              >
-                                Código Producto
-                              </Label>
-                              <div className="relative">
-                                <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                                <Input
-                                  value={productCreate.codigoProducto}
-                                  onChange={(e) =>
-                                    setProductCreate({
-                                      ...productCreate,
-                                      codigoProducto: e.target.value,
-                                    })
-                                  }
-                                  id="codigoProducto"
-                                  name="codigoProducto"
-                                  placeholder="Código único producto"
-                                  className="pl-9 h-9 shadow-sm rounded-md"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label
-                                htmlFor="codigoProveedor"
-                                className="text-sm"
-                              >
-                                Código Proveedor
-                              </Label>
-                              <div className="relative">
-                                <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                                <Input
-                                  value={productCreate.codigoProveedor}
-                                  onChange={(e) =>
-                                    setProductCreate({
-                                      ...productCreate,
-                                      codigoProveedor: e.target.value,
-                                    })
-                                  }
-                                  id="codigoProveedor"
-                                  name="codigoProveedor"
-                                  placeholder="Código Proveedor"
-                                  className="pl-9 h-9 shadow-sm rounded-md"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* STOCK MINIMO */}
-                          <div className="space-y-2">
-                            <Label htmlFor="stockBajo" className="text-sm">
-                              Stock Minimo
-                            </Label>
-                            <div className="relative">
-                              <Coins className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                              <Input
-                                value={productCreate.stockMinimo ?? ""}
-                                onChange={(e) =>
-                                  setProductCreate({
-                                    ...productCreate,
-                                    stockMinimo: e.target.value
-                                      ? Number(e.target.value)
-                                      : null,
-                                  })
-                                }
-                                id="stockBajo"
-                                name="stockBajo"
-                                type="number"
-                                step="1"
-                                placeholder="Stock minimo (opcional)"
-                                className="pl-9 h-9 shadow-sm rounded-md"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Fila 3: Descripción */}
-                          <div className="space-y-2">
-                            <Label htmlFor="desc" className="text-sm">
-                              Descripción
-                            </Label>
-                            <div className="relative">
-                              <FileText className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
-                              <Textarea
-                                value={productCreate.descripcion}
-                                onChange={(e) =>
-                                  setProductCreate({
-                                    ...productCreate,
-                                    descripcion: e.target.value,
-                                  })
-                                }
-                                placeholder="Breve descripción..."
-                                id="desc"
-                                name="desc"
-                                className="pl-9 shadow-sm rounded-md min-h-[60px] resize-none"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="">
-                            <div className="space-y-2">
-                              <Label htmlFor="precioCosto" className="text-sm">
-                                Precio Costo
-                              </Label>
-                              <div className="relative">
-                                <Coins className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                                <Input
-                                  value={productCreate.precioCostoActual ?? ""}
-                                  onChange={(e) =>
-                                    setProductCreate({
-                                      ...productCreate,
-                                      precioCostoActual: e.target.value
-                                        ? Number(e.target.value)
-                                        : null,
-                                    })
-                                  }
-                                  id="precioCosto"
-                                  name="precioCosto"
-                                  type="number"
-                                  step="1"
-                                  placeholder="Precio costo del producto"
-                                  className="pl-9 h-9 shadow-sm rounded-md"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          <div className="">
-                            <AddPrices
-                              precios={preciosProducto}
-                              setPrecios={setPreciosProducto}
-                            />
-                          </div>
-                        </div>
-                      </ScrollArea>
-
-                      <DialogFooter className="mt-4 pt-4 border-t">
-                        <Button
-                          onClick={() =>
-                            onAddProduct(
-                              productCreate,
-                              preciosProducto,
-                              croppedImages
-                            )
-                          }
-                        >
-                          Añadir Producto
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </TabsContent>
-                  <TabsContent value="password" className="mt-4">
-                    <div className="max-w-5xl max-h-[95vh] overflow-hidden">
-                      <div className="overflow-y-auto max-h-[calc(90vh-120px)] pr-2">
-                        <ImageCropperUploader
-                          croppedImages={croppedImages}
-                          setCroppedImages={setCroppedImages}
-                        />
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </DialogContent>
-            </Dialog>
           </div>
         </div>
         <div className="flex flex-col space-y-3 md:flex-row md:space-y-0 md:space-x-4">
@@ -1175,6 +890,6 @@ export default function Inventario({
           />
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 }

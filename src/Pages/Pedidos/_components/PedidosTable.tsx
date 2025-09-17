@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PedidoListItem } from "../interfaces";
+import { PedidoListItem, PedidosListResponse } from "../interfaces";
 import { formattFechaWithMinutes } from "@/Pages/Utils/Utils";
 import { formattMonedaGT } from "@/utils/formattMoneda";
 import {
@@ -31,6 +31,7 @@ import {
 import { EllipsisIcon } from "lucide-react";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 import { Link } from "react-router-dom";
+import { QueryObserverResult, RefetchOptions } from "@tanstack/react-query";
 // const API_URL = import.meta.env.VITE_API_URL;
 
 export default function PedidosTable({
@@ -46,6 +47,7 @@ export default function PedidosTable({
   handleDelete,
 
   isDeleting,
+  fetchAgain,
 }: // setIsDeleting,
 {
   data: PedidoListItem[];
@@ -59,6 +61,8 @@ export default function PedidosTable({
   handleDelete: (id: number) => void;
   setIsDeleting: React.Dispatch<React.SetStateAction<boolean>>;
   isDeleting: boolean;
+  //refetch
+  fetchAgain: () => Promise<void>;
 }) {
   const [idSelected, setIdSelected] = React.useState<number>(0);
 
@@ -162,8 +166,14 @@ export default function PedidosTable({
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>Pedidos</CardTitle>
+        <CardHeader className="grid grid-cols-2">
+          <div className="">
+            <CardTitle>Pedidos</CardTitle>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={() => fetchAgain()}>Refrescar</Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="rounded-md border">

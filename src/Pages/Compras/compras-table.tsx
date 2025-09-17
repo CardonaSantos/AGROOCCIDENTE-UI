@@ -44,26 +44,41 @@ const tableVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: {
-      duration: 0.3,
-      staggerChildren: 0.05,
-    },
+    transition: { duration: 0.3, staggerChildren: 0.05 },
   },
 };
 
 const rowVariants = {
   hidden: { opacity: 0, x: -20 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.2 },
-  },
-  exit: {
-    opacity: 0,
-    x: 20,
-    transition: { duration: 0.15 },
-  },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.2 } },
+  exit: { opacity: 0, x: 20, transition: { duration: 0.15 } },
 };
+
+// Debounced input para evitar renders por cada tecla
+// function DebouncedInput({
+//   value: initialValue,
+//   onChange,
+//   debounce = 300,
+//   ...props
+// }: React.InputHTMLAttributes<HTMLInputElement> & {
+//   value: string;
+//   onChange: (value: string) => void;
+//   debounce?: number;
+// }) {
+//   const [value, setValue] = React.useState(initialValue);
+//   React.useEffect(() => setValue(initialValue), [initialValue]);
+//   React.useEffect(() => {
+//     const t = setTimeout(() => onChange(value), debounce);
+//     return () => clearTimeout(t);
+//   }, [value, debounce, onChange]);
+//   return (
+//     <Input
+//       {...props}
+//       value={value}
+//       onChange={(e) => setValue(e.target.value)}
+//     />
+//   );
+// }
 
 export function ComprasTable({
   data,
@@ -84,8 +99,11 @@ export function ComprasTable({
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [showFilters, setShowFilters] = React.useState(false);
 
-  const table = useReactTable({
-    data,
+  // Memo data para no recrear referencias en renders
+  const tableData = React.useMemo(() => data, [data]);
+
+  const table = useReactTable<CompraListItem>({
+    data: tableData,
     columns: comprasColumns,
     state: {
       sorting,
@@ -110,7 +128,7 @@ export function ComprasTable({
         onChangePage(next.pageIndex + 1);
     },
 
-    // Server-side pagination
+    // Paginación server-side
     manualPagination: true,
     pageCount: pages,
 
@@ -118,7 +136,7 @@ export function ComprasTable({
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
 
-    // callback para abrir detalle desde las celdas
+    // callback para abrir detalle desde las celdas/acciones en columns
     meta: {
       onOpenDetalle: (row: CompraListItem) => {
         setSelected(row);
@@ -133,7 +151,6 @@ export function ComprasTable({
     setGlobalFilter("");
     setColumnFilters([]);
   };
-  console.log("La data es: ", data);
 
   return (
     <motion.div
@@ -142,7 +159,7 @@ export function ComprasTable({
       animate="visible"
       variants={tableVariants}
     >
-      {/* Header compacto */}
+      {/* Header */}
       <Card>
         <CardHeader className="pb-2 pt-3">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
@@ -155,13 +172,14 @@ export function ComprasTable({
 
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                {" "}
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />{" "}
                 <Input
                   placeholder="Buscar compras..."
                   value={globalFilter ?? ""}
                   onChange={(e) => setGlobalFilter(e.target.value)}
                   className="pl-7 h-8 text-xs"
-                />
+                />{" "}
               </div>
 
               <Button
@@ -169,6 +187,8 @@ export function ComprasTable({
                 size="sm"
                 onClick={() => setShowFilters(!showFilters)}
                 className="relative h-8 text-xs"
+                aria-expanded={showFilters}
+                aria-controls="compras-filters"
               >
                 <Filter className="h-3 w-3 mr-1" />
                 Filtros
@@ -198,8 +218,15 @@ export function ComprasTable({
         </CardHeader>
       </Card>
 
-      {/* Tabla ultra compacta */}
-      <Card>
+      {/* Tabla */}
+      <Card aria-busy={!!loading}>
+        {/* Barra de carga sutil cuando loading=true */}
+        {loading && (
+          <div className="h-0.5 w-full bg-primary/10">
+            <div className="h-0.5 w-1/2 animate-[shimmer_1.2s_infinite] bg-primary/60" />
+          </div>
+        )}
+
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <motion.table className="w-full text-xs" variants={tableVariants}>
@@ -212,6 +239,7 @@ export function ComprasTable({
                         onClick={header.column.getToggleSortingHandler()}
                         className="text-left py-2 px-2 font-medium cursor-pointer select-none hover:bg-muted/80 transition-colors text-xs"
                         style={{ width: header.getSize() }}
+                        scope="col"
                       >
                         <div className="flex items-center gap-1">
                           {flexRender(
@@ -219,14 +247,20 @@ export function ComprasTable({
                             header.getContext()
                           )}
                           <div className="flex flex-col">
-                            {{
-                              asc: (
-                                <span className="text-primary text-xs">↑</span>
-                              ),
-                              desc: (
-                                <span className="text-primary text-xs">↓</span>
-                              ),
-                            }[header.column.getIsSorted() as string] ?? (
+                            {(
+                              {
+                                asc: (
+                                  <span className="text-primary text-xs">
+                                    ↑
+                                  </span>
+                                ),
+                                desc: (
+                                  <span className="text-primary text-xs">
+                                    ↓
+                                  </span>
+                                ),
+                              } as Record<string, React.ReactNode>
+                            )[header.column.getIsSorted() as string] ?? (
                               <span className="text-muted-foreground opacity-50 text-xs">
                                 ↕
                               </span>
@@ -237,11 +271,13 @@ export function ComprasTable({
                         <AnimatePresence>
                           {showFilters && header.column.getCanFilter() && (
                             <motion.div
+                              id="compras-filters"
                               className="mt-1"
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: "auto" }}
                               exit={{ opacity: 0, height: 0 }}
                               transition={{ duration: 0.2 }}
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <Input
                                 value={
@@ -251,9 +287,8 @@ export function ComprasTable({
                                 onChange={(e) =>
                                   header.column.setFilterValue(e.target.value)
                                 }
-                                placeholder="Filtrar..."
+                                placeholder="Filtrar columna…"
                                 className="h-6 text-xs"
-                                onClick={(e) => e.stopPropagation()}
                               />
                             </motion.div>
                           )}
@@ -263,6 +298,7 @@ export function ComprasTable({
                   </tr>
                 ))}
               </thead>
+
               <tbody>
                 <AnimatePresence mode="popLayout">
                   {table.getRowModel().rows.map((row, index) => (
@@ -275,6 +311,7 @@ export function ComprasTable({
                       layout
                       className="border-b hover:bg-muted/50 transition-colors"
                       style={{ animationDelay: `${index * 0.03}s` }}
+                      data-rowid={(row.original as CompraListItem).id}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <td
@@ -318,7 +355,7 @@ export function ComprasTable({
         </CardContent>
       </Card>
 
-      {/* Paginación compacta */}
+      {/* Paginación */}
       {data.length > 0 && (
         <Card>
           <CardContent className="py-2">
@@ -337,6 +374,7 @@ export function ComprasTable({
                     onClick={() => onChangePage(1)}
                     disabled={page <= 1 || loading}
                     className="h-7 w-7 p-0"
+                    aria-label="Primera página"
                   >
                     <ChevronsLeft className="h-3 w-3" />
                   </Button>
@@ -346,6 +384,7 @@ export function ComprasTable({
                     onClick={() => onChangePage(page - 1)}
                     disabled={page <= 1 || loading}
                     className="h-7 w-7 p-0"
+                    aria-label="Página anterior"
                   >
                     <ChevronLeft className="h-3 w-3" />
                   </Button>
@@ -361,6 +400,7 @@ export function ComprasTable({
                     onClick={() => onChangePage(page + 1)}
                     disabled={page >= pages || loading}
                     className="h-7 w-7 p-0"
+                    aria-label="Página siguiente"
                   >
                     <ChevronRight className="h-3 w-3" />
                   </Button>
@@ -370,6 +410,7 @@ export function ComprasTable({
                     onClick={() => onChangePage(pages)}
                     disabled={page >= pages || loading}
                     className="h-7 w-7 p-0"
+                    aria-label="Última página"
                   >
                     <ChevronsRight className="h-3 w-3" />
                   </Button>
@@ -380,6 +421,7 @@ export function ComprasTable({
                   value={limit}
                   onChange={(e) => onChangeLimit(Number(e.target.value))}
                   disabled={loading}
+                  aria-label="Tamaño de página"
                 >
                   {[5, 10, 15, 25, 50].map((size) => (
                     <option key={size} value={size}>

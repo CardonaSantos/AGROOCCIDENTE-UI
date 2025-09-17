@@ -163,11 +163,9 @@ const menuItemsAdmin = [
     label: "Inventario y Stock",
     submenu: [
       { icon: Boxes, label: "Inventario General", href: "/inventario-stock" },
-      // {
-      //   icon: PackageSearch,
-      //   label: "Movimientos de Stock",
-      //   href: "/movimientos-stock",
-      // },
+
+      { icon: Boxes, label: "Crear Producto", href: "/crear-producto" },
+
       {
         icon: NotepadText,
         label: "Historial de Precios",

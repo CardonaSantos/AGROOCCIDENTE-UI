@@ -363,6 +363,7 @@ export const ImageCropperUploader: React.FC<ImageCropperUploaderProps> = ({
             {editingImageIndex === null && rawImages.length > 1 && (
               <div className="flex justify-between items-center p-4 bg-gray-50 border-b">
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={handlePrevImage}
@@ -381,6 +382,7 @@ export const ImageCropperUploader: React.FC<ImageCropperUploaderProps> = ({
                   )}
                 </span>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={handleNextImage}
@@ -441,6 +443,7 @@ export const ImageCropperUploader: React.FC<ImageCropperUploaderProps> = ({
               <div className="flex flex-wrap gap-2 justify-between">
                 <div className="flex gap-2">
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={handleRotate}
@@ -450,6 +453,7 @@ export const ImageCropperUploader: React.FC<ImageCropperUploaderProps> = ({
                     Rotar
                   </Button>
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
@@ -466,6 +470,7 @@ export const ImageCropperUploader: React.FC<ImageCropperUploaderProps> = ({
 
                 <div className="flex gap-2">
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={handleCropCancel}
@@ -475,6 +480,7 @@ export const ImageCropperUploader: React.FC<ImageCropperUploaderProps> = ({
                     Cancelar
                   </Button>
                   <Button
+                    type="button"
                     variant="secondary"
                     size="sm"
                     onClick={() => handleCropSave()}
@@ -484,6 +490,7 @@ export const ImageCropperUploader: React.FC<ImageCropperUploaderProps> = ({
                     Usar completa
                   </Button>
                   <Button
+                    type="button"
                     variant="default"
                     size="sm"
                     onClick={handleCropSave}
@@ -525,6 +532,7 @@ export const ImageCropperUploader: React.FC<ImageCropperUploaderProps> = ({
                     {/* Image Actions Overlay */}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                       <Button
+                        type="button"
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/40"

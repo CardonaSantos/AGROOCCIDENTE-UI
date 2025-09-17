@@ -1,55 +1,49 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Package, AlertCircle } from "lucide-react";
-import { getRegistrosComprasConDetalle } from "./API/api";
-import { PaginatedComprasResponse } from "./Interfaces/Interfaces1";
-import { GetRegistrosComprasQuery } from "./API/interfaceQuery";
 import { ComprasTable } from "./compras-table";
 
-export function ComprasMainPage() {
-  const [dataComprasWithPagination, setDataComprasWithPagination] =
-    useState<PaginatedComprasResponse>({
-      total: 0,
-      page: 1,
-      limit: 10,
-      pages: 0,
-      items: [],
-    });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+// ⬇️ types
+import type { PaginatedComprasResponse } from "./Interfaces/Interfaces1"; // <-- o donde moviste tus types
+import type { GetRegistrosComprasQuery } from "./API/interfaceQuery";
+import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
+import { keepPreviousData } from "@tanstack/react-query";
 
-  // Query parameters for filtering
+// ⬇️ hook genérico
+
+// Endpoint REST del backend
+const ENDPOINT = "/compra-requisicion/get-registros-compras-con-detalle";
+
+export function ComprasMainPage() {
+  // Filtros / paginación controlados por estado local
   const [queryParams, setQueryParams] = useState<GetRegistrosComprasQuery>({
     page: 1,
     limit: 10,
     withDetalles: true,
   });
 
-  const getDataCompras = async (
-    params: GetRegistrosComprasQuery = queryParams
-  ) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await getRegistrosComprasConDetalle(params);
-      setDataComprasWithPagination(res);
-    } catch (error) {
-      console.log("El error es: ", error);
-      setError("Error al cargar los datos de compras");
-      toast.error("Error al cargar los datos de compras");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // GET via React Query + Axios (usa axiosClient base)
+  const { data, isLoading, isFetching, isError, error } =
+    useApiQuery<PaginatedComprasResponse>(
+      ["compras", queryParams], // 🔑 cache y refetch cuando cambien params
+      ENDPOINT,
+      { params: queryParams }, // 🔎 server ya soporta withDetalles
+      {
+        placeholderData: keepPreviousData, // 🧈 paginación suave sin “parpadeo”
+        staleTime: 30_000, // ⏲️ evita refetchs agresivos
+        // onError: () => toast.error("Error al cargar los datos de compras"),
+      }
+    );
 
-  // Load data on component mount and when query params change
-  useEffect(() => {
-    getDataCompras(queryParams);
-  }, [queryParams]);
+  // Derivados seguros para no romper la UI
+  const items = data?.items ?? [];
+  const page = data?.page ?? queryParams.page!;
+  const limit = data?.limit ?? queryParams.limit!;
+  const pages = data?.pages ?? 0;
+  const total = data?.total ?? 0;
 
   const handleChangePage = (newPage: number) => {
     setQueryParams((prev) => ({ ...prev, page: newPage }));
@@ -59,7 +53,8 @@ export function ComprasMainPage() {
     setQueryParams((prev) => ({ ...prev, limit: newLimit, page: 1 }));
   };
 
-  if (loading && dataComprasWithPagination.items.length === 0) {
+  // Skeleton inicial (primera carga sin datos)
+  if (isLoading && items.length === 0) {
     return (
       <div className="space-y-4">
         <Card>
@@ -71,7 +66,7 @@ export function ComprasMainPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
+              {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
@@ -81,13 +76,16 @@ export function ComprasMainPage() {
     );
   }
 
-  if (error) {
+  // Error “duro” (sin datos que mostrar)
+  if (isError && items.length === 0) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-8">
           <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
           <h3 className="text-lg font-semibold mb-2">Error al cargar datos</h3>
-          <p className="text-muted-foreground text-center">{error}</p>
+          <p className="text-muted-foreground text-center">
+            {(error as Error)?.message ?? "Error desconocido"}
+          </p>
         </CardContent>
       </Card>
     );
@@ -105,12 +103,13 @@ export function ComprasMainPage() {
       </Card>
 
       <ComprasTable
-        data={dataComprasWithPagination.items}
-        page={dataComprasWithPagination.page}
-        limit={dataComprasWithPagination.limit}
-        pages={dataComprasWithPagination.pages}
-        total={dataComprasWithPagination.total}
-        loading={loading}
+        data={items}
+        page={page}
+        limit={limit}
+        pages={pages}
+        total={total}
+        // ⬇️ usa isFetching para mostrar loading suave mientras refetchea por paginación/filtros
+        loading={isFetching}
         onChangePage={handleChangePage}
         onChangeLimit={handleChangeLimit}
       />

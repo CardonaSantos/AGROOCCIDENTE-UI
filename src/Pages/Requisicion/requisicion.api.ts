@@ -1,10 +1,10 @@
 import axios from "axios";
-import { CreateRequisitionDto, StockAlertItem } from "./utils";
 import {
-  CreateRequisicionRecepcion,
-  RequisitionPrintable,
+  CreateRequisitionDto,
   RequisitionResponse,
-} from "./requisicion.interfaces";
+  StockAlertItem,
+} from "./utils";
+
 const API_URL = import.meta.env.VITE_API_URL;
 interface UpdateRequisitionDto {
   requisicionId: number;
@@ -42,24 +42,14 @@ export const deleteRequisicionRegis = async (id: number): Promise<void> => {
   return axios.delete(`${API_URL}/requisicion/${id}`).then(() => {});
 };
 
-export const getOneRequisicion = async (
-  id: number
-): Promise<RequisitionPrintable> => {
+export const getOneRequisicion = async (id: number) => {
   return axios
-    .get<RequisitionPrintable>(`${API_URL}/requisicion/one-requisicion/${id}`)
+    .get(`${API_URL}/requisicion/one-requisicion/${id}`)
     .then((data) => data.data);
 };
 
 export const makeRequisicionesStock = (id: number) => {
   return axios.post(`${API_URL}/requisicion/one-requisicion/${id}`);
-};
-
-//HACER LA REQUISICION DE STOCKS
-export const makeReEnterRequisicion = (data: CreateRequisicionRecepcion) => {
-  return axios.post(
-    `${API_URL}/recepcion-requisiciones/make-re-enter-producto`,
-    data
-  );
 };
 
 //HACER UN GET DEL REGISTRO DE REQUISICION PARA EDICION
@@ -77,6 +67,7 @@ export const updateRequisicion = async (data: UpdateRequisitionDto) => {
 export interface dataCreateCompra {
   requisicionID: number | undefined;
   userID: number;
+  proveedorId: number;
 }
 
 //GENERAR COMPRA

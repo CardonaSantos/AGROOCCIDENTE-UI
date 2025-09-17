@@ -36,7 +36,6 @@ import UserConfig from "./Pages/Config/UserConfig";
 import SalesDeleted from "./Pages/SalesDeleted/SalesDeleted";
 import ClientHistorialPurchase from "./Pages/Client/ClientHistorialPurchase";
 import CreatePlaceholder from "./Pages/VentaCuotas/CreatePlaceholder";
-import CreateVentaCuotaForm from "./Pages/VentaCuotas/CreateVentaCuotas";
 import ContratoCredito from "./Pages/VentaCuotas/ContratoCredito";
 import EditPlaceHolder from "./Pages/VentaCuotas/EditPlaceHolder";
 import CuotasPage from "./components/PDF/Cuotas/CuotasPage";
@@ -82,6 +81,8 @@ import CostosVentaHistoricoPage from "./Pages/CajaAdministrativo/_costo-ventas-h
 import GastoOperativoHistoricoPage from "./Pages/CajaAdministrativo/_gastos-operativos-historicos/GastoOperativoHistoricoPage";
 import FlujoEfectivoPage from "./Pages/CajaAdministrativo/_flujoEfectivo/FlujoEfectivoPage";
 import CuentasBancariasPage from "./Pages/cuentas-bancarias/CuentasBancariasPage";
+import CreateProductPage from "./Pages/producto/createProductoMain";
+import CreateVentaCuotaForm from "./Pages/VentaCuotas/_components/CreateVentaCuotaForm";
 
 function App() {
   const { checkAuth } = useAuthStore();
@@ -230,6 +231,15 @@ function App() {
               element={
                 <ProtectRouteAdmin>
                   <ProductEditForm />
+                </ProtectRouteAdmin>
+              }
+            />
+
+            <Route
+              path="/crear-producto"
+              element={
+                <ProtectRouteAdmin>
+                  <CreateProductPage />
                 </ProtectRouteAdmin>
               }
             />

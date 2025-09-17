@@ -72,6 +72,7 @@ import {
 
 import currency from "currency.js";
 import { useStore } from "@/components/Context/ContextSucursal";
+import { QueryObserverResult, RefetchOptions } from "@tanstack/react-query";
 
 const formatearMoneda = (monto: number) => {
   return currency(monto, {
@@ -88,7 +89,7 @@ dayjs.extend(localizedFormat);
 dayjs.locale("es");
 
 interface CreditRecordsTableProps {
-  getCredits: () => Promise<void>;
+  getRegistCredits: () => Promise<void>;
   records: CreditoRegistro[];
   sucursalId: number;
   userId: number;
@@ -125,7 +126,7 @@ export function CreditRecordsTable({
   records,
   sucursalId,
   userId,
-  getCredits,
+  getRegistCredits,
 }: CreditRecordsTableProps) {
   console.log("Registros actualizados en hijo:", records); // <-- Debe cambiar después de eliminar
   const [selectedRecord, setSelectedRecord] = useState<CreditoRegistro | null>(
@@ -223,7 +224,7 @@ export function CreditRecordsTable({
 
         // await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        await getCredits();
+        await getRegistCredits();
       }
     } catch (error) {
       // Actualiza el toast en caso de error
@@ -260,7 +261,7 @@ export function CreditRecordsTable({
           setCuotaID(0);
           setPassword("");
           setSelectedRecord(null);
-          await getCredits();
+          await getRegistCredits();
           toast.success("Registro de pago eliminado");
         }
       } catch (error) {
