@@ -13,7 +13,7 @@ type Props = {
   cart: CartLine[];
   setQty: (index: number, qty: number) => void;
   setPrice: (index: number, price: number, priceId: number | null) => void;
-  removeLine: (index: number) => void;
+  removeItem: (productID: number) => void;
 };
 
 const fmt = (n: number) =>
@@ -25,7 +25,7 @@ export default function CreditCart({
   cart,
   setQty,
   setPrice,
-  removeLine,
+  removeItem,
 }: Props) {
   const total = useMemo(
     () => cart.reduce((s, x) => s + x.cantidad * x.precioUnit, 0),
@@ -42,10 +42,10 @@ export default function CreditCart({
             No hay productos en el carrito
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-64 overflow-y-auto">
             {cart.map((l, i) => (
               <div
-                key={`${l.scope}-${l.productoId}-${
+                key={`${l.tipo}-${l.productoId}-${
                   "presentacionId" in l ? l.presentacionId : "p"
                 }`}
                 className="grid grid-cols-6 gap-2 items-center rounded-md border p-2"
@@ -53,11 +53,12 @@ export default function CreditCart({
                 <div className="col-span-6">
                   <div className="font-medium truncate">{l.nombre}</div>
                   <div className="text-[11px] text-muted-foreground">
-                    {l.scope === "PRESENTACION" ? "Presentación" : "Producto"}
+                    {l.tipo === "PRESENTACION" ? "Presentación" : "Producto"}
                   </div>
                 </div>
 
                 <Input
+                  disabled
                   type="number"
                   min={1}
                   value={l.cantidad}
@@ -67,17 +68,6 @@ export default function CreditCart({
                 />
 
                 {/* Precio editable manual: dejamos un input simple para flexibilidad */}
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  value={l.precioUnit}
-                  onChange={(e) =>
-                    setPrice(i, Number(e.target.value), l.precioId ?? null)
-                  }
-                  className="col-span-2 h-8 text-right"
-                  aria-label="Precio unitario"
-                />
 
                 <div className="col-span-2 text-right font-medium">
                   {fmt(l.cantidad * l.precioUnit)}
@@ -87,7 +77,7 @@ export default function CreditCart({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => removeLine(i)}
+                    onClick={() => removeItem(l.productoId)}
                     className="text-red-500 hover:text-red-700"
                   >
                     <Trash2 className="h-4 w-4 mr-1" />

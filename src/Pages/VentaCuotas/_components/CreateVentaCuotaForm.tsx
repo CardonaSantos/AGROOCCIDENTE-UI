@@ -1,7 +1,7 @@
 // /Creditos/CreateVentaCuotaForm.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CreditCard,
   DollarSign,
@@ -74,7 +74,7 @@ export type CustomerOption = { value: number; label: string };
 
 export type CartLine =
   | {
-      scope: "PRODUCTO";
+      tipo: "PRODUCTO";
       productoId: number;
       nombre: string;
       precioId: number | null;
@@ -82,7 +82,7 @@ export type CartLine =
       cantidad: number;
     }
   | {
-      scope: "PRESENTACION";
+      tipo: "PRESENTACION";
       productoId: number;
       presentacionId: number;
       nombre: string; // product + " — " + presentacion
@@ -183,7 +183,7 @@ export default function CreateVentaCuotaForm() {
   }) => {
     setCart((prev) => {
       const idx = prev.findIndex(
-        (l) => l.scope === "PRODUCTO" && l.productoId === payload.producto.id
+        (l) => l.tipo === "PRODUCTO" && l.productoId === payload.producto.id
       );
       if (idx >= 0) {
         const copy = [...prev];
@@ -198,7 +198,7 @@ export default function CreateVentaCuotaForm() {
       return [
         ...prev,
         {
-          scope: "PRODUCTO",
+          tipo: "PRODUCTO",
           productoId: payload.producto.id,
           nombre: payload.producto.nombre,
           cantidad: payload.cantidad,
@@ -220,7 +220,7 @@ export default function CreateVentaCuotaForm() {
     setCart((prev) => {
       const idx = prev.findIndex(
         (l) =>
-          l.scope === "PRESENTACION" &&
+          l.tipo === "PRESENTACION" &&
           l.productoId === payload.producto.id &&
           l.presentacionId === payload.presentacion.id
       );
@@ -237,7 +237,7 @@ export default function CreateVentaCuotaForm() {
       return [
         ...prev,
         {
-          scope: "PRESENTACION",
+          tipo: "PRESENTACION",
           productoId: payload.producto.id,
           presentacionId: payload.presentacion.id,
           nombre: `${payload.producto.nombre} — ${payload.presentacion.nombre}`,
@@ -270,8 +270,18 @@ export default function CreateVentaCuotaForm() {
       return copy;
     });
 
-  const removeLine = (index: number) =>
-    setCart((prev) => prev.filter((_, i) => i !== index));
+  const removeItem = (productID: number) => {
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.productoId === productID
+            ? { ...item, cantidad: item.cantidad - 1 }
+            : item
+        )
+        .filter((item) => item.cantidad > 0)
+    );
+    toast.info("Producto eliminado de la lista");
+  };
 
   // ==== Validación y submit ====
   const validar = () => {
@@ -315,23 +325,27 @@ export default function CreateVentaCuotaForm() {
       interes: Number(interes),
       // líneas: soporta producto o presentación
       productos: cart.map((l) =>
-        l.scope === "PRODUCTO"
+        l.tipo === "PRODUCTO"
           ? {
               productoId: l.productoId,
               cantidad: l.cantidad,
               precioVenta: l.precioUnit,
+              tipo: l.tipo,
             }
           : {
               productoId: l.productoId,
               presentacionId: (l as any).presentacionId,
               cantidad: l.cantidad,
               precioVenta: l.precioUnit,
+              tipo: l.tipo,
             }
       ),
     };
+    console.log("El payload es: ", payload);
 
     await createCredito(payload);
   };
+  console.log("El cart es: ", cart);
 
   // ==== Opciones clientes ====
   const customerOptions: CustomerOption[] =
@@ -343,7 +357,7 @@ export default function CreateVentaCuotaForm() {
   const inCartByProduct = useMemo(() => {
     const m = new Map<number, number>();
     for (const l of cart) {
-      if (l.scope === "PRODUCTO") {
+      if (l.tipo === "PRODUCTO") {
         m.set(l.productoId, (m.get(l.productoId) ?? 0) + l.cantidad);
       }
     }
@@ -353,7 +367,7 @@ export default function CreateVentaCuotaForm() {
   const inCartByPresentacion = useMemo(() => {
     const m = new Map<number, number>();
     for (const l of cart) {
-      if (l.scope === "PRESENTACION") {
+      if (l.tipo === "PRESENTACION") {
         const pid: number = l.presentacionId;
         if (pid != null) {
           m.set(pid, (m.get(pid) ?? 0) + l.cantidad);
@@ -402,7 +416,7 @@ export default function CreateVentaCuotaForm() {
       {/* Nuevo crédito: layout tipo POS */}
       <TabsContent value="password">
         <Card className="w-full  mx-auto ">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
+          <CardHeader className="">
             <CardTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
               <CreditCard className="h-6 w-6" />
               Venta a Crédito (POS)
@@ -444,7 +458,7 @@ export default function CreateVentaCuotaForm() {
                   cart={cart}
                   setQty={setQty}
                   setPrice={setPrice}
-                  removeLine={removeLine}
+                  removeItem={removeItem}
                 />
 
                 {/* Datos del cliente y condiciones */}
