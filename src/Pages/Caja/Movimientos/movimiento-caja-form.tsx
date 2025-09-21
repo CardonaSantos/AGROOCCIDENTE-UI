@@ -315,15 +315,6 @@ export function MovimientoFinancieroForm({
     }
   };
 
-  // Manejar toggle de depósito parcial/total
-  // const handleToggleDepositoCierre = (isTotal: boolean) => {
-  //   setIsDepositoCierreTotal(isTotal);
-  //   if (!isTotal) {
-  //     loadPreviaCierre();
-  //   } else {
-  //     form.setValue("monto", 0);
-  //   }
-  // };
   const handleToggleDepositoCierre = async (isTotal: boolean) => {
     setIsDepositoCierreTotal(isTotal);
     if (isTotal) {
@@ -374,10 +365,6 @@ export function MovimientoFinancieroForm({
         usuarioId: userID,
         motivo: data.motivo!,
         metodoPago: data.metodoPago,
-        // monto:
-        //   watchedMotivo === "DEPOSITO_CIERRE" && isDepositoCierreTotal
-        //     ? 0
-        //     : data.monto,
         monto: data.monto,
         descripcion: data.descripcion,
         referencia: data.referencia,

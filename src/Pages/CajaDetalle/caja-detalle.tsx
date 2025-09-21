@@ -1002,7 +1002,7 @@ export default function CajaDetalle() {
                                   )}
                                 </div>
                                 {linea.producto.descripcion && (
-                                  <p className="text-xs text-muted-foreground truncate">
+                                  <p className="text-xs text-muted-foreground truncate max-w-96">
                                     {linea.producto.descripcion}
                                   </p>
                                 )}

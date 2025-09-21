@@ -4,7 +4,6 @@ import axios from "axios";
 import dayjs from "dayjs";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import currency from "currency.js";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { useStore } from "@/components/Context/ContextSucursal";
@@ -41,24 +40,14 @@ import TableAlertStocks from "@/Pages/Dashboard/TableAlertStocks";
 import { TimeLineDto } from "../components/API/interfaces.interfaces";
 import { createNewTimeLine } from "../components/API/api";
 import { EstadoGarantia, GarantiaType } from "../types/newGarantyTypes";
+import { formattMonedaGT } from "@/utils/formattMoneda";
 const API_URL = import.meta.env.VITE_API_URL;
-
 // Otras utilidades
-
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 dayjs.locale("es");
 
 export default function DashboardPageMain() {
-  const formatearMoneda = (monto: number) => {
-    return currency(monto, {
-      symbol: "Q",
-      separator: ",",
-      decimal: ".",
-      precision: 2,
-    }).format();
-  };
-
   const formatearFecha = (fecha: string) => {
     const nueva_fecha = dayjs(fecha).format("DD MMMM YYYY, hh:mm A");
     return nueva_fecha;
@@ -102,17 +91,14 @@ export default function DashboardPageMain() {
   const [estado, setEstado] = useState<EstadoGarantia | null>(null);
   const [productoIdW, setProductoIdW] = useState<number>(0);
   const [warrantyId, setWarrantyId] = useState<number>(0);
-
   // Finish Warranty Dialog States
   const [openFinishWarranty, setOpenFinishWarranty] = useState(false);
   const [estadoRegistFinishW, setEstadoFinishW] = useState("");
   const [conclusion, setConclusion] = useState("");
   const [accionesRealizadas, setAccionesRealizadas] = useState("");
-
   // Update timeline warranty dialog states
 
   const socket = useSocket();
-
   const getInfo = async () => {
     try {
       const [
@@ -423,7 +409,7 @@ export default function DashboardPageMain() {
         ventasMes={ventasMes}
         ventasSemana={ventasSemana}
         ventasDia={ventasDia}
-        formatearMoneda={formatearMoneda}
+        formattMonedaGT={formattMonedaGT}
       />
 
       <TableAlertStocks />
@@ -432,7 +418,7 @@ export default function DashboardPageMain() {
       <CreditCardList
         creditos={creditos}
         isLoadingCreditos={isLoadingCreditos}
-        formatearMoneda={formatearMoneda}
+        formattMonedaGT={formattMonedaGT}
         formatearFechaSimple={formatearFechaSimple}
         getCredits={getCredits}
       />

@@ -22,9 +22,12 @@ export const cerrarCaja = async (dto: CerrarCaja) => {
   return response.data;
 };
 
-export const getUltimoSaldoSucursal = async (sucursalID: number) => {
+export const getUltimoSaldoSucursal = async (
+  sucursalID: number,
+  userID: number
+) => {
   const response = await axios.get<number>(
-    `${API_URL}/caja/get-ultimo-saldo-sucursal/${sucursalID}`
+    `${API_URL}/caja/get-ultimo-saldo-usuario/${sucursalID}/${userID}/`
   );
   return response.data;
 };

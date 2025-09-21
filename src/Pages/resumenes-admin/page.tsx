@@ -75,6 +75,7 @@ export default function ResumenDiarioPage() {
       setLoading(false);
     }
   };
+  console.log("La data es: ", data);
 
   const loadSucursales = async () => {
     try {

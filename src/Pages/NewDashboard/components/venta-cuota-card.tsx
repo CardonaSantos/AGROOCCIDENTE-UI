@@ -138,7 +138,7 @@ export function VentaCuotaCard({
   };
 
   return (
-    <Card className="w-full max-w-xl shadow-xl">
+    <Card className="w-full max-w-xl shadow-md">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">
           <span className="font-bold">Crédito #{ventaCuota.id}</span>
@@ -283,6 +283,7 @@ export function VentaCuotaCard({
               cuota={cuotaPayment}
               CreditoID={ventaCuota.id}
               getCredits={getCredits}
+              montoPorCuota={montoPorCuota}
             />
           </DialogContent>
         </Dialog>

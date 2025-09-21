@@ -4,18 +4,29 @@ interface Testigo {
   direccion: string;
 }
 
-interface ProductoVenta {
+export interface PresentacionesCreditoResponse {
+  id: number;
+  nombre: string;
+  sku?: string;
+  codigoBarras?: string;
+}
+
+export interface ProductoCreditoResponse {
+  id: number;
+  nombre: string;
+  codigoProducto: string;
+}
+
+export interface ProductoVenta {
   id: number;
   ventaId: number;
-  productoId: number;
+  productoId: number | null; // <- acepta null
+  presentacionId: number | null; // <- nuevo
   cantidad: number;
   creadoEn: string;
   precioVenta: number;
-  producto: {
-    id: number;
-    nombre: string;
-    codigoProducto: string;
-  };
+  producto?: ProductoCreditoResponse | null; // <- opcional/null
+  presentacion?: PresentacionesCreditoResponse | null; // <- opcional/null
 }
 
 interface Cliente {
@@ -40,17 +51,25 @@ export interface Cuotas {
   id: number;
   creadoEn: string;
   estado: string;
-  fechaPago: string;
-  fechaVencimiento: string;
+  fechaPago: string | null;
   monto: number;
   montoEsperado?: number;
   comentario: string;
-  usuario: {
-    id: number;
-    nombre: string;
-  };
+  usuario: { id: number; nombre: string } | null;
 }
 
+export interface PresentacionesCreditoResponse {
+  id: number;
+  nombre: string;
+  sku?: string;
+  codigoBarras?: string;
+}
+
+export interface ProductoCreditoResponse {
+  id: number;
+  nombre: string;
+  codigoProducto: string;
+}
 export interface CreditoRegistro {
   id: number;
   clienteId: number;
@@ -71,6 +90,7 @@ export interface CreditoRegistro {
   totalPagado: number;
   cliente: Cliente;
   productos: ProductoVenta[];
+  presentaciones: PresentacionesCreditoResponse[];
   sucursal: Sucursal;
   usuario: Usuario;
   cuotas: Cuotas[];

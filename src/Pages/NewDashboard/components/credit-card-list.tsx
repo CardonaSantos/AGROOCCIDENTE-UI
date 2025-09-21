@@ -8,17 +8,17 @@ import SkeletonCardCredit from "../components/dashboard/skeleton/skeleton-card-c
 interface CreditCardListProps {
   creditos: CreditoRegistro[];
   isLoadingCreditos: boolean;
-  formatearMoneda: (monto: number) => string;
   formatearFechaSimple: (fecha: string) => string;
   getCredits: () => Promise<void>;
+  formattMonedaGT(value: string | number): string;
 }
 
 export function CreditCardList({
   creditos,
   isLoadingCreditos,
-  formatearMoneda,
   formatearFechaSimple,
   getCredits,
+  formattMonedaGT,
 }: CreditCardListProps) {
   return (
     <div
@@ -39,7 +39,7 @@ export function CreditCardList({
           <VentaCuotaCard
             key={ventacuota.id}
             ventaCuota={ventacuota}
-            formatearMoneda={formatearMoneda}
+            formatearMoneda={formattMonedaGT}
             formatearFechaSimple={formatearFechaSimple}
             getCredits={getCredits}
           />

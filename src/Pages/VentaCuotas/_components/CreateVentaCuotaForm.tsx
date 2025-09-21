@@ -1,7 +1,7 @@
 // /Creditos/CreateVentaCuotaForm.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CreditCard,
   DollarSign,
@@ -35,6 +35,8 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 
 import { CreditRecordsTable } from "../CreditosRegistros";
@@ -45,6 +47,10 @@ import {
 } from "@/hooks/genericoCall/creditApi";
 import CreditProducts from "./CreditProducts";
 import CreditCart from "./CreditCart";
+import { ReusableSelect } from "@/utils/components/ReactSelectComponent/ReusableSelect";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
+import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
+import { CuentasBancariasSelect } from "@/Types/CuentasBancarias/CuentasBancariasSelect";
 
 /* ======================
    Tipos auxiliares
@@ -91,16 +97,34 @@ export type CartLine =
       cantidad: number;
     };
 
+export enum MetodoPago {
+  EFECTIVO = "EFECTIVO",
+  TRANSFERENCIA = "TRANSFERENCIA",
+  TARJETA = "TARJETA",
+  CHEQUE = "CHEQUE",
+}
+
+const OptionsMetodoPago = [
+  "EFECTIVO",
+  "TRANSFERENCIA",
+  "TARJETA",
+  "CHEQUE",
+] as const;
+
+const OptionsMetodoPagoToBanco: MetodoPago[] = [
+  MetodoPago.TRANSFERENCIA,
+  MetodoPago.TARJETA,
+  MetodoPago.CHEQUE,
+];
+
 /* ======================
    Página
 ====================== */
 export default function CreateVentaCuotaForm() {
   const sucursalId = useStore((s) => s.sucursalId) ?? 0;
   const userId = useStore((s) => s.userId) ?? 0;
-
   // Tabs: Registros / Nuevo Crédito
   const [tab, setTab] = useState<"account" | "password">("password");
-
   // ==== Estado del formulario de crédito (sin testigos) ====
   const [cliente, setCliente] = useState<SingleValue<CustomerOption>>(null);
   const [fechaInicio, setFechaInicio] = useState<string>("");
@@ -110,21 +134,21 @@ export default function CreateVentaCuotaForm() {
   const [garantiaMeses, setGarantiaMeses] = useState<number>(0);
   const [diasEntrePagos, setDiasEntrePagos] = useState<number>(30);
   const [interes, setInteres] = useState<number>(0); // ← 0 permitido
-
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>(MetodoPago.EFECTIVO);
   // ==== Carrito de líneas ====
   const [cart, setCart] = useState<CartLine[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
-
   // ==== Búsqueda / datos remotos ====
   const [q, setQ] = useState("");
   const { customers, customersLoading } = useCustomersQuery();
-  const { records, recordsLoading, refetchRecords } = useCreditRecordsQuery();
+  const { records, refetchRecords } = useCreditRecordsQuery();
 
   // ==== Derivados ====
   const totalProductos = useMemo(
     () => cart.reduce((s, l) => s + l.cantidad * l.precioUnit, 0),
     [cart]
   );
+  const [cuentaBancaria, setCuentaBancaria] = useState<string>("");
 
   // Permitir interés 0
   const montoInteres = useMemo(
@@ -173,6 +197,20 @@ export default function CreateVentaCuotaForm() {
       );
     },
   });
+
+  const {
+    data: cuentas = [],
+    // isError,
+    // error: errorCuentasBancarias,
+  } = useApiQuery<CuentasBancariasSelect[]>(
+    ["cuentas-bancarias-select"],
+    "/cuentas-bancarias/get-simple-select",
+    undefined, // o {}
+    {
+      initialData: [],
+      refetchOnMount: "always",
+    }
+  );
 
   // ==== Helpers carrito ====
   const upsertProductLine = (payload: {
@@ -247,6 +285,7 @@ export default function CreateVentaCuotaForm() {
         },
       ];
     });
+    toast.info("Presentación añadido");
   };
 
   const setQty = (index: number, qty: number) =>
@@ -323,6 +362,9 @@ export default function CreateVentaCuotaForm() {
       fechaContrato,
       diasEntrePagos: Number(diasEntrePagos),
       interes: Number(interes),
+      metodoPago: metodoPago,
+      cuentaBancariaId:
+        cuentaBancaria.length > 0 ? parseInt(cuentaBancaria) : null,
       // líneas: soporta producto o presentación
       productos: cart.map((l) =>
         l.tipo === "PRODUCTO"
@@ -383,12 +425,27 @@ export default function CreateVentaCuotaForm() {
   const getInCartQtyPresentation = (presentacionId: number) =>
     inCartByPresentacion.get(presentacionId) ?? 0;
 
+  const isInMetodoPago = OptionsMetodoPagoToBanco.includes(metodoPago);
+
+  useEffect(() => {
+    if (!isInMetodoPago) {
+      setCuentaBancaria("");
+    }
+  }, [isInMetodoPago]);
+  console.log("metodo pago: ", metodoPago, "cuenta bancaria: ", cuentaBancaria);
+
   return (
     <Tabs
       value={tab}
       onValueChange={(v) => setTab(v as any)}
       className="w-full"
     >
+      <PageHeader
+        title="Creditos"
+        subtitle="Cree y administre sus creditos"
+        fallbackBackTo="/"
+        sticky={false}
+      />
       <div className="flex flex-col items-center w-full">
         <TabsList className="flex w-full  justify-center">
           <TabsTrigger value="account" className="flex-1 text-center">
@@ -591,6 +648,64 @@ export default function CreateVentaCuotaForm() {
                         </span>
                       </div>
                     </div>
+
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="flex items-center gap-1">
+                        <CreditCard className="h-4 w-4" /> Método de pago
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <ReusableSelect
+                          items={[...OptionsMetodoPago]}
+                          getValue={(m) => m} // cómo se obtiene el value
+                          getLabel={(m) => m} // cómo se muestra el label
+                          value={metodoPago}
+                          onChange={(m) => setMetodoPago(m as MetodoPago)} // devuelve MetodoPago | null
+                          placeholder="Método de pago"
+                        />
+                      </div>
+                    </div>
+
+                    {isInMetodoPago ? (
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor="cBancaria"
+                          className="flex items-center gap-1"
+                        >
+                          <CreditCard className="h-4 w-4" /> Cuenta bancaria
+                        </Label>
+                        <div className="">
+                          <Select
+                            onValueChange={setCuentaBancaria}
+                            value={cuentaBancaria}
+                          >
+                            <SelectTrigger id="cBancaria" className="w-full">
+                              <SelectValue placeholder="Selecciona una cuenta bancaria" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                <SelectLabel>
+                                  CUENTAS BANCARIAS DISPONIBLES
+                                </SelectLabel>
+                                {Array.isArray(cuentas) ? (
+                                  cuentas.map((c) => {
+                                    // algo...
+                                    return (
+                                      <SelectItem value={c.id.toString()}>
+                                        {c.nombre}
+                                      </SelectItem>
+                                    );
+                                  })
+                                ) : (
+                                  <SelectItem value="apple">
+                                    Cargando cuentas....
+                                  </SelectItem>
+                                )}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

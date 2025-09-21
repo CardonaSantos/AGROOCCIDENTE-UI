@@ -166,7 +166,7 @@ function Caja() {
 
   const getMontoAnterior = async () => {
     try {
-      const data = await getUltimoSaldoSucursal(sucursalID);
+      const data = await getUltimoSaldoSucursal(sucursalID, userID);
       setCajaMontoAnterior(data);
     } catch {
       toast.error("Error al conseguir último monto de caja");
@@ -240,7 +240,7 @@ function Caja() {
       setVentas([]);
     }
 
-    const saldo = await getUltimoSaldoSucursal(sucursalID);
+    const saldo = await getUltimoSaldoSucursal(sucursalID, userID);
     setCajaMontoAnterior(saldo);
   }, [sucursalID, userID, cajaMontoAnterior]);
 
