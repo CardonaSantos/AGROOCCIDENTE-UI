@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import logo from "@/assets/Agroservicio.png";
+import logo from "@/assets/AGROSIL.jpg";
 
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
