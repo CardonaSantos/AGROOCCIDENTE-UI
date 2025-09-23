@@ -835,7 +835,9 @@ export default function Dashboard() {
                                 <Link to={`/cuota/comprobante/${cuota.id}`}>
                                   <span className="text-gray-700 dark:text-white hover:cursor-pointer text-sm">
                                     Pagado el día{" "}
-                                    {formatearFechaSimple(cuota.fechaPago)}
+                                    {formatearFechaSimple(
+                                      cuota.fechaPago ?? ""
+                                    )}
                                   </span>
                                 </Link>
 

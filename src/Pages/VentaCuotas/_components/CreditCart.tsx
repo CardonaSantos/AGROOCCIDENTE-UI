@@ -24,7 +24,7 @@ const fmt = (n: number) =>
 export default function CreditCart({
   cart,
   setQty,
-  setPrice,
+  // setPrice,
   removeItem,
 }: Props) {
   const total = useMemo(

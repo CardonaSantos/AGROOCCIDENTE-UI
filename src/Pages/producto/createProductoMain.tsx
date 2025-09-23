@@ -35,7 +35,6 @@ import AddPrices from "../Inventario/AddPrices";
 import {
   PrecioProductoInventario,
   Presentacion,
-  TIPO_EMPAQUE_VALUES,
   TipoEmpaque,
 } from "./interfaces/preciosCreateInterfaces";
 import { ImageCropperUploader } from "../Cropper";

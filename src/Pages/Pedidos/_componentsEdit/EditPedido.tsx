@@ -29,7 +29,7 @@ import {
   PedidoPrioridad,
   TipoPedido,
 } from "../Interfaces/createPedido.interfaces";
-import ProductsList from "../_components/ProductsList";
+// import ProductsList from "../_components/ProductsList";
 import {
   getPedidoDetalle,
   patchPedido,
@@ -90,6 +90,7 @@ export default function EditPedido() {
   const [search, setSearch] = useState("");
   const [pageProd, setPageProd] = useState(1);
   const pageSizeProd = 10;
+  console.log(setSearch);
 
   const {
     data: productosResp,
@@ -172,6 +173,8 @@ export default function EditPedido() {
       )
     );
   };
+
+  console.log("funciones sin usar aun: ", selectedLines, toggle, changeQty);
 
   const removeLine = (productId: number) => {
     setLineas((prev) => prev.filter((l) => l.productoId !== productId));
@@ -370,14 +373,14 @@ export default function EditPedido() {
           </div>
 
           {/* Lista de productos */}
-          <ProductsList
+          {/* <ProductsList
             search={search}
             setSearch={setSearch}
             productos={productos}
             selectedLines={selectedLines}
             onToggle={toggle}
             onQtyChange={changeQty}
-          />
+          /> */}
 
           {/* Paginación server-side */}
           {productos.length > 0 && (

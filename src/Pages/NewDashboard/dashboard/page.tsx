@@ -41,6 +41,8 @@ import { TimeLineDto } from "../components/API/interfaces.interfaces";
 import { createNewTimeLine } from "../components/API/api";
 import { EstadoGarantia, GarantiaType } from "../types/newGarantyTypes";
 import { formattMonedaGT } from "@/utils/formattMoneda";
+// import { useSocketCtx, useSocketEvent } from "@/Web/realtime/SocketProvider";
+// import { Button } from "@/components/ui/button";
 const API_URL = import.meta.env.VITE_API_URL;
 // Otras utilidades
 dayjs.extend(localizedFormat);
@@ -398,7 +400,31 @@ export default function DashboardPageMain() {
 
   const [openTimeLine, setOpenTimeLine] = useState(false);
 
-  console.log("Los registros de garantía son: ", warranties);
+  // const { manager } = useSocketCtx();
+  // const solicitar = () =>
+  //   new Promise<void>((resolve, reject) => {
+  //     if (!manager?.instance) return reject(new Error("WS desconectado"));
+  //     manager.instance.emit(
+  //       "solicitud:precio.request", // 👈 nombre del evento
+  //       { productoID: 10, nuevoPrecio: 99.5 }, // 👈 payload
+  //       (
+  //         ack: { ok: true; solicitudId: number } | { ok: false; error: string }
+  //       ) => {
+  //         if (ack.ok) resolve();
+  //         else reject(new Error(ack.error));
+  //       }
+  //     );
+  //   });
+
+  // useSocketEvent(
+  //   "credit:request.created",
+  //   (p) => {
+  //     toast.info("Nueva solicitud de crédito: ", {
+  //       description: `ID ${p.id}, nuevo precio es: ${p.nuevoPrecio}`,
+  //     });
+  //   },
+  //   []
+  // );
 
   return (
     <motion.div {...DesvanecerHaciaArriba} className="container p-4 space-y-4">
@@ -411,9 +437,7 @@ export default function DashboardPageMain() {
         ventasDia={ventasDia}
         formattMonedaGT={formattMonedaGT}
       />
-
       <TableAlertStocks />
-
       {/* MOSTRAR LOS CRÉDITOS ACTIVOS */}
       <CreditCardList
         creditos={creditos}
@@ -422,7 +446,6 @@ export default function DashboardPageMain() {
         formatearFechaSimple={formatearFechaSimple}
         getCredits={getCredits}
       />
-
       {/* MOSTRAR LAS REPARACIONES ACTIVAS */}
       <RepairCardList
         reparaciones={reparaciones}
@@ -430,7 +453,6 @@ export default function DashboardPageMain() {
         userID={userID ?? 0}
         sucursalId={sucursalId}
       />
-
       {/* MOSTRAR GARANTÍAS ACTIVAS */}
       <WarrantyCardList
         warranties={warranties}
@@ -452,7 +474,6 @@ export default function DashboardPageMain() {
         warrantyId={warrantyId}
         handleCreateNewTimeLine={handleCreateNewTimeLine}
       />
-
       {/* MOSTRAR LAS SOLICITUDES DE PRECIO */}
       <PriceRequestList
         solicitudes={solicitudes}
@@ -460,7 +481,6 @@ export default function DashboardPageMain() {
         handleRejectRequest={handleRejectRequest}
         formatearFecha={formatearFecha}
       />
-
       {/* MOSTRAS LAS SOLICITUDES DE TRANSFERENCIA */}
       <TransferRequestList
         solicitudesTransferencia={solicitudesTransferencia}
@@ -468,7 +488,6 @@ export default function DashboardPageMain() {
         handleRejectTransferencia={handleRejectTransferencia}
         formatearFecha={formatearFecha}
       />
-
       {/* MOSTRAR DIALOG DE ACTUALIZAR REGISTRO DE GARANTÍA */}
       <UpdateWarrantyDialog
         open={openUpdateWarranty}
@@ -483,7 +502,6 @@ export default function DashboardPageMain() {
         handleUpdateRegistW={handleUpdateRegistW}
         setOpenFinishWarranty={setOpenFinishWarranty}
       />
-
       {/* MOSTRAR DIALOG DE FINALIZACION DE REGISTRO DE GARANTIA */}
       <FinishWarrantyDialog
         open={openFinishWarranty}
@@ -496,10 +514,8 @@ export default function DashboardPageMain() {
         setAccionesRealizadas={setAccionesRealizadas}
         handleSubmitFinishRegistW={handleSubmitFinishRegistW}
       />
-
       {/* Gráfico de ventas */}
       <SalesChartCard ventasSemanalChart={ventasSemanalChart} />
-
       {/* Productos e inventario */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <TopSellingProductsTable masVendidos={masVendidos} />

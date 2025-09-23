@@ -143,3 +143,64 @@ export type RequisitionProductCandidate = {
 export const keyForProducto = (id: number): `prod-${number}` => `prod-${id}`;
 export const keyForPresentacion = (id: number): `pres-${number}` =>
   `pres-${id}`;
+
+//ADICIONAL
+/* ---- cabecera de la requisición ---- */
+export interface RequisitionResponse {
+  id: number;
+  folio: string;
+  fecha: string; // ISO8601
+  sucursalId: number;
+  usuarioId: number;
+  estado: RequisitionEstado;
+  observaciones?: string;
+
+  totalLineas: number;
+  totalRequisicion: number; // suma de líneas; incluye o no impuestos según tu lógica
+  moneda?: string; // opcional, por si manejas multi-moneda
+
+  createdAt: string; // ISO8601
+  updatedAt: string; // ISO8601
+
+  ingresadaAStock: boolean;
+  /* relaciones embebidas */
+  usuario: UsuarioResumen;
+  sucursal: SucursalResumen;
+  lineas: RequisitionLine[];
+}
+/* ---- detalle de cada línea ---- */
+export interface RequisitionLine {
+  id: number;
+  productoId: number;
+  cantidadActual: number;
+  stockMinimo: number;
+  cantidadSugerida: number;
+  precioUnitario: number;
+
+  /* opcionales para versiones futuras */
+  subtotal?: number; // precioUnitario * cantidadSugerida
+  iva?: number; // impuesto calculado
+  moneda?: string; // 'GTQ', 'USD', etc.
+
+  createdAt: string; // ISO8601
+  updatedAt: string; // ISO8601
+  producto: ProductoResumen;
+
+  cantidadRecibida?: number;
+
+  fechaExpiracion?: Date | null;
+}
+
+// Para cuando la requisición está en curso o pendiente
+interface PendingRequisition extends RequisitionResponse {
+  estado: "BORRADOR" | "PENDIENTE" | "APROBADA" | "ENVIADA";
+}
+
+// Para cuando ya se ha recibido/completado
+interface FinishedRequisition extends RequisitionResponse {
+  estado: "RECIBIDA" | "COMPLETADA";
+  fechaRecepcion: string; // lo que guarde tu DB
+  recepcionLineas: RequisitionLine[];
+}
+
+export type RequisitionPrintable = PendingRequisition | FinishedRequisition;

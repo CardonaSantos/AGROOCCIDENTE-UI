@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PedidoListItem, PedidosListResponse } from "../interfaces";
+import { PedidoListItem } from "../interfaces";
 import { formattFechaWithMinutes } from "@/Pages/Utils/Utils";
 import { formattMonedaGT } from "@/utils/formattMoneda";
 import {
@@ -31,7 +31,7 @@ import {
 import { EllipsisIcon } from "lucide-react";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 import { Link } from "react-router-dom";
-import { QueryObserverResult, RefetchOptions } from "@tanstack/react-query";
+// import { QueryObserverResult, RefetchOptions } from "@tanstack/react-query";
 // const API_URL = import.meta.env.VITE_API_URL;
 
 export default function PedidosTable({

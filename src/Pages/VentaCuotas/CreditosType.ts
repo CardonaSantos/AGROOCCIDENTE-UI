@@ -56,6 +56,7 @@ export interface Cuotas {
   montoEsperado?: number;
   comentario: string;
   usuario: { id: number; nombre: string } | null;
+  fechaVencimiento: string;
 }
 
 export interface PresentacionesCreditoResponse {
