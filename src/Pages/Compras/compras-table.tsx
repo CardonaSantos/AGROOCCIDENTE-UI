@@ -54,32 +54,6 @@ const rowVariants = {
   exit: { opacity: 0, x: 20, transition: { duration: 0.15 } },
 };
 
-// Debounced input para evitar renders por cada tecla
-// function DebouncedInput({
-//   value: initialValue,
-//   onChange,
-//   debounce = 300,
-//   ...props
-// }: React.InputHTMLAttributes<HTMLInputElement> & {
-//   value: string;
-//   onChange: (value: string) => void;
-//   debounce?: number;
-// }) {
-//   const [value, setValue] = React.useState(initialValue);
-//   React.useEffect(() => setValue(initialValue), [initialValue]);
-//   React.useEffect(() => {
-//     const t = setTimeout(() => onChange(value), debounce);
-//     return () => clearTimeout(t);
-//   }, [value, debounce, onChange]);
-//   return (
-//     <Input
-//       {...props}
-//       value={value}
-//       onChange={(e) => setValue(e.target.value)}
-//     />
-//   );
-// }
-
 export function ComprasTable({
   data,
   limit,
@@ -163,13 +137,6 @@ export function ComprasTable({
       <Card>
         <CardHeader className="pb-2 pt-3">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-            <CardTitle className="text-base font-medium">
-              Registros de Compras
-              <Badge variant="secondary" className="ml-2 text-xs">
-                {table.getFilteredRowModel().rows.length}
-              </Badge>
-            </CardTitle>
-
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-64">
                 {" "}

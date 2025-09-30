@@ -632,6 +632,15 @@ function App() {
             />
 
             <Route
+              path="/compra/:id"
+              element={
+                <ProtectRouteAdmin>
+                  <CompraDetalle />
+                </ProtectRouteAdmin>
+              }
+            />
+
+            <Route
               path="/pedidos"
               element={
                 <ProtectRouteAdmin>
@@ -654,15 +663,6 @@ function App() {
               element={
                 <ProtectRouteAdmin>
                   <PedidoDetails />
-                </ProtectRouteAdmin>
-              }
-            />
-
-            <Route
-              path="/compra/:id"
-              element={
-                <ProtectRouteAdmin>
-                  <CompraDetalle />
                 </ProtectRouteAdmin>
               }
             />

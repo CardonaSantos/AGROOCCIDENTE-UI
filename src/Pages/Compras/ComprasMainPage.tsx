@@ -11,6 +11,7 @@ import type { PaginatedComprasResponse } from "./Interfaces/Interfaces1"; // <--
 import type { GetRegistrosComprasQuery } from "./API/interfaceQuery";
 import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
 import { keepPreviousData } from "@tanstack/react-query";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 // ⬇️ hook genérico
 
@@ -34,6 +35,7 @@ export function ComprasMainPage() {
       {
         placeholderData: keepPreviousData, // 🧈 paginación suave sin “parpadeo”
         staleTime: 30_000, // ⏲️ evita refetchs agresivos
+        refetchOnWindowFocus: true,
         // onError: () => toast.error("Error al cargar los datos de compras"),
       }
     );
@@ -93,15 +95,12 @@ export function ComprasMainPage() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Gestión de Compras
-          </CardTitle>
-        </CardHeader>
-      </Card>
-
+      <PageHeader
+        title="Módulo de compras"
+        sticky={false}
+        fallbackBackTo="/"
+        subtitle="Administre sus registros de compras"
+      />
       <ComprasTable
         data={items}
         page={page}

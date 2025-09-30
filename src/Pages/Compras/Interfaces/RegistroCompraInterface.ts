@@ -57,6 +57,17 @@ export interface CompraDetalleUI {
   creadoEn: string | null; // ISO
   actualizadoEn: string | null; // ISO
   producto: CompraProductoUI;
+  presentacion?: Presentacion | null;
+}
+
+export interface Presentacion {
+  codigoBarras: string;
+  costoReferencialPresentacion: number;
+  factorUnidadBase: number;
+  id: number;
+  nombre: string;
+  sku: string;
+  tipoPresentacion: string;
 }
 
 export interface CompraFacturaUI {

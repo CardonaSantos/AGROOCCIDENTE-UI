@@ -1,31 +1,8 @@
 "use client";
-
 import { motion } from "framer-motion";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  ArrowLeft,
-  Calendar,
-  User,
-  Building2,
-  DollarSign,
-  ShoppingCart,
-  Receipt,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Package,
-  FileText,
-  Hash,
-  Truck,
-  ClipboardList,
-  Mail,
-} from "lucide-react";
+import { ArrowLeft, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -46,24 +23,27 @@ import { Label } from "@/components/ui/label";
 import ReactSelectComponent from "react-select";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { formattMonedaGT } from "@/utils/formattMoneda";
-import { formattFechaWithMinutes } from "../Utils/Utils";
+import { TZGT } from "../Utils/Utils";
 import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-
-import {
-  CompraPedidoUI,
-  CompraRegistroUI,
-} from "./Interfaces/RegistroCompraInterface";
-import { CompraRequisicionUI } from "./Interfaces/Interfaces1";
-import { EstadoCompra } from "./API/interfaceQuery";
-
+import { CompraRegistroUI } from "./Interfaces/RegistroCompraInterface";
 // ⬇️ hooks genéricos (React Query + Axios client base)
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useApiMutation,
   useApiQuery,
 } from "@/hooks/genericoCall/genericoCallHook";
+import {
+  ItemDetallesPayloadParcial,
+  PayloadRecepcionParcial,
+} from "./table-select-recepcion/selectedItems";
+import dayjs from "dayjs";
+import { CompraRecepcionableResponse } from "./ResumenRecepcionParcial/Interfaces/detalleRecepcionable";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ComprasMain from "./comprasMain";
+import RecepcionesMain from "./Recepciones/RecepcionesMain";
+import PaymentMethodCompraDialogConfirm from "./PaymentCompraDialog";
 
 interface Option {
   label: string;
@@ -77,22 +57,6 @@ const containerVariants = {
     opacity: 1,
     transition: { staggerChildren: 0.1, delayChildren: 0.1 },
   },
-};
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
-};
-const tableVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.3, staggerChildren: 0.05 },
-  },
-};
-const rowVariants = {
-  hidden: { opacity: 0, x: -20 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.2 } },
 };
 
 // 1) Tipos y helpers arriba del componente (o en un archivo de utils compartido)
@@ -125,8 +89,10 @@ export interface CajaConSaldo {
   usuarioInicioId: number;
   disponibleEnCaja: number;
 }
+type RecepcionFlow = "NORMAL" | "PARCIAL";
 
 export default function CompraDetalle() {
+  const userId = useStore((state) => state.userId) ?? 0;
   // === Helpers ===
   const isBankMethod = (m?: MetodoPago | "") =>
     m === "TRANSFERENCIA" || m === "TARJETA" || m === "CHEQUE";
@@ -138,10 +104,13 @@ export default function CompraDetalle() {
   const navigate = useNavigate();
   const sucursalId = useStore((state) => state.sucursalId) ?? 0;
   const compraId = Number.isFinite(Number(id)) ? Number(id) : 0;
+  const [recepcionFlow, setRecepcionFlow] = useState<RecepcionFlow>("NORMAL");
 
   // === Dialog/UI states ===
   const [openSendStock, setOpenSendStock] = useState(false);
   const [openFormDialog, setOpenFormDialog] = useState(false);
+
+  const [openFormPaymentDialog, setOpenFormPaymentDialog] = useState(false);
 
   const [observaciones, setObservaciones] = useState<string>("");
   const [proveedorSelected, setProveedorSelected] = useState<
@@ -152,13 +121,26 @@ export default function CompraDetalle() {
   const [cuentaBancariaSelected, setCuentaBancariaSelected] =
     useState<string>("");
   const [cajaSelected, setCajaSelected] = useState<string | null>(null);
-
+  const [isRecibirParcial, setIsRecibirParcial] = useState<boolean>(false);
+  const [openRecibirParcial, setOpenRecibirParcial] = useState<boolean>(false);
   const queryClient = useQueryClient();
+  const [selectedItems, setSelectedItems] = useState<PayloadRecepcionParcial>({
+    compraId: compraId,
+    fecha: dayjs().tz(TZGT).startOf("day").toISOString(),
+    observaciones: "",
+    usuarioId: userId,
+    sucursalId: sucursalId,
+    lineas: [],
+  });
 
   // === QUERIES ===============================================================
-
-  // 1) Registro de compra (detalle)
-  const registroQ = useApiQuery<CompraRegistroUI>(
+  const {
+    data: registroQ,
+    isPending: isPendingRegistro,
+    isError: isErrorRegistro,
+    error: errorRegistro,
+    refetch: reFetchRegistro,
+  } = useApiQuery<CompraRegistroUI>(
     ["compra", compraId],
     `/compra-requisicion/get-registro/${compraId}`,
     undefined,
@@ -166,11 +148,9 @@ export default function CompraDetalle() {
       enabled: Number.isFinite(compraId) && compraId > 0,
       staleTime: 30_000,
       refetchOnWindowFocus: false,
-      // onError: () => toast.error("Error al cargar el registro de compra"),
     }
   );
 
-  // 2) Proveedores
   const proveedoresQ = useApiQuery<Array<{ id: number; nombre: string }>>(
     ["proveedores"],
     "/proveedor",
@@ -178,11 +158,9 @@ export default function CompraDetalle() {
     {
       staleTime: 5 * 60_000,
       refetchOnWindowFocus: false,
-      // onError: () => toast.error("Error al cargar proveedores"),
     }
   );
 
-  // 3) Cuentas bancarias (select simple)
   const cuentasQ = useApiQuery<Array<{ id: number; nombre: string }>>(
     ["cuentas-bancarias", "simple-select"],
     "cuentas-bancarias/get-simple-select",
@@ -190,13 +168,10 @@ export default function CompraDetalle() {
     {
       staleTime: 5 * 60_000,
       refetchOnWindowFocus: false,
-      // onError: () => toast.error("Error al cargar cuentas bancarias"),
     }
   );
 
-  console.log("Las cuentas bancarias son:_ ", cuentasQ);
-
-  // 4) Cajas abiertas por sucursal
+  //Cajas abiertas por sucursal
   const cajasQ = useApiQuery<CajaConSaldo[]>(
     ["cajas-disponibles", sucursalId],
     `/caja/cajas-disponibles/${sucursalId}`,
@@ -223,7 +198,6 @@ export default function CompraDetalle() {
     }
   >("post", `/compra-requisicion/${compraId}/recepcionar`, undefined, {
     onSuccess: async () => {
-      // Refrescar detalle + (opcional) listados relacionados
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["compra", compraId] }),
         queryClient.invalidateQueries({ queryKey: ["compras"] }), // comodín por si hay listados cacheados
@@ -231,18 +205,39 @@ export default function CompraDetalle() {
     },
   });
 
+  const {
+    data: recepcionable = {
+      id: compraId,
+      estado: "ESPERANDO_ENTREGA",
+      estadoCalculado: "ESPERANDO_ENTREGA",
+      detalles: [],
+    },
+    isPending: isPendingDrp,
+    refetch: reFetchDRP,
+  } = useApiQuery<CompraRecepcionableResponse>(
+    ["compra-recepcionable", compraId],
+    "compras/get-data-compra-parcial",
+    { params: { compraId } }
+  );
+
   // === DERIVED ===============================================================
-  const registro = registroQ.data ?? null;
+  const registro = registroQ ?? null;
   const proveedores = proveedoresQ.data ?? [];
   const cuentasBancarias = cuentasQ.data ?? [];
   const cajasDisponibles = cajasQ.data ?? [];
 
-  const montoRecepcion = useMemo(
-    () => Number(registro?.resumen?.subtotal ?? registro?.total ?? 0),
-    [registro]
-  );
+  const montoRecepcion = useMemo(() => {
+    if (recepcionFlow === "PARCIAL") {
+      return selectedItems.lineas.reduce(
+        (acc: number, item: ItemDetallesPayloadParcial) => {
+          return acc + item.cantidadRecibida * item.precioCosto;
+        },
+        0
+      );
+    }
+    return Number(registro?.resumen?.subtotal ?? registro?.total ?? 0);
+  }, [registro, recepcionFlow, selectedItems]);
 
-  // Autoresolver de cuenta/caja según método
   useEffect(() => {
     if (!isBankMethod(metodoPago) && cuentaBancariaSelected) {
       setCuentaBancariaSelected("");
@@ -272,7 +267,6 @@ export default function CompraDetalle() {
     }
   }, [metodoPago, cajasDisponibles, montoRecepcion, cajaSelected]);
 
-  // Set default proveedor desde el registro
   useEffect(() => {
     const idProv = registro?.proveedor?.id;
     setProveedorSelected(idProv ? String(idProv) : undefined);
@@ -369,42 +363,115 @@ export default function CompraDetalle() {
     value: c.id.toString(),
   }));
 
-  const getEstadoBadge = (estado: EstadoCompra) => {
-    const variants = {
-      RECIBIDO: {
-        variant: "default" as const,
-        icon: CheckCircle,
-        color: "text-green-600",
-      },
-      CANCELADO: {
-        variant: "destructive" as const,
-        icon: XCircle,
-        color: "text-red-600",
-      },
-      RECIBIDO_PARCIAL: {
-        variant: "secondary" as const,
-        icon: AlertCircle,
-        color: "text-orange-600",
-      },
-      ESPERANDO_ENTREGA: {
-        variant: "outline" as const,
-        icon: Truck,
-        color: "text-blue-600",
-      },
-    };
-    const config = variants[estado] || variants.ESPERANDO_ENTREGA;
-    const Icon = config.icon;
-    return (
-      <Badge variant={config.variant} className="gap-1">
-        <Icon className={`h-3 w-3 ${config.color}`} />
-        {estado.replace("_", " ")}
-      </Badge>
-    );
+  //derivado del state principal
+  const selectedIds = useMemo(() => {
+    return new Set(selectedItems.lineas.map((l) => l.compraDetalleId));
+  }, [selectedItems]);
+
+  const updateCantidadDetalle = (
+    compraDetalleId: number,
+    nuevaCantidad: number
+  ) => {
+    setSelectedItems((prev) => ({
+      ...prev,
+      lineas: prev.lineas.map((l) =>
+        l.compraDetalleId === compraDetalleId
+          ? { ...l, cantidadRecibida: nuevaCantidad }
+          : l
+      ),
+    }));
+  };
+
+  const upsserSelectItems = (
+    item: ItemDetallesPayloadParcial,
+    checked: boolean
+  ) => {
+    setSelectedItems((prev) => {
+      const exists = prev.lineas.some(
+        (l) => l.compraDetalleId === item.compraDetalleId
+      );
+
+      if (checked) {
+        return exists
+          ? {
+              ...prev,
+              lineas: prev.lineas.map((l) =>
+                l.compraDetalleId === item.compraDetalleId
+                  ? { ...l, ...item, checked: true }
+                  : l
+              ),
+            }
+          : {
+              ...prev,
+              lineas: [...prev.lineas, { ...item, checked: true }],
+            };
+      } else {
+        return {
+          ...prev,
+          lineas: prev.lineas.filter(
+            (l) => l.compraDetalleId !== item.compraDetalleId
+          ),
+        };
+      }
+    });
+  };
+
+  const handleRecepcionarParcial = useApiMutation<
+    void,
+    PayloadRecepcionParcial
+  >("post", "compras/create-recepcion-parcial", undefined, {
+    onSuccess: () => {
+      reFetchRegistro();
+      reFetchDRP();
+      setSelectedItems({
+        compraId: compraId,
+        fecha: dayjs().tz(TZGT).startOf("day").toISOString(),
+        observaciones: "",
+        usuarioId: userId,
+        sucursalId: sucursalId,
+        lineas: [],
+      });
+      setOpenRecibirParcial(false);
+      setIsRecibirParcial(false);
+    },
+    onError: () => {},
+  });
+
+  const verifyTransaction = () => {
+    if (
+      !selectedItems.compraId ||
+      !selectedItems.sucursalId ||
+      !selectedItems.usuarioId ||
+      !selectedItems.lineas ||
+      selectedItems.lineas.length <= 0
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const handleCreateRecepcionParcial = async () => {
+    try {
+      console.log("El log del payload: ", selectedItems);
+
+      const isValid = verifyTransaction();
+      if (!isValid) {
+        toast.warning("Verifique los datos a enviar");
+        return;
+      }
+      toast.promise(handleRecepcionarParcial.mutateAsync(selectedItems), {
+        success: "Compra parcial recepcionada",
+        error: (error) => getApiErrorMessageAxios(error),
+        loading: "Registrando entrada...",
+      });
+    } catch (error) {
+      console.log("El error: ", error);
+    }
   };
 
   // === Loading / Error screens ==============================================
-  const loadingHard = registroQ.isPending; // primera carga del registro
-  const errorHard = registroQ.isError && !registro;
+  const loadingHard = isPendingRegistro;
+  const errorHard = isErrorRegistro && !registro;
 
   if (loadingHard) {
     return (
@@ -426,7 +493,7 @@ export default function CompraDetalle() {
           <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-semibold mb-2">Error</h2>
           <p className="text-sm text-muted-foreground">
-            {(registroQ.error as Error)?.message || "Registro no encontrado"}
+            {(errorRegistro as Error)?.message || "Registro no encontrado"}
           </p>
           <Button
             variant="outline"
@@ -441,12 +508,13 @@ export default function CompraDetalle() {
     );
   }
 
-  if (!registro) return null;
-
-  // === Derived values (ya con datos) ========================================
-  const addedToStock: boolean = ["RECIBIDO", "RECIBIDO_PARCIAL"].includes(
-    registro.estado
-  );
+  if (!registro) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p>Cargando o sin datos...</p>
+      </div>
+    );
+  }
 
   const cajaSel = cajasDisponibles.find(
     (c) => String(c.id) === String(cajaSelected)
@@ -465,6 +533,23 @@ export default function CompraDetalle() {
     (!requiereBanco || !!cuentaBancariaSelected) &&
     (!requiereCaja || (!!cajaSelected && cajaTieneSaldo));
 
+  // NEW: estado de flujo
+
+  // NEW: decide a qué confirmación abrir cuando el usuario da "Continuar" en el PaymentDialog
+  const onContinueFromPayment = useCallback(() => {
+    setOpenFormPaymentDialog(false);
+    if (recepcionFlow === "PARCIAL") {
+      setOpenRecibirParcial(true);
+    } else {
+      setOpenSendStock(true);
+    }
+  }, [
+    recepcionFlow,
+    setOpenFormPaymentDialog,
+    setOpenRecibirParcial,
+    setOpenSendStock,
+  ]);
+
   // === RENDER ================================================================
   return (
     <motion.div
@@ -473,373 +558,48 @@ export default function CompraDetalle() {
       animate="visible"
       className="min-h-screen bg-background p-2 sm:p-4"
     >
-      <div className="mx-auto max-w-7xl space-y-4">
-        {/* Header */}
-        <motion.div variants={itemVariants} className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-            className="h-8 w-8 p-0"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-semibold">
-              Registro de Compra #{registro.id}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              {registro.sucursal?.nombre || "Sin sucursal"}
-            </p>
-          </div>
-          <div className="ml-auto">{getEstadoBadge(registro.estado)}</div>
-        </motion.div>
+      <Tabs defaultValue="compra" className="">
+        <TabsList className="w-full max-h-8">
+          <TabsTrigger value="compra" className="flex-1 max-h-6">
+            Compra
+          </TabsTrigger>
+          <TabsTrigger value="recepcionesParciales" className="flex-1 max-h-6">
+            Recepciones
+          </TabsTrigger>
+        </TabsList>
 
-        {/* Info General */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <motion.div variants={itemVariants}>
-            <Card className="h-full">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium">Fecha de Compra</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {formattFechaWithMinutes(registro.fecha)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <Card className="h-full">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium">Total</p>
-                    <p className="text-sm font-semibold text-green-600">
-                      {formattMonedaGT(registro.total)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <Card className="h-full">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-blue-600" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium">Items</p>
-                    <p className="text-sm font-semibold text-blue-600">
-                      {registro.resumen.items}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <Card className="h-full">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <Receipt className="h-4 w-4 text-purple-600" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium">Con Factura</p>
-                    <p className="text-sm font-semibold text-purple-600">
-                      {registro.conFactura ? "Sí" : "No"}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Usuario / Proveedor */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <motion.div variants={itemVariants}>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Usuario Responsable
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-xs font-medium">Nombre</p>
-                  <p className="text-xs text-muted-foreground">
-                    {registro.usuario.nombre}
-                  </p>
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs font-medium">Correo</p>
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">
-                      {registro.usuario.correo}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
-                  Proveedor
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-xs font-medium">Nombre</p>
-                  <p className="text-xs text-muted-foreground">
-                    {registro.proveedor?.nombre || "Sin proveedor asignado"}
-                  </p>
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs font-medium">Sucursal</p>
-                  <p className="text-xs text-muted-foreground">
-                    {registro.sucursal?.nombre || "N/A"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Origen */}
-        {registro.origen === "REQUISICION" && registro.requisicion && (
-          <RequisicionInfo requisicion={registro.requisicion} />
-        )}
-        {registro.origen === "PEDIDO" && registro.pedido && (
-          <PedidoInfo pedido={registro.pedido} />
-        )}
-
-        {/* Factura */}
-        {registro.conFactura && registro.factura && (
-          <motion.div variants={itemVariants}>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Receipt className="h-4 w-4" />
-                  Información de Factura
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <p className="text-xs font-medium">Número de Factura</p>
-                    <p className="text-xs text-muted-foreground">
-                      {registro.factura.numero || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium">Fecha de Factura</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formattFechaWithMinutes(registro.factura.fecha)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-
-        {/* Resumen */}
-        <motion.div variants={itemVariants}>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4" />
-                Resumen de Compra
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <Package className="h-6 w-6 mx-auto text-blue-600 mb-1" />
-                  <p className="text-lg font-semibold">
-                    {registro.resumen.items}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Productos Únicos
-                  </p>
-                </div>
-                <div className="text-center">
-                  <Hash className="h-6 w-6 mx-auto text-green-600 mb-1" />
-                  <p className="text-lg font-semibold">
-                    {registro.resumen.cantidadTotal}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Cantidad Total
-                  </p>
-                </div>
-                <div className="text-center">
-                  <DollarSign className="h-6 w-6 mx-auto text-purple-600 mb-1" />
-                  <p className="text-lg font-semibold">
-                    {formattMonedaGT(registro.resumen.subtotal)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Subtotal</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Detalles */}
-        <motion.div variants={itemVariants}>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                Productos Comprados ({registro.detalles.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <motion.div
-                variants={tableVariants}
-                className="space-y-3 max-h-96 overflow-y-auto"
-              >
-                {registro.detalles.map((detalle) => (
-                  <motion.div
-                    key={detalle.id}
-                    variants={rowVariants}
-                    className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="text-xs">
-                          #{detalle.producto.id}
-                        </Badge>
-                        <h4 className="text-sm font-medium">
-                          {detalle.producto.nombre}
-                        </h4>
-
-                        {/* Si tus types ya incluyen 'presentacion', puedes mostrarla */}
-                        {/* {detalle.presentacion && (
-                          <Badge variant="secondary" className="text-[11px]">
-                            {detalle.presentacion.nombre}
-                            {detalle.presentacion.sku ? ` · ${detalle.presentacion.sku}` : ""}
-                          </Badge>
-                        )} */}
-
-                        <Badge
-                          variant="secondary"
-                          className="text-xs flex items-center gap-1"
-                        >
-                          <Hash className="h-2 w-2" />
-                          {detalle.producto.codigo}
-                        </Badge>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">
-                          {formattMonedaGT(detalle.subtotal)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Subtotal
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                      <div>
-                        <p className="text-lg font-semibold text-blue-600">
-                          {detalle.cantidad}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Cantidad
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-semibold text-green-600">
-                          {formattMonedaGT(detalle.costoUnitario)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Costo Unit.
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-semibold text-purple-600">
-                          {formattMonedaGT(
-                            detalle.producto.precioCostoActual || 0
-                          )}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Precio Actual
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-semibold text-orange-600">
-                          {formattMonedaGT(detalle.subtotal)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Total</p>
-                      </div>
-                    </div>
-
-                    {detalle.creadoEn && (
-                      <div className="mt-3 pt-3 border-t">
-                        <p className="text-xs text-muted-foreground">
-                          Agregado: {formattFechaWithMinutes(detalle.creadoEn)}
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </motion.div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Auditoría */}
-        <motion.div variants={itemVariants}>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Información de Auditoría
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-xs font-medium">Creado</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formattFechaWithMinutes(registro.creadoEn)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium">Última Actualización</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formattFechaWithMinutes(registro.actualizadoEn)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <Button
-            disabled={addedToStock}
-            onClick={() => setOpenFormDialog(true)}
-          >
-            Confirmar recepción y enviar a stock
-          </Button>
-        </motion.div>
-      </div>
+        <TabsContent value="compra">
+          <ComprasMain
+            //STATES
+            openFormPaymentDialog={openFormPaymentDialog} // ✅ correcto
+            setOpenFormPaymentDialog={setOpenFormPaymentDialog}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            isPendingDrp={isPendingDrp}
+            reFetchDRP={reFetchDRP}
+            isRecibirParcial={isRecibirParcial}
+            setIsRecibirParcial={setIsRecibirParcial}
+            openFormDialog={openFormDialog}
+            setOpenFormDialog={setOpenFormDialog}
+            selectedIds={selectedIds}
+            openRecibirParcial={openRecibirParcial}
+            setOpenRecibirParcial={setOpenRecibirParcial}
+            //REGISTRO
+            registro={registroQ}
+            //HELPERS
+            updateCantidadDetalle={updateCantidadDetalle}
+            upsserSelectItems={upsserSelectItems}
+            recepcionable={recepcionable}
+            onOpenPaymentFor={(flow) => {
+              setRecepcionFlow(flow);
+              setOpenFormPaymentDialog(true);
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="recepcionesParciales">
+          <RecepcionesMain compraId={compraId} />
+        </TabsContent>
+      </Tabs>
 
       {/* Confirmación (segunda pantalla) */}
       <AdvancedDialog
@@ -861,6 +621,29 @@ export default function CompraDetalle() {
           disabled: recepcionarM.isPending,
           loadingText: "Cancelando...",
           onClick: () => setOpenSendStock(false),
+        }}
+      />
+
+      {/* RECEPCION PARCIAL */}
+      <AdvancedDialog
+        type="confirmation"
+        onOpenChange={setOpenRecibirParcial}
+        open={openRecibirParcial}
+        title="Recepción parcial de la compra"
+        description="Solo se ingresarán al stock los productos seleccionados. El resto quedará pendiente para una entrega posterior. Los montos y totales se recalcularán según tu selección."
+        question="¿Confirmas la recepción parcial? Esta acción no se puede deshacer."
+        confirmButton={{
+          label: "Confirmar recepción parcial",
+          disabled: handleRecepcionarParcial.isPending,
+          loading: handleRecepcionarParcial.isPending,
+          loadingText: "Ingresando productos al stock...",
+          onClick: handleCreateRecepcionParcial,
+        }}
+        cancelButton={{
+          label: "Cancelar",
+          disabled: handleRecepcionarParcial.isPending,
+          loadingText: "Cancelando...",
+          onClick: () => setOpenRecibirParcial(false),
         }}
       />
 
@@ -1016,94 +799,33 @@ export default function CompraDetalle() {
           </div>
         </DialogContent>
       </Dialog>
-    </motion.div>
-  );
-}
 
-function RequisicionInfo({
-  requisicion,
-}: {
-  requisicion: CompraRequisicionUI;
-}) {
-  return (
-    <motion.div variants={itemVariants}>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <ClipboardList className="h-4 w-4" />
-            Requisición Asociada
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <Hash className="h-6 w-6 mx-auto text-blue-600 mb-1" />
-              <p className="text-sm font-semibold">{requisicion.folio}</p>
-              <p className="text-xs text-muted-foreground">Folio</p>
-            </div>
-            <div className="text-center">
-              <Badge variant="secondary" className="mb-1">
-                {requisicion.estado}
-              </Badge>
-              <p className="text-xs text-muted-foreground">Estado</p>
-            </div>
-            <div className="text-center">
-              <FileText className="h-6 w-6 mx-auto text-green-600 mb-1" />
-              <p className="text-sm font-semibold">{requisicion.totalLineas}</p>
-              <p className="text-xs text-muted-foreground">Líneas</p>
-            </div>
-            <div className="text-center">
-              <Calendar className="h-6 w-6 mx-auto text-purple-600 mb-1" />
-              <p className="text-sm font-semibold">
-                {formattFechaWithMinutes(requisicion.fecha)}
-              </p>
-              <p className="text-xs text-muted-foreground">Fecha</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
-
-function PedidoInfo({ pedido }: { pedido: CompraPedidoUI }) {
-  return (
-    <motion.div variants={itemVariants}>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <ClipboardList className="h-4 w-4" />
-            Pedido Asociado
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <Hash className="h-6 w-6 mx-auto text-blue-600 mb-1" />
-              <p className="text-sm font-semibold">{pedido.folio}</p>
-              <p className="text-xs text-muted-foreground">Folio</p>
-            </div>
-            <div className="text-center">
-              <Badge variant="secondary" className="mb-1">
-                {pedido.estado}
-              </Badge>
-              <p className="text-xs text-muted-foreground">Estado</p>
-            </div>
-            <div className="text-center">
-              <FileText className="h-6 w-6 mx-auto text-green-600 mb-1" />
-              <p className="text-sm font-semibold">{pedido.tipo}</p>
-              <p className="text-xs text-muted-foreground">Tipo</p>
-            </div>
-            <div className="text-center">
-              <Calendar className="h-6 w-6 mx-auto text-purple-600 mb-1" />
-              <p className="text-sm font-semibold">
-                {formattFechaWithMinutes(pedido.fecha)}
-              </p>
-              <p className="text-xs text-muted-foreground">Fecha</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* FORM PREVIO A RECEPCION PARCIAL */}
+      <PaymentMethodCompraDialogConfirm
+        isBankMethod={isBankMethod}
+        isCashMethod={isCashMethod}
+        openFormPaymentDialog={openFormPaymentDialog}
+        setOpenFormPaymentDialog={setOpenFormPaymentDialog}
+        observaciones={observaciones}
+        setObservaciones={setObservaciones}
+        proveedorSelected={proveedorSelected}
+        setProveedorSelected={setProveedorSelected}
+        metodoPago={metodoPago}
+        setMetodoPago={setMetodoPago}
+        optionsCajas={optionsCajas}
+        handleSelectCaja={handleSelectCaja}
+        cajaSelected={cajaSelected}
+        setCajaSelected={setCajaSelected}
+        cajaTieneSaldo={cajaTieneSaldo}
+        montoRecepcion={montoRecepcion}
+        cajasDisponibles={cajasDisponibles}
+        cuentaBancariaSelected={cuentaBancariaSelected}
+        setCuentaBancariaSelected={setCuentaBancariaSelected}
+        cuentasBancarias={cuentasBancarias}
+        canContinue={canContinue}
+        onContinue={onContinueFromPayment}
+        proveedores={proveedores}
+      />
     </motion.div>
   );
 }

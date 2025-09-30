@@ -46,7 +46,7 @@ import localizedFormat from "dayjs/plugin/localizedFormat";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
-import logo from "@/assets/AGROSIL.jpg";
+import logo from "@/assets/NOVALOGO.jpeg";
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 dayjs.locale("es");
@@ -363,7 +363,7 @@ export default function Layout2({ children }: LayoutProps) {
           </main>
 
           <footer className="bg-background py-4 text-center text-sm text-muted-foreground border-t">
-            <p>&copy; 2024 Novas Sistemas. Todos los derechos reservados</p>
+            <p>&copy; 2025 Nova Sistemas. Todos los derechos reservados</p>
           </footer>
         </div>
       </SidebarProvider>
