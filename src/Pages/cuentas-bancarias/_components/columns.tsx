@@ -32,15 +32,7 @@ export const buildColumns = (actions: {
     header: "Tipo",
     cell: ({ row }) => <Badge>{row.original.tipo}</Badge>,
   },
-  // {
-  //   accessorKey: "saldoActual",
-  //   header: "Saldo",
-  //   cell: ({ row }) =>
-  //     new Intl.NumberFormat("es-GT", {
-  //       style: "currency",
-  //       currency: "GTQ",
-  //     }).format(row.original.saldoActual),
-  // },
+
   {
     accessorKey: "ultimoMovimiento",
     header: "Último mov.",

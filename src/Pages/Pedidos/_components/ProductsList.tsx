@@ -26,7 +26,15 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package2, ChevronRight, ChevronDown } from "lucide-react";
+import {
+  Package2,
+  ChevronRight,
+  ChevronDown,
+  CalendarDays,
+  BadgeDollarSign,
+  ListFilter,
+} from "lucide-react";
+
 import type {
   ProductoToPedidoList,
   ProductoPresentacionToPedido,
@@ -56,16 +64,14 @@ type Props = {
   toggleActPrecioProduct: (rowKey: string, checked: boolean) => void;
 };
 
-/** === Celda de stock con popover por sucursal === */
-const StockCell = ({
-  stockPorSucursal,
-}: {
+/** === Popover compacto para ver stock por sucursal === */
+const StockCell: React.FC<{
   stockPorSucursal: {
     sucursalId: number;
     sucursalNombre: string;
     cantidad: number;
   }[];
-}) => {
+}> = ({ stockPorSucursal }) => {
   const total = useMemo(
     () => stockPorSucursal.reduce((a, s) => a + (s.cantidad || 0), 0),
     [stockPorSucursal]
@@ -73,13 +79,18 @@ const StockCell = ({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 px-2">
-          <Badge variant="outline" className="font-medium">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2"
+          aria-label="Ver stock por sucursal"
+        >
+          <Badge variant="outline" className="font-medium tabular-nums">
             {total}
           </Badge>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-64">
+      <PopoverContent align="start" className="w-56">
         <div className="text-xs text-muted-foreground mb-2">
           Stock por sucursal
         </div>
@@ -90,7 +101,7 @@ const StockCell = ({
               className="flex items-center justify-between text-sm"
             >
               <span className="truncate">{s.sucursalNombre}</span>
-              <span className="font-medium">{s.cantidad}</span>
+              <span className="font-medium tabular-nums">{s.cantidad}</span>
             </div>
           ))}
         </div>
@@ -149,20 +160,35 @@ export default function ProductsList({
           rowKey === rowKeyForPres(l.presentacionId!))
     )?.precioUnitarioOverride ?? null;
 
-  /** === Columnas TanStack v5 === */
-  const columns = useMemo<ColumnDef<ProductoToPedidoList>[]>(
-    () => [
+  /**
+   * Tamaños (en px) de columnas NO elásticas.
+   * Dejamos la columna "Producto" sin size para que absorba/responda.
+   */
+  const COL = {
+    EXPAND: 28,
+    SELECT: 40,
+    STOCK: 60,
+    QTY_PRICE: 220,
+    FECHA: 120,
+    ACT: 56,
+    TOTAL: 96,
+  } as const;
+
+  /** === Columnas (compactas + responsivas) === */
+  const columns = useMemo<ColumnDef<ProductoToPedidoList>[]>(() => {
+    return [
       {
         id: "expander",
         header: () => null,
-        size: 36,
+        size: COL.EXPAND,
         cell: ({ row }) =>
           row.getCanExpand() ? (
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-7 w-7"
               onClick={row.getToggleExpandedHandler()}
+              aria-label={row.getIsExpanded() ? "Contraer" : "Expandir"}
             >
               {row.getIsExpanded() ? (
                 <ChevronDown className="h-4 w-4" />
@@ -175,18 +201,17 @@ export default function ProductsList({
       {
         id: "select",
         header: () => (
-          <div className="flex justify-center text-xs text-muted-foreground">
+          <div className="flex justify-center text-[10px] text-muted-foreground select-none">
             SEL
           </div>
         ),
-        size: 44,
+        size: COL.SELECT,
         cell: ({ row }) => {
           const p = row.original;
-          const checked = isProductChecked(p.id);
           return (
             <div className="flex justify-center">
               <Checkbox
-                checked={checked}
+                checked={isProductChecked(p.id)}
                 onCheckedChange={(ck) => onToggleProduct(p.id, Boolean(ck))}
                 aria-label="Seleccionar producto"
               />
@@ -196,20 +221,23 @@ export default function ProductsList({
       },
       {
         accessorKey: "nombre",
-        header: () => <span className="text-sm">Producto</span>,
+        header: () => <span className="text-xs sm:text-sm">Producto</span>,
+        // sin size => flexible
         cell: ({ row }) => {
           const p = row.original;
           return (
-            <div className="flex items-center gap-2">
-              <Package2 className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="flex items-start gap-2 min-w-0">
+              <Package2 className="mt-0.5 h-4 w-4 text-muted-foreground shrink-0" />
               <div className="min-w-0">
-                <div className="truncate font-medium">{p.nombre}</div>
+                <div className="truncate font-medium leading-tight">
+                  {p.nombre}
+                </div>
                 {!!p.descripcion && (
-                  <div className="text-xs text-muted-foreground truncate">
+                  <div className="text-xs text-muted-foreground truncate leading-tight">
                     {p.descripcion}
                   </div>
                 )}
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground leading-tight">
                   Código: {p.codigoProducto} · Unidad: {p.unidadBase}
                 </div>
               </div>
@@ -219,8 +247,8 @@ export default function ProductsList({
       },
       {
         id: "stock",
-        header: () => <span className="text-sm">Stock</span>,
-        size: 100,
+        header: () => <span className="text-xs sm:text-sm">Stock</span>,
+        size: COL.STOCK,
         cell: ({ row }) => (
           <div className="flex items-center justify-center">
             <StockCell stockPorSucursal={row.original.stockPorSucursal} />
@@ -229,24 +257,26 @@ export default function ProductsList({
       },
       {
         id: "qty-price",
-        header: () => <span className="text-sm">Cant. / Precio</span>,
-        size: 270,
+        header: () => (
+          <div className="flex items-center justify-center gap-1 text-xs sm:text-sm">
+            <span className="hidden sm:inline">Cant.</span>/<span>Precio</span>
+          </div>
+        ),
+        size: COL.QTY_PRICE,
         cell: ({ row }) => {
           const p = row.original;
           const rk = rowKeyForProduct(p.id);
           const checked = isProductChecked(p.id);
 
-          // Cantidad (con draft + commit onChange)
           const qtySel = qtyOfKey(rk);
           const qtyDisplay =
             drafts[rk]?.qty ?? (qtySel !== undefined ? String(qtySel) : "");
 
-          // Precio (con draft + commit onChange)
           const priceOverride = priceOfKey(rk); // number | null
           const displayPrice =
             drafts[rk]?.price ?? ((priceOverride ?? "") as string | number);
 
-          // Reglas de habilitado para editar precio
+          // Si NO está marcado "actualizarCosto" => se bloquea el input de precio
           const checkedChangeActPrecio =
             selectedLines.find((l) => rowKeyForProduct(p.id) === keyFor(l))
               ?.actualizarCosto || false;
@@ -273,43 +303,53 @@ export default function ProductsList({
                       : null;
                   onQtyChange(rk, next);
                 }}
-                className="h-8 w-20 text-center text-sm font-mono tabular-nums"
+                className="h-8 w-14 text-center text-xs font-mono tabular-nums"
                 placeholder="Cant."
                 aria-label="Cantidad producto"
               />
 
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
-                disabled={disablePrice}
-                value={checked ? displayPrice : ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setDrafts((prev) => ({
-                    ...prev,
-                    [rk]: { ...prev[rk], price: v },
-                  }));
-                  const num =
-                    v === ""
-                      ? null
-                      : Number.isFinite(Number(v))
-                      ? Number(v)
-                      : null;
-                  onPriceChange(rk, num);
-                }}
-                className="h-8 w-28 text-right text-sm font-mono tabular-nums"
-                placeholder={`Q ${p.precioCostoActual.toFixed(2)}`}
-                aria-label="Precio costo unitario"
-              />
+              {/* Precio con icono monetario a la izquierda */}
+              <div className="relative">
+                <BadgeDollarSign className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  disabled={disablePrice}
+                  value={checked ? displayPrice : ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [rk]: { ...prev[rk], price: v },
+                    }));
+                    const num =
+                      v === ""
+                        ? null
+                        : Number.isFinite(Number(v))
+                        ? Number(v)
+                        : null;
+                    onPriceChange(rk, num);
+                  }}
+                  className="h-8 w-24 pl-7 text-right text-xs font-mono tabular-nums"
+                  placeholder={`Q ${p.precioCostoActual.toFixed(2)}`}
+                  aria-label="Precio costo unitario"
+                />
+              </div>
             </div>
           );
         },
       },
       {
         id: "fecha",
-        header: () => <span className="text-sm">F. Cad</span>,
-        size: 140,
+        header: () => (
+          <div className="flex items-center justify-center gap-1 text-xs sm:text-sm">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <span className="hidden md:inline">F. Cad</span>
+            <span className="md:hidden">Cad</span>
+          </div>
+        ),
+        size: COL.FECHA,
         cell: ({ row }) => {
           const p = row.original;
           const checked = isProductChecked(p.id);
@@ -329,7 +369,7 @@ export default function ProductsList({
                     e.target.value
                   )
                 }
-                className="h-8 w-36 px-2 rounded-md border bg-background text-foreground text-sm text-center"
+                className="h-8 w-28 px-2 rounded-md border bg-background text-foreground text-xs text-center"
                 aria-label="Fecha de caducidad"
               />
             </div>
@@ -338,8 +378,8 @@ export default function ProductsList({
       },
       {
         id: "updCosto",
-        header: () => <span className="text-sm">Act. Costo</span>,
-        size: 90,
+        header: () => <span className="text-xs sm:text-sm">Act.</span>,
+        size: COL.ACT,
         cell: ({ row }) => {
           const p = row.original;
           const rk = rowKeyForProduct(p.id);
@@ -362,8 +402,8 @@ export default function ProductsList({
       },
       {
         id: "total",
-        header: () => <span className="text-sm">Total</span>,
-        size: 110,
+        header: () => <span className="text-xs sm:text-sm">Total</span>,
+        size: COL.TOTAL,
         cell: ({ row }) => {
           const p = row.original;
           const rk = rowKeyForProduct(p.id);
@@ -371,17 +411,16 @@ export default function ProductsList({
           const price = (priceOfKey(rk) ?? p.precioCostoActual) || 0;
           const total = qty * price;
           return (
-            <div className="text-right font-medium text-sm">
-              Q {isFinite(total) ? total.toFixed(2) : "0.00"}
+            <div className="text-right font-medium text-xs tabular-nums">
+              Q {Number.isFinite(total) ? total.toFixed(2) : "0.00"}
             </div>
           );
         },
       },
-    ],
-    [selectedLines, drafts]
-  );
+    ];
+  }, [selectedLines, drafts]);
 
-  /** === Tabla TanStack v5 === */
+  /** === Tabla TanStack === */
   const table = useReactTable({
     data: productos,
     columns,
@@ -392,7 +431,7 @@ export default function ProductsList({
     onExpandedChange: setExpanded,
   });
 
-  /** === Fila expandida de Presentaciones === */
+  /** === Fila expandida de Presentaciones (grid compacta) === */
   const PresentacionGridRow: React.FC<{
     p: ProductoToPedidoList;
     pp: ProductoPresentacionToPedido;
@@ -406,14 +445,15 @@ export default function ProductsList({
     const checkedPrecioAct =
       selectedLines.find((l) => keyFor(l) === rk)?.actualizarCosto || false;
     const disablePrice = isChecked && checkedPrecioAct === false;
+    const currentFecha =
+      selectedLines.find((l) => keyFor(l) === rk)?.fechaVencimiento || "";
 
     return (
       <div
-        key={pp.id}
         className="
           grid items-center gap-x-3 gap-y-1 py-1
-          grid-cols-[24px_minmax(0,1fr)_100px_96px_120px_90px_110px]
-          md:grid-cols-[24px_minmax(0,1fr)_110px_120px_140px_90px_120px]
+          grid-cols-[24px_minmax(0,1fr)_60px_70px_120px_56px_96px]
+          md:grid-cols-[24px_minmax(0,1fr)_72px_84px_140px_60px_110px]
         "
       >
         <div className="flex justify-center">
@@ -427,14 +467,10 @@ export default function ProductsList({
         </div>
 
         <div className="min-w-0">
-          <div className="truncate font-medium">
-            {p.nombre} — <span className="font-normal">{pp.nombre}</span>
-          </div>
-          <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+          <div className="truncate font-medium">{p.nombre}</div>
+          <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span>Tipo: {pp.tipoPresentacion}</span>
-            <span>Factor: {pp.factorUnidadBase}</span>
-            {pp.sku && <span>SKU: {pp.sku}</span>}
-            {pp.codigoBarras && <span>CB: {pp.codigoBarras}</span>}
+            {pp.codigoBarras && <span>Código: {pp.codigoBarras}</span>}
           </div>
         </div>
 
@@ -455,13 +491,14 @@ export default function ProductsList({
                 e.target.value === "" ? null : Number(e.target.value)
               )
             }
-            className="h-8 w-24 text-center text-sm"
+            className="h-8 w-16 text-center text-xs tabular-nums"
             placeholder="Cant."
             aria-label="Cantidad presentación"
           />
         </div>
 
-        <div className="justify-self-center">
+        <div className="relative justify-self-center">
+          <BadgeDollarSign className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
           <Input
             type="number"
             inputMode="decimal"
@@ -475,11 +512,22 @@ export default function ProductsList({
                 e.target.value === "" ? null : Number(e.target.value)
               )
             }
-            className="h-8 w-28 text-right text-sm font-mono tabular-nums"
+            className="h-8 w-24 pl-7 text-right text-xs font-mono tabular-nums"
             placeholder={`Q ${(pp.costoReferencialPresentacion ?? 0).toFixed(
               2
             )}`}
             aria-label="Precio costo presentación"
+          />
+        </div>
+
+        <div className="justify-self-center">
+          <input
+            type="date"
+            disabled={!isChecked}
+            value={isChecked ? currentFecha : ""}
+            onChange={(e) => handleChangeFechaVencimiento(rk, e.target.value)}
+            className="h-8 w-28 px-2 rounded-md border bg-background text-foreground text-xs text-center"
+            aria-label="Fecha de caducidad (presentación)"
           />
         </div>
 
@@ -491,8 +539,8 @@ export default function ProductsList({
           />
         </div>
 
-        <div className="text-right font-medium text-sm">
-          Q {isFinite(lineTotal) ? lineTotal.toFixed(2) : "0.00"}
+        <div className="text-right font-medium text-xs tabular-nums">
+          Q {Number.isFinite(lineTotal) ? lineTotal.toFixed(2) : "0.00"}
         </div>
       </div>
     );
@@ -500,27 +548,34 @@ export default function ProductsList({
 
   return (
     <div className="space-y-3">
-      {/* Buscador */}
-      <div className="flex items-center gap-2">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nombre o código…"
-          className="max-w-sm"
-        />
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="relative w-full sm:max-w-xs">
+          <ListFilter className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre o código…"
+            className="pl-8"
+            aria-label="Buscar productos"
+          />
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {productos.length} resultados
+        </div>
       </div>
 
       {/* Tabla principal */}
-      <div className="rounded-md border">
-        <div className="max-h-full overflow-y-auto">
+      <div className="rounded-md border overflow-hidden">
+        <div className="max-h-full overflow-y-auto overflow-x-hidden">
           <Table className="w-full table-fixed">
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id} className="h-10">
+                <TableRow key={hg.id} className="h-8">
                   {hg.headers.map((h) => (
                     <TableHead
                       key={h.id}
-                      className="align-middle"
+                      className="align-middle text-[11px] sm:text-xs"
                       style={{
                         width: h.getSize() ? `${h.getSize()}px` : undefined,
                       }}
@@ -539,24 +594,26 @@ export default function ProductsList({
                 <TableRow>
                   <TableCell
                     colSpan={columns.length}
-                    className="text-center py-6 text-muted-foreground"
+                    className="text-center py-8 text-muted-foreground"
                   >
-                    Sin resultados…
+                    No hay resultados…
                   </TableCell>
                 </TableRow>
               ) : (
                 table.getRowModel().rows.map((row) => {
                   const p = row.original;
                   const prodSelected = isProductChecked(p.id);
-
                   return (
                     <React.Fragment key={row.id}>
                       <TableRow
                         data-state={row.getIsExpanded() ? "open" : undefined}
-                        className={prodSelected ? "bg-muted/50" : ""}
+                        className={`h-10 ${prodSelected ? "bg-muted/40" : ""}`}
                       >
                         {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id} className="align-middle">
+                          <TableCell
+                            key={cell.id}
+                            className="align-middle py-2"
+                          >
                             {flexRender(
                               cell.column.columnDef.cell,
                               cell.getContext()
@@ -566,7 +623,7 @@ export default function ProductsList({
                       </TableRow>
 
                       {row.getIsExpanded() && (
-                        <TableRow className="bg-muted/30">
+                        <TableRow className="bg-muted/20">
                           <TableCell colSpan={columns.length} className="py-2">
                             <div className="space-y-1">
                               {p.presentaciones.map((pp) => (

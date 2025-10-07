@@ -469,9 +469,21 @@ export default function CompraDetalle() {
     }
   };
 
-  // === Loading / Error screens ==============================================
   const loadingHard = isPendingRegistro;
   const errorHard = isErrorRegistro && !registro;
+  const onContinueFromPayment = useCallback(() => {
+    setOpenFormPaymentDialog(false);
+    if (recepcionFlow === "PARCIAL") {
+      setOpenRecibirParcial(true);
+    } else {
+      setOpenSendStock(true);
+    }
+  }, [
+    recepcionFlow,
+    setOpenFormPaymentDialog,
+    setOpenRecibirParcial,
+    setOpenSendStock,
+  ]);
 
   if (loadingHard) {
     return (
@@ -533,24 +545,6 @@ export default function CompraDetalle() {
     (!requiereBanco || !!cuentaBancariaSelected) &&
     (!requiereCaja || (!!cajaSelected && cajaTieneSaldo));
 
-  // NEW: estado de flujo
-
-  // NEW: decide a qué confirmación abrir cuando el usuario da "Continuar" en el PaymentDialog
-  const onContinueFromPayment = useCallback(() => {
-    setOpenFormPaymentDialog(false);
-    if (recepcionFlow === "PARCIAL") {
-      setOpenRecibirParcial(true);
-    } else {
-      setOpenSendStock(true);
-    }
-  }, [
-    recepcionFlow,
-    setOpenFormPaymentDialog,
-    setOpenRecibirParcial,
-    setOpenSendStock,
-  ]);
-
-  // === RENDER ================================================================
   return (
     <motion.div
       variants={containerVariants}

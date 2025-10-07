@@ -10,7 +10,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import ReactSelect from "react-select";
-import ProductsList from "./ProductsList";
 import { Loader2 } from "lucide-react";
 import { ProductoToPedidoList } from "../Interfaces/productsList.interfaces";
 import {
@@ -30,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
+import ProductsList from "./ProductsList";
 
 /** === UI Linea: permite producto O presentación === */
 export type PedidoLineaUI = {

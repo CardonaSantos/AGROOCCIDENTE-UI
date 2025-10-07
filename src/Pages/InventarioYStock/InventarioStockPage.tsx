@@ -1,22 +1,22 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
-import axios from "axios";
-import { Categorias, Category, ProductCreate } from "./interfaces.interface";
+import { Categorias, ProductCreate } from "./interfaces.interface";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { createOneCategory, deleteOneCategory, updateCategory } from "./api";
 import { toast } from "sonner";
-import { ProductsInventary } from "@/Types/Inventary/ProductsInventary";
 import { SimpleProvider } from "@/Types/Proveedor/SimpleProveedor";
 import Inventario from "./Inventario";
-const API_URL = import.meta.env.VITE_API_URL;
+import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
+import { PaginatedInventarioResponse } from "./interfaces/InventaryInterfaces";
+import { QueryTable } from "./interfaces/querytable";
 
 function InventarioStockPage() {
-  const recibidoPorId = useStore((s) => s.userId);
+  const recibidoPorId = useStore((s) => s.userId) ?? 0;
+  const sucursalId = useStore((s) => s.sucursalId) ?? 0;
 
   //CATEGORIAS
   const [openCategory, setOpenCategory] = useState<boolean>(false);
-
   const [productCreate, setProductCreate] = useState<ProductCreate>({
     precioCostoActual: null,
     codigoProducto: "",
@@ -31,32 +31,75 @@ function InventarioStockPage() {
   });
 
   //DATA PARA INVENTARIO
-  const [productsInventary, setProductsInventary] = useState<
-    ProductsInventary[]
-  >([]);
-  const [categorias, setCategorias] = useState<Category[]>([]);
-  const [suppliers, setSuppliers] = useState<SimpleProvider[]>([]);
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
-  const loadInventoryData = async () => {
-    try {
-      const [prods, cats, provs] = await Promise.all([
-        axios.get<ProductsInventary[]>(
-          `${API_URL}/products/products/for-inventary`
-        ),
-        axios.get<Categorias[]>(`${API_URL}/categoria/`),
-        axios.get<SimpleProvider[]>(`${API_URL}/proveedor/simple-proveedor`),
-      ]);
-      setProductsInventary(prods.data);
-      setCategorias(cats.data);
-      setSuppliers(provs.data);
-    } catch {
-      toast.error("Error al cargar datos de inventario");
+  const [searchQuery, setSearchQuery] = useState<QueryTable>({
+    categorias: [],
+    codigoProducto: "",
+    fechaVencimiento: "",
+    productoNombre: "",
+    sucursalId: sucursalId,
+    precio: "",
+    tipoPresentacion: [],
+  });
+
+  const {
+    data: productsInventario = {
+      data: [],
+      meta: {
+        limit: 0,
+        page: 0,
+        totalCount: 0,
+        totalPages: 0,
+      },
+    },
+    refetch: reFetchInventario,
+  } = useApiQuery<PaginatedInventarioResponse>(
+    [
+      "productos-inventario",
+      searchQuery,
+      pagination.pageIndex,
+      pagination.pageSize,
+    ],
+    "products/products/for-inventary",
+    {
+      params: {
+        ...searchQuery,
+        page: pagination.pageIndex + 1,
+        limit: pagination.pageSize,
+      },
+    },
+    {
+      placeholderData: {
+        data: [],
+        meta: { totalCount: 0, totalPages: 0, page: 1, limit: 10 },
+      },
     }
-  };
+  );
 
-  useEffect(() => {
-    loadInventoryData();
-  }, []);
+  const { data: cats = [], refetch: reFetchCats } = useApiQuery<Categorias[]>(
+    ["categorias"],
+    "/categoria/",
+    {
+      // params: {}
+    },
+    {
+      initialData: [],
+    }
+  );
+
+  const { data: provs = [], refetch: reFetchProvs } = useApiQuery<
+    SimpleProvider[]
+  >(
+    ["proveedores"],
+    "/proveedor/simple-proveedor",
+    {
+      // params: {}
+    },
+    {
+      initialData: [],
+    }
+  );
 
   const createCategory = async (nombreCategorya: string) => {
     if (!nombreCategorya.trim()) {
@@ -69,8 +112,7 @@ function InventarioStockPage() {
       success: "Categoría creada con éxito",
       error: "Error al crear categoría",
     });
-
-    await loadInventoryData();
+    reloadInventaryData();
     setOpenCategory(false);
   };
 
@@ -85,8 +127,8 @@ function InventarioStockPage() {
       success: "Categoría eliminada",
       error: "Error al eliminar categoría",
     });
-
-    await loadInventoryData();
+    reloadInventaryData();
+    // await loadInventoryData();
   };
 
   const updateOneCategory = async (
@@ -103,21 +145,31 @@ function InventarioStockPage() {
       success: "Categoría actualizada",
       error: "Error al actualizar categoría",
     });
-
-    await loadInventoryData();
+    reloadInventaryData();
     // setOpenCategory(false);
   };
+
+  const reloadInventaryData = async () => {
+    await reFetchInventario();
+    await reFetchCats();
+    await reFetchProvs();
+  };
+
+  //si cambia el filtro, regresa a primera pagina
+  useEffect(() => {
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
+  }, [JSON.stringify(searchQuery)]);
 
   return (
     <motion.div {...DesvanecerHaciaArriba} className="w-full px-4">
       <Inventario
-        products={productsInventary}
-        categorias={categorias}
-        proveedores={suppliers}
+        setSearchQuery={setSearchQuery}
+        categorias={cats}
+        proveedores={provs}
         // PROPS PARA ABRIR EL MODAL
         openCategory={openCategory}
         setOpenCategory={setOpenCategory}
-        loadInventoryData={loadInventoryData}
+        loadInventoryData={reloadInventaryData}
         //createCategory
         createCategory={createCategory}
         deleteCategory={deleteCategory}
@@ -125,6 +177,10 @@ function InventarioStockPage() {
         //Para creacion de producto y limpieza al terminar de crear
         productCreate={productCreate}
         setProductCreate={setProductCreate}
+        searchQuery={searchQuery}
+        productsInventario={productsInventario}
+        setPagination={setPagination}
+        pagination={pagination}
         //Para cropear imagenes el resultado
       />
     </motion.div>

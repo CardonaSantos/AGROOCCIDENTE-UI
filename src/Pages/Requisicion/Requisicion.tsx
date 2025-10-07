@@ -128,6 +128,7 @@ export default function RequisitionBuilder() {
       toast.error("Error al crear la requisición");
     }
   };
+  console.log("La data es: ", data);
 
   return (
     <div className="w-full">

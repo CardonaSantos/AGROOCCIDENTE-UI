@@ -332,6 +332,8 @@ export default function RequisicionesList(props: ExternalQueryProps) {
     );
   }
 
+  console.log("los registros de requisiciones son: ", requisiciones);
+
   // ---------- Render principal ----------
   return (
     <div className="space-y-4">
