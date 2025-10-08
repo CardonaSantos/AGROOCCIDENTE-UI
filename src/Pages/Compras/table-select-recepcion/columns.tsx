@@ -5,7 +5,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Check, Tag, Package, AlertTriangle, CheckCircle2 } from "lucide-react";
-
+import dayjs from "dayjs";
+import "dayjs/locale/es";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isSameOrAfter);
+dayjs.locale("es");
 import { DetalleRecepcionable } from "../ResumenRecepcionParcial/Interfaces/detalleRecepcionable";
 import {
   ItemDetallesPayloadParcial,
@@ -23,6 +33,12 @@ const toInt = (raw: string | number) => {
 const clamp = (n: number, min: number, max: number) =>
   Math.min(max, Math.max(min, n));
 
+const toYMD = (v?: string | Date | null) => {
+  if (!v) return undefined;
+  const d = v instanceof Date ? dayjs(v) : dayjs(v);
+  return d.isValid() ? d.format("YYYY-MM-DD") : undefined;
+};
+
 export const buildItemFromRow = (
   row: DetalleRecepcionable
 ): ItemDetallesPayloadParcial => {
@@ -31,7 +47,8 @@ export const buildItemFromRow = (
   return {
     compraDetalleId,
     itemId: row.producto.id,
-    fechaExpiracion: undefined,
+    // si detalle ya trae fecha, úsala como default
+    fechaExpiracion: toYMD(row.fechaVencimiento) ?? undefined,
     cantidadRecibida: cantidadSugerida,
     checked: true,
     tipo: row.producto.tipo,
@@ -54,6 +71,10 @@ interface PropsColum {
     compraDetalleId: number,
     nuevaCantidad: number
   ) => void;
+  updateFechaVencimiento: (
+    compraDetalleId: number,
+    nuevaFechaVencimiento: string
+  ) => void;
 }
 
 export const columnsDetallesSelect = ({
@@ -61,6 +82,7 @@ export const columnsDetallesSelect = ({
   selectedIds,
   updateCantidadDetalle,
   selectedItems,
+  updateFechaVencimiento,
 }: PropsColum) => [
   // SELECT (con select-all)
   columnHelper.display({
@@ -135,6 +157,48 @@ export const columnsDetallesSelect = ({
       );
     },
     sortingFn: "alphanumeric",
+  }),
+
+  columnHelper.accessor((row) => row.fechaVencimiento, {
+    id: "fechaVencimiento",
+    header: () => <span>F. Vencimiento</span>,
+    cell: (info) => {
+      const row = info.row.original;
+      const compraDetalleId = row.id;
+
+      const seleccion = selectedItems.lineas.find(
+        (l) => l.compraDetalleId === compraDetalleId
+      );
+
+      // valor para el input date (YYYY-MM-DD o "")
+      const valueYMD =
+        seleccion?.fechaExpiracion ??
+        (row.fechaVencimiento
+          ? dayjs(row.fechaVencimiento).format("YYYY-MM-DD")
+          : "");
+
+      // texto legible (DD/MM/YYYY o "—")
+      const pretty = valueYMD
+        ? dayjs(valueYMD, "YYYY-MM-DD").format("DD/MM/YYYY")
+        : "—";
+
+      return (
+        <div className="max-w-[12rem] sm:max-w-[16rem]">
+          <Input
+            type="date"
+            value={valueYMD}
+            onChange={(e) =>
+              updateFechaVencimiento(compraDetalleId, e.currentTarget.value)
+            }
+            className="h-8"
+          />
+          <div className="mt-0.5 text-[11px] text-muted-foreground">
+            {pretty}
+          </div>
+        </div>
+      );
+    },
+    sortingFn: "alphanumeric", // o pon el sortingFn de fecha si quieres orden real por fecha
   }),
 
   // CANTIDAD (input angosto)

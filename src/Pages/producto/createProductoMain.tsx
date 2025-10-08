@@ -153,18 +153,15 @@ function CreateProductPage() {
   const buildPresentacionesDto = (presentaciones: Presentacion[]) => {
     return presentaciones.map((p) => ({
       nombre: p.nombre.trim(),
-      factorUnidadBase: String(p.factorUnidadBase).trim(),
       sku: p.sku || undefined,
       codigoBarras: p.codigoBarras || undefined,
       esDefault: !!p.esDefault,
 
-      // ✅ enviar lo que espera el backend
       tipoPresentacion: p.tipoPresentacion, // "UNIDAD" | ...
       costoReferencialPresentacion: String(
         p.costoReferencialPresentacion
       ).trim(),
 
-      // ✅ mapear a preciosPresentacion
       preciosPresentacion: (p.precios ?? []).map((pp) => ({
         rol: pp.rol,
         orden: Number(pp.orden),
@@ -292,14 +289,7 @@ function CreateProductPage() {
             errores.push(`Presentación #${idxP + 1}: el nombre es requerido.`);
             return false;
           }
-          if (!isPositiveDecimalStr(presentacion.factorUnidadBase)) {
-            errores.push(
-              `Presentación #${
-                idxP + 1
-              }: el factor de unidad base debe ser > 0.`
-            );
-            return false;
-          }
+
           if (presentacion.precios.length === 0) {
             errores.push(
               `Presentación #${idxP + 1}: debe tener al menos un precio.`

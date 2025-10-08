@@ -58,6 +58,8 @@ function TableInventario({
     pageCount,
   });
 
+  console.log("inventario: ", data);
+
   return (
     <div className="w-full rounded-lg border overflow-x-auto">
       <table className="w-full text-xs">

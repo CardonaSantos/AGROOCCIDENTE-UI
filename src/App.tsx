@@ -83,6 +83,7 @@ import FlujoEfectivoPage from "./Pages/CajaAdministrativo/_flujoEfectivo/FlujoEf
 import CuentasBancariasPage from "./Pages/cuentas-bancarias/CuentasBancariasPage";
 import CreateProductPage from "./Pages/producto/createProductoMain";
 import CreateVentaCuotaForm from "./Pages/VentaCuotas/_components/CreateVentaCuotaForm";
+import CategoriasMainPage from "./Pages/Categorias/CategoriasMainPage";
 
 function App() {
   const { checkAuth } = useAuthStore();
@@ -187,6 +188,15 @@ function App() {
                 <ProtectedRoute>
                   <InventarioStockPage />
                 </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/categorias"
+              element={
+                <ProtectRouteAdmin>
+                  <CategoriasMainPage />
+                </ProtectRouteAdmin>
               }
             />
 

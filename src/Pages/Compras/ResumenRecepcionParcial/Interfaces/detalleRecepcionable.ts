@@ -14,6 +14,7 @@ export interface DetalleRecepcionable {
   cantidad: number;
   costoUnitario: number;
   producto: ProductoMini;
+  fechaVencimiento: string | undefined;
   recibida: number; // acumulada
   pendiente: number; // server-calculado
   estadoDetalle: "PENDIENTE" | "PARCIAL" | "RECIBIDO";

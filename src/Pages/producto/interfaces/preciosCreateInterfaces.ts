@@ -35,7 +35,6 @@ export interface PreciosPresentacion extends PrecioProductoInventario {}
 //COMPUESTA GENERAL A USAR:
 export interface Presentacion {
   nombre: string; // "1 L", "500 ml", "Saco 46 kg"
-  factorUnidadBase: string; // "1000", "0.5", etc.
   sku?: string;
   codigoBarras?: string;
   esDefault?: boolean; // si true, forzará a ser la default
@@ -43,4 +42,6 @@ export interface Presentacion {
   //nuevo
   tipoPresentacion: TipoEmpaque;
   costoReferencialPresentacion: string;
+  descripcion: string;
+  stockMinimo: number;
 }

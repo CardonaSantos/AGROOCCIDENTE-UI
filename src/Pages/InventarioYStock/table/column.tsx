@@ -20,10 +20,9 @@ import {
   Package,
   Tag,
   Store,
-  AlertTriangle,
   EllipsisVertical,
-  PackageOpen,
   Eye,
+  CircleAlert,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import {
@@ -33,6 +32,19 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import dayjs from "dayjs";
+import "dayjs/locale/es";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+dayjs.extend(utc);
+dayjs.extend(customParseFormat);
+dayjs.extend(timezone);
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isSameOrAfter);
+dayjs.locale("es");
 
 import { esTextSortingFn, numericStringSortingFn } from "../sortingFns";
 import { ddmmyyyyToTime, numFromStr, sumBy } from "../tableFormatters";
@@ -45,6 +57,40 @@ const getImages = (p: any): { cover: string; items: ImgItem[] } => {
   const cover = p?.image ?? items[0]?.url ?? productPlaceHolder;
   return { cover, items };
 };
+
+const parseDMY = (s?: string | null): number | null => {
+  if (!s || !s.trim()) return null;
+  const d = dayjs(s, "DD-MM-YYYY", true); // estricto
+  return d.isValid() ? d.startOf("day").valueOf() : null;
+};
+
+const cmpDescNullsLast = (a: number | null, b: number | null) => {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return b - a; // más reciente primero
+};
+
+/** Próximos vencimientos primero, luego vencidos, luego vacíos */
+const cmpVencProximas = (aStr?: string | null, bStr?: string | null) => {
+  const a = parseDMY(aStr);
+  const b = parseDMY(bStr);
+  const today = dayjs().startOf("day").valueOf();
+
+  const cat = (ms: number | null) => (ms === null ? 2 : ms < today ? 1 : 0); // 0=futuro (próximo), 1=vencido, 2=vacío
+
+  const ca = cat(a),
+    cb = cat(b);
+  if (ca !== cb) return ca - cb;
+
+  // Dentro de cada categoría:
+  // - futuros: asc (más próximo primero)
+  // - vencidos: asc (más antiguo primero) — cámbialo a desc si prefieres “recién vencidos” arriba
+  // - vacíos: iguales
+  if (a === null && b === null) return 0;
+  return (a ?? 0) - (b ?? 0);
+};
+
 export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
   // IMAGEN DEL PRODUCTO
 
@@ -243,7 +289,10 @@ export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
       </div>
     ),
     cell: (info) => {
-      const items = info.row.original.stocks ?? [];
+      const items = [...(info.row.original.stocks ?? [])].sort((x, y) =>
+        cmpDescNullsLast(parseDMY(x.fechaIngreso), parseDMY(y.fechaIngreso))
+      );
+
       const show = items.slice(0, 2);
       const extra = items.length - show.length;
 
@@ -271,10 +320,13 @@ export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
                       key={s.id ?? i}
                       className="flex items-center gap-2 text-sm"
                     >
-                      <PackageOpen className="w-4 h-4" />
-                      <span className="tabular-nums">{s.cantidad}</span>
+                      <span className="tabular-nums text-[11px]">
+                        {s.cantidad} unidades
+                      </span>
                       <Separator orientation="vertical" className="h-4" />
-                      <span>{s.fechaIngreso || "N/A"}</span>
+                      <span className="text-[11px]">
+                        Ingresado: {s.fechaIngreso || "N/A"}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -297,7 +349,11 @@ export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
       </div>
     ),
     cell: (info) => {
-      const items = info.row.original.stocks ?? [];
+      const raw = info.row.original.stocks ?? [];
+      const items = [...raw].sort((a, b) =>
+        cmpVencProximas(a.fechaVencimiento, b.fechaVencimiento)
+      );
+
       const show = items.slice(0, 2);
       const extra = items.length - show.length;
 
@@ -322,26 +378,52 @@ export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
               <PopoverTrigger className="text-[11px] text-primary hover:underline dark:text-white">
                 Ver {extra} más…
               </PopoverTrigger>
-              <PopoverContent className="w-80">
+              <PopoverContent className="w-96">
                 <div className="max-h-48 overflow-y-auto space-y-1">
-                  {items.map((s, i) => (
-                    <div
-                      key={s.id ?? i}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>{s.fechaVencimiento || "N/A"}</span>
-                      <Separator orientation="vertical" className="h-4" />
-                      <span className="tabular-nums">{s.cantidad}</span>
-                    </div>
-                  ))}
+                  {items.map((s, i) => {
+                    const todayJs = dayjs().startOf("day").toDate();
+                    const todayDayJs = dayjs().startOf("day");
+
+                    const d = dayjs(s.fechaVencimiento, "DD-MM-YYYY", true); // el true fuerza parseo estricto
+
+                    const isStockVencido = dayjs(
+                      s.fechaVencimiento
+                    ).isSameOrBefore(todayJs);
+
+                    const differenceBetween = todayDayJs.diff(d, "day");
+
+                    return (
+                      <div
+                        key={s.id ?? i}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <span className="text-[11px]">
+                          Vence: {s.fechaVencimiento || "N/A"}
+                        </span>
+                        <Separator orientation="vertical" className="h-4" />
+                        <span className="tabular-nums text-[11px]">
+                          {s.cantidad} unidades
+                        </span>
+
+                        {isStockVencido ? (
+                          <>
+                            <Separator orientation="vertical" className="h-4" />
+                            <CircleAlert className="w-auto h-3 text-red-600 dark:text-red-400 " />
+                            <span className="text-[11px] text-red-600 dark:text-red-400">
+                              Vencido desde hace: {differenceBetween} días
+                            </span>
+                          </>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </PopoverContent>
             </Popover>
           ) : null}
 
           {anyExpired ? (
-            <span className="mt-1 inline-block text-[10px] text-red-600 dark:text-red-400">
+            <span className="ml-1 mt-1 inline-block text-[10px] text-red-600 dark:text-red-400">
               ¡Hay productos vencidos!
             </span>
           ) : null}

@@ -382,6 +382,20 @@ export default function CompraDetalle() {
     }));
   };
 
+  const updateFechaVencimiento = (
+    compraDetalleId: number,
+    nuevaFechaVencimiento: string
+  ) => {
+    setSelectedItems((previa) => ({
+      ...previa,
+      lineas: previa.lineas.map((linea) =>
+        linea.compraDetalleId === compraDetalleId
+          ? { ...linea, fechaExpiracion: nuevaFechaVencimiento }
+          : linea
+      ),
+    }));
+  };
+
   const upsserSelectItems = (
     item: ItemDetallesPayloadParcial,
     checked: boolean
@@ -397,7 +411,14 @@ export default function CompraDetalle() {
               ...prev,
               lineas: prev.lineas.map((l) =>
                 l.compraDetalleId === item.compraDetalleId
-                  ? { ...l, ...item, checked: true }
+                  ? {
+                      ...l,
+                      ...item,
+                      // si el item trae undefined, conserva la anterior
+                      fechaExpiracion:
+                        item.fechaExpiracion ?? l.fechaExpiracion,
+                      checked: true,
+                    }
                   : l
               ),
             }
@@ -545,6 +566,8 @@ export default function CompraDetalle() {
     (!requiereBanco || !!cuentaBancariaSelected) &&
     (!requiereCaja || (!!cajaSelected && cajaTieneSaldo));
 
+  console.log("El registro de compra: ", registroQ);
+
   return (
     <motion.div
       variants={containerVariants}
@@ -588,6 +611,7 @@ export default function CompraDetalle() {
               setRecepcionFlow(flow);
               setOpenFormPaymentDialog(true);
             }}
+            updateFechaVencimiento={updateFechaVencimiento}
           />
         </TabsContent>
         <TabsContent value="recepcionesParciales">

@@ -102,7 +102,12 @@ interface PropsPage {
   setOpenFormPaymentDialog: React.Dispatch<React.SetStateAction<boolean>>;
   openFormPaymentDialog: boolean;
 
-  onOpenPaymentFor: (flow: RecepcionFlow) => void; // 👈 NUEVO
+  onOpenPaymentFor: (flow: RecepcionFlow) => void;
+
+  updateFechaVencimiento: (
+    compraDetalleId: number,
+    nuevaFechaVencimiento: string
+  ) => void;
 }
 
 function ComprasMain({
@@ -117,6 +122,7 @@ function ComprasMain({
   selectedIds,
   recepcionable,
   onOpenPaymentFor,
+  updateFechaVencimiento,
 }: PropsPage) {
   const navigate = useNavigate();
 
@@ -588,6 +594,7 @@ function ComprasMain({
                 selectedItems={selectedItems}
                 detalles={recepcionable.detalles}
                 upsserSelectItems={upsserSelectItems}
+                updateFechaVencimiento={updateFechaVencimiento}
               />
             </>
           )}

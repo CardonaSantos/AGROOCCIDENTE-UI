@@ -42,7 +42,7 @@ export interface CompraRegistroUI {
 
   origen: OrigenCompra; // 👈 directo desde DB
   folioOrigen: string | null; // 👈 dinámico (folio de req/pedido)
-
+  fechaVencimiento: string | undefined;
   creadoEn: string | null;
   actualizadoEn: string | null;
   detalles: CompraDetalleUI[];

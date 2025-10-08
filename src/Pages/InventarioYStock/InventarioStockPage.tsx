@@ -54,6 +54,7 @@ function InventarioStockPage() {
       },
     },
     refetch: reFetchInventario,
+    isFetching: isloadingInventario,
   } = useApiQuery<PaginatedInventarioResponse>(
     [
       "productos-inventario",
@@ -182,6 +183,7 @@ function InventarioStockPage() {
         setPagination={setPagination}
         pagination={pagination}
         //Para cropear imagenes el resultado
+        isloadingInventario={isloadingInventario}
       />
     </motion.div>
   );

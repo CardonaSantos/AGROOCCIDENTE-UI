@@ -40,6 +40,11 @@ interface PropsTable {
     compraDetalleId: number,
     nuevaCantidad: number
   ) => void;
+
+  updateFechaVencimiento: (
+    compraDetalleId: number,
+    nuevaFechaVencimiento: string
+  ) => void;
 }
 
 const COL_W: Record<string, string> = {
@@ -59,6 +64,7 @@ export default function TableRecepcionCompraSelect({
   upsserSelectItems,
   selectedIds,
   updateCantidadDetalle,
+  updateFechaVencimiento,
 }: PropsTable) {
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [sorting, setSorting] = React.useState<SortingState>([
@@ -72,8 +78,15 @@ export default function TableRecepcionCompraSelect({
         selectedItems,
         selectedIds,
         updateCantidadDetalle,
+        updateFechaVencimiento,
       }),
-    [upsserSelectItems, selectedItems, selectedIds, updateCantidadDetalle]
+    [
+      upsserSelectItems,
+      selectedItems,
+      selectedIds,
+      updateCantidadDetalle,
+      updateFechaVencimiento,
+    ]
   );
 
   const table = useReactTable({
@@ -145,6 +158,7 @@ export default function TableRecepcionCompraSelect({
                           : "",
                         id === "costoUnitario" ||
                         id === "pendiente" ||
+                        id === "fechaVencimiento" ||
                         id === "cantidad" ||
                         id === "estado"
                           ? "text-right"
@@ -198,6 +212,7 @@ export default function TableRecepcionCompraSelect({
                           "px-2 py-1 align-middle",
                           id === "costoUnitario" ||
                           id === "pendiente" ||
+                          id === "fechaVencimiento" ||
                           id === "cantidad" ||
                           id === "estado"
                             ? "text-right tabular-nums"
