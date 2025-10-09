@@ -44,6 +44,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ComprasMain from "./comprasMain";
 import RecepcionesMain from "./Recepciones/RecepcionesMain";
 import PaymentMethodCompraDialogConfirm from "./PaymentCompraDialog";
+import CreditoCompraMainPage from "./Credito/CreditoCompraMainPage";
 
 interface Option {
   label: string;
@@ -583,6 +584,10 @@ export default function CompraDetalle() {
           <TabsTrigger value="recepcionesParciales" className="flex-1 max-h-6">
             Recepciones
           </TabsTrigger>
+
+          <TabsTrigger value="credito" className="flex-1 max-h-6">
+            Crédito
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="compra">
@@ -616,6 +621,15 @@ export default function CompraDetalle() {
         </TabsContent>
         <TabsContent value="recepcionesParciales">
           <RecepcionesMain compraId={compraId} />
+        </TabsContent>
+
+        {/* GENERAR CREDITO DE UNA COMPRA */}
+        <TabsContent value="credito">
+          <CreditoCompraMainPage
+            proveedores={proveedores}
+            compraId={compraId}
+            proveedorId={registro.proveedor?.id ?? 0}
+          />
         </TabsContent>
       </Tabs>
 

@@ -1,148 +1,152 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import ReactCrop, { type Crop } from "react-image-crop";
+import {
+  useRef,
+  useState,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
+import ReactCrop, {
+  type Crop,
+  type PercentCrop,
+  type PixelCrop,
+} from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 
-export type ImageCropperResult = {
-  blob: Blob;
-  dataUrl: string;
-  width: number;
-  height: number;
+export type ImageCropperResult = { blob: Blob; width: number; height: number };
+
+export type Output = {
+  mode?: "native" | "fit" | "exact";
+  width?: number;
+  height?: number;
+  maxDim?: number;
+  allowUpscale?: boolean;
+  mime?: "image/jpeg" | "image/png";
+  quality?: number;
 };
 
-type ImageCropperProps = {
+type Props = {
   src: string;
-  aspect?: number; // ej. 1, 4/3, 16/9
-  circularCrop?: boolean; // recorte “redondo” (overlay + preview circular)
-  minWidth?: number; // en px (en el espacio mostrado)
+  aspect?: number;
+  circularCrop?: boolean;
+  minWidth?: number;
   minHeight?: number;
-  output?: {
-    // tamaño final opcional (re-escala el crop)
-    width?: number;
-    height?: number;
-    mime?: "image/jpeg" | "image/png" | "image/webp";
-    quality?: number; // 0..1
-  };
-  initial?: Crop;
-  onChange?: (crop: Crop) => void;
-  onComplete?: (res: ImageCropperResult, crop: Crop) => void;
+  initial?: Crop; // acepta % o px; usaremos %
+  onChange?: (cropPx: PixelCrop, percent: PercentCrop) => void;
+  onComplete?: (cropPx: PixelCrop, percent: PercentCrop) => void;
+  className?: string;
 };
 
-export function ImageCropper({
-  src,
-  aspect,
-  circularCrop,
-  minWidth = 20,
-  minHeight = 20,
-  output,
-  initial,
-  onChange,
-  onComplete,
-}: ImageCropperProps) {
-  const imgRef = useRef<HTMLImageElement>(null);
-  const [crop, setCrop] = useState<Crop>(
-    initial ?? {
-      unit: "%",
-      width: 60,
-      height: 60,
-      x: 20,
-      y: 20,
-      ...(aspect ? { aspect } : {}),
-    }
-  );
-  const [completed, setCompleted] = useState<Crop>();
+export type ImageCropperHandle = {
+  getImageEl: () => HTMLImageElement | null;
+  getCrop: () => Crop | null;
+  setCrop: (c: Crop) => void;
+  reset: (initial?: Crop) => void;
+};
 
-  useEffect(() => {
-    if (!completed || !imgRef.current || !onComplete) return;
+const defaultCrop = (aspect?: number): Crop => ({
+  unit: "%",
+  width: 60,
+  height: 60,
+  x: 20,
+  y: 20,
+  ...(aspect ? { aspect } : {}),
+});
 
-    const run = async () => {
-      const result = await toBlob(imgRef.current!, completed, output);
-      onComplete(result, completed);
-    };
-    void run();
-  }, [completed, onComplete, output]);
+export const ImageCropper = forwardRef<ImageCropperHandle, Props>(
+  function ImageCropper(
+    {
+      src,
+      aspect,
+      circularCrop,
+      minWidth = 20,
+      minHeight = 20,
+      initial,
+      onChange,
+      onComplete,
+      className = "max-h-[75vh] w-auto object-contain",
+    },
+    ref
+  ) {
+    const imgRef = useRef<HTMLImageElement>(null);
+    const [crop, setCrop] = useState<Crop>(initial ?? defaultCrop(aspect));
 
-  return (
-    <ReactCrop
-      crop={crop}
-      onChange={(c) => {
-        setCrop(c);
-        onChange?.(c);
-      }}
-      onComplete={(c) => setCompleted(c)}
-      circularCrop={circularCrop}
-      minWidth={minWidth}
-      minHeight={minHeight}
-      keepSelection
-      ruleOfThirds
-    >
-      <img ref={imgRef} src={src} alt="" />
-    </ReactCrop>
-  );
-}
+    useEffect(() => {
+      setCrop(initial ?? defaultCrop(aspect));
+    }, [src, initial, aspect]);
 
-// helpers
-async function toBlob(
-  image: HTMLImageElement,
-  crop: Crop,
-  out?: { width?: number; height?: number; mime?: string; quality?: number }
+    useImperativeHandle(ref, () => ({
+      getImageEl: () => imgRef.current,
+      getCrop: () => crop ?? null,
+      setCrop: (c: Crop) => setCrop(c),
+      reset: (init?: Crop) => setCrop(init ?? defaultCrop(aspect)),
+    }));
+
+    return (
+      <ReactCrop
+        crop={crop}
+        onChange={(c, percent) => {
+          setCrop(c);
+          onChange?.(c as PixelCrop, percent);
+        }}
+        onComplete={(c, percent) => onComplete?.(c as PixelCrop, percent)}
+        circularCrop={circularCrop}
+        minWidth={minWidth}
+        minHeight={minHeight}
+        keepSelection
+        ruleOfThirds
+        className={className}
+      >
+        <img ref={imgRef} src={src} alt="" className={className} />
+      </ReactCrop>
+    );
+  }
+);
+
+// ===== Export usando PercentCrop =====
+export async function exportPercentCropToBlob(
+  imageEl: HTMLImageElement,
+  percent: PercentCrop,
+  out: Output = { mode: "native" }
 ): Promise<ImageCropperResult> {
-  const mime = out?.mime ?? "image/jpeg";
-  const quality = out?.quality ?? 0.92;
+  const naturalW = imageEl.naturalWidth;
+  const naturalH = imageEl.naturalHeight;
 
-  const scaleX = image.naturalWidth / image.width;
-  const scaleY = image.naturalHeight / image.height;
+  const sx = Math.round(((percent.x ?? 0) * naturalW) / 100);
+  const sy = Math.round(((percent.y ?? 0) * naturalH) / 100);
+  const sw = Math.round(((percent.width ?? 0) * naturalW) / 100);
+  const sh = Math.round(((percent.height ?? 0) * naturalH) / 100);
 
-  const sx = Math.round((crop.x ?? 0) * scaleX);
-  const sy = Math.round((crop.y ?? 0) * scaleY);
-  const sw = Math.round((crop.width ?? 0) * scaleX);
-  const sh = Math.round((crop.height ?? 0) * scaleY);
-
-  const targetW = out?.width ?? sw;
-  const targetH = out?.height ?? sh;
+  let targetW = sw,
+    targetH = sh;
+  const mode = out.mode ?? "native";
+  if (mode === "exact") {
+    targetW = Math.max(1, out.width ?? sw);
+    targetH = Math.max(1, out.height ?? sh);
+  } else if (mode === "fit") {
+    const maxDim = out.maxDim ?? Math.max(sw, sh);
+    const r = Math.min(maxDim / sw, maxDim / sh);
+    const scale = out.allowUpscale ? r : Math.min(1, r);
+    targetW = Math.max(1, Math.round(sw * scale));
+    targetH = Math.max(1, Math.round(sh * scale));
+  }
 
   const canvas = document.createElement("canvas");
   canvas.width = targetW;
   canvas.height = targetH;
-
   const ctx = canvas.getContext("2d")!;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(image, sx, sy, sw, sh, 0, 0, targetW, targetH);
+  ctx.drawImage(imageEl, sx, sy, sw, sh, 0, 0, targetW, targetH);
 
-  const blob: Blob = await new Promise((res) =>
-    canvas.toBlob((b) => res(b!), mime, quality)
+  const mime = out.mime ?? "image/jpeg";
+  const quality = mime === "image/jpeg" ? out.quality ?? 0.98 : undefined;
+
+  const blob: Blob = await new Promise((res, rej) =>
+    canvas.toBlob(
+      (b) => (b ? res(b) : rej(new Error("toBlob failed"))),
+      mime,
+      quality
+    )
   );
-  const dataUrl = canvas.toDataURL(mime, quality);
 
-  return { blob, dataUrl, width: targetW, height: targetH };
+  return { blob, width: targetW, height: targetH };
 }
-
-// import "react-image-crop/dist/ReactCrop.css";
-// import React, { useRef, useState, useEffect } from "react";
-// import ReactCrop, { type Crop } from "react-image-crop";
-
-// type Props = { src: string };
-
-// export default function BasicCrop({ src }: Props) {
-//   const [crop, setCrop] = useState<Crop>({
-//     unit: "%", // Can be 'px' or '%'
-//     x: 25,
-//     y: 25,
-//     width: 50,
-//     height: 50,
-//   });
-//   const [completedCrop, setCompletedCrop] = useState<Crop>();
-//   const imgRef = useRef<HTMLImageElement>(null);
-
-//   return (
-//     <div className="max-w-xl">
-//       <ReactCrop
-//         crop={crop}
-//         onChange={(c) => setCrop(c)}
-//         onComplete={(c) => setCompletedCrop(c)}
-//         // extras útiles más abajo
-//       >
-//         <img ref={imgRef} src={src} alt="to crop" />
-//       </ReactCrop>
-//     </div>
-//   );
-// }

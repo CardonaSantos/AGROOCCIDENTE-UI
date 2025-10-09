@@ -153,11 +153,10 @@ function CreateProductPage() {
   const buildPresentacionesDto = (presentaciones: Presentacion[]) => {
     return presentaciones.map((p) => ({
       nombre: p.nombre.trim(),
-      sku: p.sku || undefined,
       codigoBarras: p.codigoBarras || undefined,
       esDefault: !!p.esDefault,
 
-      tipoPresentacion: p.tipoPresentacion, // "UNIDAD" | ...
+      tipoPresentacion: p.tipoPresentacion,
       costoReferencialPresentacion: String(
         p.costoReferencialPresentacion
       ).trim(),
