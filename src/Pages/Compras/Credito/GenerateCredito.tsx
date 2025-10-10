@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -14,234 +14,43 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { TZGT } from "@/Pages/Utils/Utils"; // ej. "America/Guatemala"
+import { Calendar, Percent, Receipt, Timer, Wallet } from "lucide-react";
+import { toNumber } from "./helpers/helpers1";
 import {
-  AlertCircle,
-  Calendar,
-  Percent,
-  Receipt,
-  Timer,
-  Wallet,
-} from "lucide-react";
-
-/************************************
- *  Dayjs setup
- ************************************/
+  CreditoCompraForm,
+  GeneracionModo,
+  InteresTipo,
+  PlanCuotaModo,
+  ProveedorOption,
+  RecepcionValorada,
+} from "./interfaces/types";
+import { buildPlanPreview } from "./helpers/helpers2";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(localizedFormat);
 dayjs.locale("es");
 
-/************************************
- *  Tipos
- ************************************/
-export enum InteresTipo {
-  NONE = "NONE",
-  SIMPLE = "SIMPLE",
-  COMPUESTO = "COMPUESTO",
-}
-
-export enum PlanCuotaModo {
-  IGUALES = "IGUALES",
-  PRIMERA_MAYOR = "PRIMERA_MAYOR",
-}
-
-export type GeneracionModo = "POR_COMPRA" | "POR_RECEPCION";
-
-export type EngancheInput = { tipo: "Q" | "%"; valor: number } | null;
-
-export interface CreditoCompraForm {
-  proveedorId: number;
-  compraId: number;
-  modo: GeneracionModo;
-  recepcionId?: number;
-  montoOriginal?: number; // por defecto: total de compra o valor de recepción
-  fechaEmisionISO: string; // ISO
-  diasCredito: number; // Net X
-  diasEntrePagos: number; // frecuencia entre cuotas
-  cantidadCuotas: number; // n total (incluye la #1 si hay enganche)
-  interesTipo: InteresTipo;
-  interes: number; // tasa por periodo (ej. 0, 0.02)
-  planCuotaModo: PlanCuotaModo;
-  enganche: EngancheInput; // si modo PRIMERA_MAYOR
-  registrarPagoEngancheAhora: boolean;
-}
-
-export interface ProveedorOption {
-  id: number;
-  nombre: string;
-}
-export interface RecepcionValorada {
-  id: number;
-  valor: number;
-  folio?: string;
-  fechaISO?: string;
-}
-
-/************************************
- *  Helpers numéricos
- ************************************/
-const round2 = (n: number) => Math.round(n * 100) / 100;
-const toNumber = (v: string | number) =>
-  typeof v === "string" ? Number(v.replace(/,/g, ".")) : v;
-
-/************************************
- *  Builder de plan (preview en UI)
- ************************************/
-export type PlanCuotaFila = { numero: number; fechaISO: string; monto: number };
-export type PlanPreview = {
-  cuotas: PlanCuotaFila[];
-  interesTotal: number;
-  principalFinanciado: number; // total - enganche
-  totalAPagar: number; // suma de cuotas
-};
-
-function addDaysISO(baseISO: string, d: number) {
-  return dayjs(baseISO)
-    .tz(TZGT)
-    .add(d, "day")
-    .startOf("day")
-    .toDate()
-    .toISOString();
-}
-
-function buildPlanPreview(args: {
-  montoTotal: number;
-  fechaEmisionISO: string;
-  diasCredito: number;
-  diasEntrePagos: number;
-  n: number; // total de cuotas (incluye #1 si hay enganche en plan)
-  interesTipo: InteresTipo;
-  interes: number; // tasa por periodo
-  planCuotaModo: PlanCuotaModo;
-  enganche: EngancheInput; // null = sin enganche
-}): PlanPreview {
-  const {
-    montoTotal,
-    fechaEmisionISO,
-    diasCredito,
-    diasEntrePagos,
-    n,
-    interesTipo,
-    interes,
-    planCuotaModo,
-    enganche,
-  } = args;
-
-  const firstDueISO = addDaysISO(fechaEmisionISO, diasCredito);
-  const cuotas: PlanCuotaFila[] = [];
-
-  // 1) Enganche como cuota #1 (en plan)
-  const eng = enganche
-    ? enganche.tipo === "%"
-      ? round2(montoTotal * (enganche.valor / 100))
-      : round2(enganche.valor)
-    : 0;
-  let numero = 1;
-  if (eng > 0) {
-    cuotas.push({ numero: numero++, fechaISO: firstDueISO, monto: eng });
-  }
-
-  const restantes = Math.max(0, n - (eng > 0 ? 1 : 0));
-  const P = round2(montoTotal - eng); // principal financiado
-
-  if (restantes === 0) {
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-    return {
-      cuotas,
-      interesTotal: 0,
-      principalFinanciado: P,
-      totalAPagar: total,
-    };
-  }
-
-  const start2ISO =
-    eng > 0 ? addDaysISO(firstDueISO, diasEntrePagos) : firstDueISO;
-
-  if (interesTipo === InteresTipo.NONE) {
-    // repartir P en 'restantes', ajuste a la última (o primera si quisieras moverlo)
-    const base = Math.floor((P / restantes) * 100) / 100; // floor a 2d
-    let acum = 0;
-    for (let k = 1; k <= restantes; k++) {
-      const isLast = k === restantes;
-      const monto = isLast ? round2(P - acum) : round2(base);
-      cuotas.push({
-        numero: numero++,
-        fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-        monto,
-      });
-      acum = round2(acum + monto);
-    }
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-    return {
-      cuotas,
-      interesTotal: 0,
-      principalFinanciado: P,
-      totalAPagar: total,
-    };
-  }
-
-  if (interesTipo === InteresTipo.SIMPLE) {
-    const capital = round2(P / restantes);
-    let saldo = P;
-    let interesTotal = 0;
-    for (let k = 1; k <= restantes; k++) {
-      const interesK = round2(saldo * interes);
-      const cuotaK = round2(capital + interesK);
-      cuotas.push({
-        numero: numero++,
-        fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-        monto: cuotaK,
-      });
-      interesTotal = round2(interesTotal + interesK);
-      saldo = round2(saldo - capital);
-    }
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-    return { cuotas, interesTotal, principalFinanciado: P, totalAPagar: total };
-  }
-
-  // COMPUESTO (francés): cuota fija A sobre P y 'restantes'
-  const i = interes;
-  const A = round2((P * i) / (1 - Math.pow(1 + i, -restantes)));
-  let interesTotal = 0;
-  let saldo = P;
-  for (let k = 1; k <= restantes; k++) {
-    const interesK = round2(saldo * i);
-    const capitalK = round2(A - interesK);
-    cuotas.push({
-      numero: numero++,
-      fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-      monto: A,
-    });
-    interesTotal = round2(interesTotal + interesK);
-    saldo = round2(saldo - capitalK);
-  }
-  const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-  return { cuotas, interesTotal, principalFinanciado: P, totalAPagar: total };
-}
-
-/************************************
- *  GenerateCredito (formulario)
- ************************************/
 interface GenerateProps {
   form: CreditoCompraForm;
   setForm: React.Dispatch<React.SetStateAction<CreditoCompraForm>>;
   proveedores: ProveedorOption[];
   recepciones?: RecepcionValorada[]; // para modo "POR_RECEPCION"
   compraTotal: number; // total de la compra (para default)
+
+  cuentasBancarias: {
+    id: number;
+    nombre: string;
+  }[];
 }
 
 export function GenerateCredito({
@@ -250,9 +59,9 @@ export function GenerateCredito({
   proveedores,
   recepciones = [],
   compraTotal,
+  cuentasBancarias,
 }: GenerateProps) {
   const hasRecepciones = recepciones.length > 0;
-
   // sincroniza monto base por modo
   const baseMonto = useMemo(() => {
     if (form.modo === "POR_RECEPCION" && form.recepcionId) {
@@ -305,6 +114,8 @@ export function GenerateCredito({
       }),
     [baseMonto, form]
   );
+  console.log("El form es: ", form);
+  console.log("El recepciones es: ", recepciones);
 
   return (
     <Card className="shadow-sm">
@@ -408,16 +219,20 @@ export function GenerateCredito({
           <Label>Fecha de emisión</Label>
           <Input
             type="date"
-            value={dayjs(form.fechaEmisionISO).tz(TZGT).format("YYYY-MM-DD")}
-            onChange={(e) =>
+            value={
+              form.fechaEmisionISO
+                ? dayjs(form.fechaEmisionISO).tz(TZGT).format("YYYY-MM-DD")
+                : dayjs().tz(TZGT).format("YYYY-MM-DD") // fallback: hoy
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
               setForm((p) => ({
                 ...p,
-                fechaEmisionISO: dayjs
-                  .tz(e.target.value, TZGT)
-                  .toDate()
-                  .toISOString(),
-              }))
-            }
+                fechaEmisionISO: raw
+                  ? dayjs.tz(raw, TZGT).toISOString()
+                  : dayjs().tz(TZGT).toISOString(), // si borra, vuelve a hoy
+              }));
+            }}
           />
         </div>
         <div className="space-y-2">

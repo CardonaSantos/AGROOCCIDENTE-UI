@@ -1,34 +1,42 @@
-import {
-  CreditoCompraForm,
-  EngancheInput,
-  GenerateCredito,
-  InteresTipo,
-  PlanCuotaFila,
-  PlanCuotaModo,
-  PlanPreview,
-  ProveedorOption,
-  RecepcionValorada,
-} from "./GenerateCredito";
-
-import React, { useMemo, useState } from "react";
-import dayjs from "dayjs";
-
+import { useMemo, useState } from "react";
 import "dayjs/locale/es";
-
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-
 import { TZGT } from "@/Pages/Utils/Utils"; // ej. "America/Guatemala"
 import { AlertCircle } from "lucide-react";
 import { useApiMutation } from "@/hooks/genericoCall/genericoCallHook";
 import { SummaryCreditoCompra } from "./SummaryCreditoCompra";
+import dayjs from "dayjs";
+import {
+  CrearCreditoCompraPayload,
+  CreditoCompraForm,
+  InteresTipo,
+  PlanCuotaFila,
+  PlanCuotaModo,
+  ProveedorOption,
+  RecepcionValorada,
+} from "./interfaces/types";
+import { GenerateCredito } from "./GenerateCredito";
+import {
+  cuotasForSubmit,
+  ensureId,
+  getMontoBase,
+  previewFrom,
+} from "./helpers/helpersplan";
+import { CuotasManualEditor } from "./CuotasManualEditor";
+import { useStore } from "@/components/Context/ContextSucursal";
 interface CreditoCompraMainProps {
   compraId: number;
   proveedorId: number;
   compraTotal: number; // total de la compra (para default)
   proveedores: ProveedorOption[];
   recepciones?: RecepcionValorada[];
+
+  cuentasBancarias: {
+    id: number;
+    nombre: string;
+  }[];
 }
 export default function CreditoCompraMainPage({
   compraId,
@@ -36,10 +44,15 @@ export default function CreditoCompraMainPage({
   compraTotal,
   proveedores,
   recepciones = [],
+  cuentasBancarias,
 }: CreditoCompraMainProps) {
+  const userId = useStore((state) => state.userId) ?? 0;
+  const sucursalId = useStore((state) => state.sucursalId) ?? 0;
+
   const [enabled, setEnabled] = useState<boolean>(true);
 
   const [form, setForm] = useState<CreditoCompraForm>({
+    usuarioId: userId,
     proveedorId,
     compraId,
     modo: "POR_COMPRA",
@@ -54,30 +67,13 @@ export default function CreditoCompraMainPage({
     planCuotaModo: PlanCuotaModo.IGUALES,
     enganche: null,
     registrarPagoEngancheAhora: false,
+    cuentaBancariaId: 0,
+    cuotas: [],
   });
 
-  const preview = useMemo(
-    () =>
-      buildPlanPreview({
-        montoTotal:
-          form.montoOriginal ??
-          (form.modo === "POR_RECEPCION" && form.recepcionId
-            ? recepciones.find((r) => r.id === form.recepcionId)?.valor ??
-              compraTotal
-            : compraTotal),
-        fechaEmisionISO: form.fechaEmisionISO,
-        diasCredito: form.diasCredito,
-        diasEntrePagos: form.diasEntrePagos,
-        n: form.cantidadCuotas,
-        interesTipo: form.interesTipo,
-        interes: form.interes,
-        planCuotaModo: form.planCuotaModo,
-        enganche:
-          form.planCuotaModo === PlanCuotaModo.PRIMERA_MAYOR
-            ? form.enganche
-            : null,
-      }),
-    [form, compraTotal, recepciones]
+  const [isManual, setIsManual] = useState(false);
+  const [cuotasOverride, setCuotasOverride] = useState<PlanCuotaFila[] | null>(
+    null
   );
 
   // POST mutation (usa tu hook genérico). Ajusta el tipo TData según tu API.
@@ -102,33 +98,63 @@ export default function CreditoCompraMainPage({
     return base > 0 && form.cantidadCuotas >= 1 && form.diasEntrePagos > 0;
   }, [form, compraTotal, recepciones]);
 
+  // 1) Preview solo para mostrar en UI (derivado)
+  const preview = useMemo(
+    () => previewFrom(form, compraTotal, recepciones),
+    [form, compraTotal, recepciones]
+  );
+
+  // 2) Handlers opcionales para edición manual (sin loops)
+  const adoptPreview = () => {
+    setCuotasOverride(preview.cuotas.map(ensureId)); // o .map(x => x) si ya traen id
+    setIsManual(true);
+  };
+
+  // 3) Submit: transformas AHÍ MISMO (single source of truth)
   const onSubmit = async () => {
-    const payload = {
-      // mapea tu DTO del backend
+    const cuotas = cuotasForSubmit(
+      isManual,
+      cuotasOverride,
+      form,
+      compraTotal,
+      recepciones
+    );
+
+    const payload: CrearCreditoCompraPayload = {
+      //identificacion
+      compraId: compraId,
       folioProveedor: undefined,
-      fechaEmision: form.fechaEmisionISO,
-      montoOriginal:
-        form.montoOriginal ??
-        (form.modo === "POR_RECEPCION" && form.recepcionId
-          ? recepciones.find((r) => r.id === form.recepcionId)?.valor ??
-            compraTotal
-          : compraTotal),
+      montoOriginal: getMontoBase(form, compraTotal, recepciones),
       diasCredito: form.diasCredito,
       cantidadCuotas: form.cantidadCuotas,
-      diasEntreCuotas: form.diasEntrePagos,
       interes: form.interes,
-      tipoInteres: form.interesTipo,
-      modoGeneracion: form.planCuotaModo,
       recepcionId: form.modo === "POR_RECEPCION" ? form.recepcionId : undefined,
       enganche:
-        form.planCuotaModo === PlanCuotaModo.PRIMERA_MAYOR && form.enganche
+        typeof form.enganche === "number"
           ? form.enganche
-          : undefined,
+          : form.enganche?.valor ?? 0,
+      diasEntrePagos: form.diasEntrePagos,
+      fechaEmisionISO: form.fechaEmisionISO,
+      modo: form.modo,
+      metodoPago: "CONTADO",
+      interesTipo: form.interesTipo,
+      usuarioId: userId,
+      planCuotaModo: form.planCuotaModo,
+      cuentaBancariaId: 1,
+      proveedorId: form.proveedorId,
+      sucursalId: sucursalId,
+      descripcion: "Descripcion de mi primer pago enganche",
       registrarPagoEngancheAhora: form.registrarPagoEngancheAhora,
-      // pago: { metodoPago, sucursalId, referencia } // si vas a registrar pago del enganche ahora
+      cuotas, // <- aquí ya va el array bueno
     };
-    await mutateAsync(payload as any);
+    console.log("El payload es: ", payload);
+
+    await mutateAsync(payload);
   };
+
+  console.log("El preview es: ", preview);
+  console.log("El formulario creando es: ", form);
+  console.log("Las cuotas manuales son: ", cuotasOverride);
 
   return (
     <div className="space-y-4">
@@ -147,6 +173,36 @@ export default function CreditoCompraMainPage({
             compraTotal={compraTotal}
           />
           <SummaryCreditoCompra preview={preview} />
+          <CuotasManualEditor
+            isManual={isManual}
+            cuotas={cuotasOverride}
+            adoptPreview={adoptPreview}
+            resetToPreview={() => {
+              setIsManual(false);
+              setCuotasOverride(null);
+            }}
+            editCuotaFecha={(id, ymd) => {
+              if (!isManual || !cuotasOverride) adoptPreview();
+              setCuotasOverride((prev) =>
+                (prev ?? preview.cuotas.map(ensureId)).map((c) =>
+                  c.id === id
+                    ? { ...c, fechaISO: dayjs(ymd).toDate().toISOString() }
+                    : c
+                )
+              );
+            }}
+            editCuotaMonto={(id, monto) => {
+              if (!isManual || !cuotasOverride) adoptPreview();
+              setCuotasOverride((prev) =>
+                (prev ?? preview.cuotas.map(ensureId)).map((c) =>
+                  c.id === id ? { ...c, monto } : c
+                )
+              );
+            }}
+            onSubmit={onSubmit}
+            canSubmit={canSubmit}
+            isPending={isPending}
+          />
 
           <div className="flex items-center justify-end gap-2">
             {!canSubmit && (
@@ -163,131 +219,4 @@ export default function CreditoCompraMainPage({
       ) : null}
     </div>
   );
-}
-function addDaysISO(baseISO: string, d: number) {
-  return dayjs(baseISO)
-    .tz(TZGT)
-    .add(d, "day")
-    .startOf("day")
-    .toDate()
-    .toISOString();
-}
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-const toNumber = (v: string | number) =>
-  typeof v === "string" ? Number(v.replace(/,/g, ".")) : v;
-
-function buildPlanPreview(args: {
-  montoTotal: number;
-  fechaEmisionISO: string;
-  diasCredito: number;
-  diasEntrePagos: number;
-  n: number; // total de cuotas (incluye #1 si hay enganche en plan)
-  interesTipo: InteresTipo;
-  interes: number; // tasa por periodo
-  planCuotaModo: PlanCuotaModo;
-  enganche: EngancheInput; // null = sin enganche
-}): PlanPreview {
-  const {
-    montoTotal,
-    fechaEmisionISO,
-    diasCredito,
-    diasEntrePagos,
-    n,
-    interesTipo,
-    interes,
-    planCuotaModo,
-    enganche,
-  } = args;
-
-  const firstDueISO = addDaysISO(fechaEmisionISO, diasCredito);
-  const cuotas: PlanCuotaFila[] = [];
-
-  // 1) Enganche como cuota #1 (en plan)
-  const eng = enganche
-    ? enganche.tipo === "%"
-      ? round2(montoTotal * (enganche.valor / 100))
-      : round2(enganche.valor)
-    : 0;
-  let numero = 1;
-  if (eng > 0) {
-    cuotas.push({ numero: numero++, fechaISO: firstDueISO, monto: eng });
-  }
-
-  const restantes = Math.max(0, n - (eng > 0 ? 1 : 0));
-  const P = round2(montoTotal - eng); // principal financiado
-
-  if (restantes === 0) {
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-    return {
-      cuotas,
-      interesTotal: 0,
-      principalFinanciado: P,
-      totalAPagar: total,
-    };
-  }
-
-  const start2ISO =
-    eng > 0 ? addDaysISO(firstDueISO, diasEntrePagos) : firstDueISO;
-
-  if (interesTipo === InteresTipo.NONE) {
-    // repartir P en 'restantes', ajuste a la última (o primera si quisieras moverlo)
-    const base = Math.floor((P / restantes) * 100) / 100; // floor a 2d
-    let acum = 0;
-    for (let k = 1; k <= restantes; k++) {
-      const isLast = k === restantes;
-      const monto = isLast ? round2(P - acum) : round2(base);
-      cuotas.push({
-        numero: numero++,
-        fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-        monto,
-      });
-      acum = round2(acum + monto);
-    }
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-    return {
-      cuotas,
-      interesTotal: 0,
-      principalFinanciado: P,
-      totalAPagar: total,
-    };
-  }
-
-  if (interesTipo === InteresTipo.SIMPLE) {
-    const capital = round2(P / restantes);
-    let saldo = P;
-    let interesTotal = 0;
-    for (let k = 1; k <= restantes; k++) {
-      const interesK = round2(saldo * interes);
-      const cuotaK = round2(capital + interesK);
-      cuotas.push({
-        numero: numero++,
-        fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-        monto: cuotaK,
-      });
-      interesTotal = round2(interesTotal + interesK);
-      saldo = round2(saldo - capital);
-    }
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-    return { cuotas, interesTotal, principalFinanciado: P, totalAPagar: total };
-  }
-
-  // COMPUESTO (francés): cuota fija A sobre P y 'restantes'
-  const i = interes;
-  const A = round2((P * i) / (1 - Math.pow(1 + i, -restantes)));
-  let interesTotal = 0;
-  let saldo = P;
-  for (let k = 1; k <= restantes; k++) {
-    const interesK = round2(saldo * i);
-    const capitalK = round2(A - interesK);
-    cuotas.push({
-      numero: numero++,
-      fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-      monto: A,
-    });
-    interesTotal = round2(interesTotal + interesK);
-    saldo = round2(saldo - capitalK);
-  }
-  const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-  return { cuotas, interesTotal, principalFinanciado: P, totalAPagar: total };
 }

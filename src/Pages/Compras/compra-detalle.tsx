@@ -626,6 +626,8 @@ export default function CompraDetalle() {
         {/* GENERAR CREDITO DE UNA COMPRA */}
         <TabsContent value="credito">
           <CreditoCompraMainPage
+            cuentasBancarias={cuentasBancarias}
+            compraTotal={registro.total}
             proveedores={proveedores}
             compraId={compraId}
             proveedorId={registro.proveedor?.id ?? 0}

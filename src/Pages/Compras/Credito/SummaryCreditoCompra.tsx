@@ -1,37 +1,17 @@
 import dayjs from "dayjs";
-
 import "dayjs/locale/es";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { TZGT } from "@/Pages/Utils/Utils"; // ej. "America/Guatemala"
-import {
-  AlertCircle,
-  Calendar,
-  HandCoins,
-  Percent,
-  Receipt,
-  ShieldQuestion,
-  Timer,
-  Wallet,
-} from "lucide-react";
-export type PlanCuotaFila = { numero: number; fechaISO: string; monto: number };
-
-export type PlanPreview = {
-  cuotas: PlanCuotaFila[];
-  interesTotal: number;
-  principalFinanciado: number; // total - enganche
-  totalAPagar: number; // suma de cuotas
-};
-
+import { ShieldQuestion } from "lucide-react";
+import { PlanPreview } from "./interfaces/types";
 export function SummaryCreditoCompra({ preview }: { preview: PlanPreview }) {
   return (
     <Card className="mt-4">
@@ -53,7 +33,10 @@ export function SummaryCreditoCompra({ preview }: { preview: PlanPreview }) {
         </div>
         <div className="max-h-64 overflow-y-auto divide-y">
           {preview.cuotas.map((c) => (
-            <div key={c.numero} className="grid grid-cols-12 py-2 text-sm">
+            <div
+              key={c.id ?? c.numero}
+              className="grid grid-cols-12 py-2 text-sm"
+            >
               <div className="col-span-2">{c.numero}</div>
               <div className="col-span-5">
                 {dayjs(c.fechaISO).tz(TZGT).format("dddd DD/MM/YYYY")}
