@@ -38,6 +38,7 @@ import {
   CircleDollarSign,
   Clock4,
   ReceiptText,
+  RotateCcw,
 } from "lucide-react";
 
 import PurchasePaymentFormDialog, {
@@ -47,6 +48,7 @@ import PurchasePaymentFormDialog, {
 } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 
 dayjs.extend(customParseFormat);
 dayjs.extend(utc);
@@ -164,6 +166,12 @@ const metodoPagoOptions: MetodoPagoOption[] = [
   // { value: "CONTADO",       label: "Contado",               canal: "CAJA" },
 ];
 
+interface DeletePagoPayment {
+  documentoId: number;
+  cuotaId: number;
+  observaciones: string | undefined;
+  usuarioId: number;
+}
 // -----------------------------------------
 // Componente principal
 // -----------------------------------------
@@ -207,6 +215,35 @@ function MapCuotasCreditoCompra({
     "post",
     "/compras-pagos-creditos/"
   );
+
+  const deletePagoCuota = useApiMutation<DeletePagoPayment>(
+    "delete",
+    `compras-pagos-creditos/delete-cuota-payed`
+  );
+
+  const handleDeletePayment = async () => {
+    try {
+      const payload: DeletePagoPayment = {
+        cuotaId: cuotaSeleccionada?.id ?? 0,
+        documentoId: documentoId,
+        usuarioId: userId,
+        observaciones: "",
+      };
+
+      toast.promise(deletePagoCuota.mutateAsync(payload), {
+        loading: "Eliminando registro de pago...",
+        success: "Registro de pago de cuota eliminado",
+        error: (e) => getApiErrorMessageAxios(e),
+      });
+
+      qc.invalidateQueries({ queryKey: ["credito-from-compra"] });
+      await handleRefresAll?.();
+      setOpenDelete(false);
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  };
 
   const saldoCuota = useMemo(
     () => cuotaSeleccionada?.saldo ?? cuotaSeleccionada?.monto ?? 0,
@@ -256,6 +293,12 @@ function MapCuotasCreditoCompra({
     setCuentaBancariaSelected("");
     setCajaSelected(null);
     setOpen(true);
+  };
+
+  const [openDelete, setOpenDelete] = useState<boolean>(false);
+  const handleOpenDelete = (cuota: UICuota) => {
+    setCuotaSeleccionada(cuota);
+    setOpenDelete(true);
   };
 
   const handleChangeEvent = <K extends keyof PagoCxPPayload>(
@@ -377,6 +420,18 @@ function MapCuotasCreditoCompra({
                     <ReceiptText className="h-4 w-4" />
                     {isPayed ? "Pagada" : "Pagar cuota"}
                   </Button>
+
+                  {isPayed ? (
+                    <Button
+                      variant={isPayed ? "destructive" : "default"}
+                      size="sm"
+                      onClick={() => handleOpenDelete(c)}
+                      className="gap-1.5"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Deshacer pago
+                    </Button>
+                  ) : null}
                 </div>
               </div>
 
@@ -491,6 +546,32 @@ function MapCuotasCreditoCompra({
           </div>
         </div>
       </PurchasePaymentFormDialog>
+
+      <AdvancedDialog
+        title="Eliminación de registro de pago de cuota"
+        description="Se procederá a eliminar el registro del pago a este credito, y el stock ingresado se restará"
+        question="Estas seguro de querer continuar?"
+        open={openDelete}
+        onOpenChange={setOpenDelete}
+        confirmButton={{
+          label: "Si, continuar y eliminar pago de cuota",
+          onClick: () => {
+            handleDeletePayment();
+          },
+          loadingText: "Eliminado...",
+          loading: deletePagoCuota.isPending,
+          disabled: deletePagoCuota.isPending,
+        }}
+        cancelButton={{
+          disabled: deletePagoCuota.isPending,
+          label: "Cancelar",
+          loadingText: "Cancelando...",
+          onClick: () => {
+            setOpenDelete(false);
+            setCuotaSeleccionada(null);
+          },
+        }}
+      />
     </div>
   );
 }

@@ -108,6 +108,8 @@ interface PropsPage {
     compraDetalleId: number,
     nuevaFechaVencimiento: string
   ) => void;
+
+  hasCredit: boolean;
 }
 
 function ComprasMain({
@@ -123,6 +125,7 @@ function ComprasMain({
   recepcionable,
   onOpenPaymentFor,
   updateFechaVencimiento,
+  hasCredit,
 }: PropsPage) {
   const navigate = useNavigate();
 
@@ -196,17 +199,42 @@ function ComprasMain({
       </div>
     );
   }
-  const addedToStock: boolean = ["RECIBIDO", "RECIBIDO_PARCIAL"].includes(
-    registro.estado
-  );
 
   const normalizados = normalizarDetalles(registro.detalles);
   console.log("los datos normalizados para ver son: ", normalizados);
   console.log("el set state es: ", selectedItems);
 
-  const truncarBotonRecepcion: boolean = addedToStock || isRecibirParcial;
-  const isCompraCompleted: boolean = registro.estado === "RECIBIDO";
-  console.log("El registro es: ", registro);
+  //NEW
+  const isCompraCompleted = registro.estado === "RECIBIDO";
+  const addedToStock = ["RECIBIDO", "RECIBIDO_PARCIAL"].includes(
+    registro.estado
+  );
+
+  // Razón para bloquear el switch “recibir parcial”
+  const partialDisableReason = React.useMemo(() => {
+    if (isCompraCompleted) return "La compra ya fue recibida.";
+    if (hasCredit) return "La compra ya tiene un crédito ligado.";
+    return null;
+  }, [isCompraCompleted, hasCredit]);
+
+  const isPartialDisabled = !!partialDisableReason;
+
+  // Si aparece una razón de bloqueo y el switch estaba activo, apágalo.
+  React.useEffect(() => {
+    if (isPartialDisabled && isRecibirParcial) {
+      setIsRecibirParcial(false);
+    }
+  }, [isPartialDisabled, isRecibirParcial, setIsRecibirParcial]);
+
+  // Razón para bloquear el botón de “Confirmar recepción”
+  const confirmDisableReason = React.useMemo(() => {
+    if (addedToStock) return "La compra ya está en stock.";
+    if (hasCredit) return "No disponible porque hay crédito ligado.";
+    if (isRecibirParcial) return "Usa el botón ‘Recepcionar parcial’.";
+    return null;
+  }, [addedToStock, hasCredit, isRecibirParcial]);
+
+  const confirmDisabled = !!confirmDisableReason;
 
   return (
     <div className="mx-auto space-y-3">
@@ -555,14 +583,8 @@ function ComprasMain({
 
       <motion.div variants={itemVariants}>
         <div className="flex items-center space-x-2">
-          {isCompraCompleted ? (
-            <Label className="text-green-600 font-semibold">
-              #Compra completada
-            </Label>
-          ) : null}
-
           <Switch
-            disabled={isCompraCompleted}
+            disabled={isPartialDisabled}
             checked={isRecibirParcial}
             onCheckedChange={(checked) => {
               setIsRecibirParcial(checked);
@@ -570,8 +592,17 @@ function ComprasMain({
             }}
             id="recibirParcial"
           />
-          <Label htmlFor="recibirParcial">RECIBIR DE FORMA PARCIAL</Label>
+          <Label htmlFor="recibirParcial">
+            {isPartialDisabled
+              ? "Recibir parcial (bloqueado)"
+              : "RECIBIR DE FORMA PARCIAL"}
+          </Label>
         </div>
+        {partialDisableReason && (
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {partialDisableReason}
+          </p>
+        )}
       </motion.div>
 
       {isRecibirParcial ? (
@@ -612,16 +643,21 @@ function ComprasMain({
 
       <motion.div variants={itemVariants} className="flex gap-2">
         <Button
-          disabled={truncarBotonRecepcion}
-          onClick={() => onOpenPaymentFor("NORMAL")} // 👈 abre PaymentDialog en flujo NORMAL
+          disabled={confirmDisabled}
+          onClick={() => onOpenPaymentFor("NORMAL")}
         >
           Confirmar recepción y enviar a stock
         </Button>
-        {isRecibirParcial ? (
+        {confirmDisableReason && (
+          <span className="text-[11px] text-muted-foreground self-center">
+            {confirmDisableReason}
+          </span>
+        )}
+        {isRecibirParcial && (
           <Button onClick={() => onOpenPaymentFor("PARCIAL")}>
             Recepcionar parcial
           </Button>
-        ) : null}
+        )}
       </motion.div>
     </div>
   );

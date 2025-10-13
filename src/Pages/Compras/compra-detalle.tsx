@@ -498,7 +498,9 @@ export default function CompraDetalle() {
     ]);
   }, [reFetchDRP, reFetchRegistro, refetchCredito]);
 
-  const itHasCreditoCompra: boolean = creditoFromCompra;
+  const hasCredit: boolean =
+    Boolean(creditoFromCompra?.id) &&
+    (creditoFromCompra?.cuotas?.length ?? 0) > 0;
 
   if (loadingHard) {
     return (
@@ -608,6 +610,8 @@ export default function CompraDetalle() {
               setOpenFormPaymentDialog(true);
             }}
             updateFechaVencimiento={updateFechaVencimiento}
+            //FLAGS
+            hasCredit={hasCredit}
           />
         </TabsContent>
         <TabsContent value="recepcionesParciales">
