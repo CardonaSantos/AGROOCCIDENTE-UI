@@ -55,6 +55,7 @@ export interface CreditoCompraForm {
   enganche: EngancheInput; // si modo PRIMERA_MAYOR
   registrarPagoEngancheAhora: boolean;
   cuentaBancariaId: number;
+  observaciones: string;
   cuotas: PlanCuotaFila[];
 }
 

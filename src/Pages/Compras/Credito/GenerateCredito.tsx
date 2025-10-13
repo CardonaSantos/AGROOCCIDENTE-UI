@@ -59,7 +59,6 @@ export function GenerateCredito({
   proveedores,
   recepciones = [],
   compraTotal,
-  cuentasBancarias,
 }: GenerateProps) {
   const hasRecepciones = recepciones.length > 0;
   // sincroniza monto base por modo

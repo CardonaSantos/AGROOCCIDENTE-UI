@@ -7,3 +7,4 @@ export enum MetodoPago {
   CREDITO = "CREDITO",
   OTRO = "OTRO",
 }
+// VERDADERO

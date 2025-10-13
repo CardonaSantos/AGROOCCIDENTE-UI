@@ -2,25 +2,9 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, XCircle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import ReactSelectComponent from "react-select";
+
 import { useStore } from "@/components/Context/ContextSucursal";
 import { formattMonedaGT } from "@/utils/formattMoneda";
 import { TZGT } from "../Utils/Utils";
@@ -45,6 +29,10 @@ import ComprasMain from "./comprasMain";
 import RecepcionesMain from "./Recepciones/RecepcionesMain";
 import PaymentMethodCompraDialogConfirm from "./PaymentCompraDialog";
 import CreditoCompraMainPage from "./Credito/CreditoCompraMainPage";
+import PurchasePaymentFormDialog, {
+  CajaConSaldo,
+} from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
+import { UICreditoCompra } from "./Credito/creditoCompraDisponible/interfaces/interfaces";
 
 interface Option {
   label: string;
@@ -70,26 +58,6 @@ type MetodoPago =
   | "OTRO"
   | "CONTADO";
 
-const METODO_PAGO_OPTIONS: Array<{
-  value: MetodoPago;
-  label: string;
-  canal: "CAJA" | "BANCO" | "NINGUNO";
-}> = [
-  { value: "EFECTIVO", label: "Efectivo", canal: "CAJA" },
-  { value: "TRANSFERENCIA", label: "Transferencia/Depósito", canal: "BANCO" },
-  { value: "TARJETA", label: "Tarjeta", canal: "BANCO" },
-  { value: "CHEQUE", label: "Cheque", canal: "BANCO" },
-];
-
-export interface CajaConSaldo {
-  id: number;
-  fechaApertura: string;
-  estado: string;
-  actualizadoEn: string;
-  saldoInicial: number;
-  usuarioInicioId: number;
-  disponibleEnCaja: number;
-}
 type RecepcionFlow = "NORMAL" | "PARCIAL";
 
 export default function CompraDetalle() {
@@ -151,6 +119,20 @@ export default function CompraDetalle() {
       refetchOnWindowFocus: false,
     }
   );
+
+  const queryKey = ["credito-from-compra", compraId] as const;
+
+  const { data: creditoFromCompra, refetch: refetchCredito } =
+    useApiQuery<UICreditoCompra>(
+      queryKey,
+      `/credito-documento-compra/${compraId}`,
+      undefined,
+      {
+        // mientras debuggeas, evita sorpresas
+        staleTime: 0,
+        refetchOnWindowFocus: false,
+      }
+    );
 
   const proveedoresQ = useApiQuery<Array<{ id: number; nombre: string }>>(
     ["proveedores"],
@@ -507,6 +489,17 @@ export default function CompraDetalle() {
     setOpenSendStock,
   ]);
 
+  console.log("El registro de compra: ", registroQ);
+  const handleRefresAll = React.useCallback(async () => {
+    await Promise.allSettled([
+      reFetchDRP(),
+      reFetchRegistro(),
+      refetchCredito(), // usa el refetch del mismo queryKey
+    ]);
+  }, [reFetchDRP, reFetchRegistro, refetchCredito]);
+
+  const itHasCreditoCompra: boolean = creditoFromCompra;
+
   if (loadingHard) {
     return (
       <div className="min-h-screen bg-background p-2 sm:p-4 flex items-center justify-center">
@@ -566,8 +559,6 @@ export default function CompraDetalle() {
     !!metodoPago &&
     (!requiereBanco || !!cuentaBancariaSelected) &&
     (!requiereCaja || (!!cajaSelected && cajaTieneSaldo));
-
-  console.log("El registro de compra: ", registroQ);
 
   return (
     <motion.div
@@ -631,6 +622,10 @@ export default function CompraDetalle() {
             proveedores={proveedores}
             compraId={compraId}
             proveedorId={registro.proveedor?.id ?? 0}
+            cajasDisponibles={cajasDisponibles}
+            montoRecepcion={registro.total}
+            handleRefresAll={handleRefresAll}
+            creditoFromCompra={creditoFromCompra}
           />
         </TabsContent>
       </Tabs>
@@ -682,157 +677,26 @@ export default function CompraDetalle() {
       />
 
       {/* Form previo a confirmar */}
-      <Dialog open={openFormDialog} onOpenChange={setOpenFormDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Preparar envío a stock</DialogTitle>
-            <DialogDescription>
-              Complete la información necesaria antes de confirmar el envío a
-              stock.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="observaciones">Observaciones</Label>
-              <Textarea
-                id="observaciones"
-                placeholder="Observaciones acerca de la recepción de esta compra"
-                value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="proveedor">Seleccionar Proveedor</Label>
-              <Select
-                value={proveedorSelected}
-                onValueChange={setProveedorSelected}
-              >
-                <SelectTrigger id="proveedor">
-                  <SelectValue placeholder="Seleccione un proveedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(proveedores ?? []).map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      {p.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="metodPago">Método de pago</Label>
-              <Select
-                value={metodoPago}
-                onValueChange={(v) => setMetodoPago(v as MetodoPago)}
-              >
-                <SelectTrigger id="metodPago">
-                  <SelectValue placeholder="Seleccione un método de pago compra" />
-                </SelectTrigger>
-                <SelectContent>
-                  {METODO_PAGO_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {!metodoPago && (
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Requerido para continuar.
-                </p>
-              )}
-            </div>
-
-            {/* Caja */}
-            {isCashMethod(metodoPago) && (
-              <div className="space-y-2">
-                <Label>Seleccionar caja (saldo disponible)</Label>
-                <ReactSelectComponent
-                  options={optionsCajas}
-                  onChange={handleSelectCaja}
-                  value={
-                    cajaSelected
-                      ? optionsCajas.find((o) => o.value === cajaSelected) ??
-                        null
-                      : null
-                  }
-                  isClearable
-                  isSearchable
-                  className="text-black"
-                  placeholder="Seleccione una caja a asignar"
-                />
-                {!cajaSelected && (
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Seleccione una caja para pagos en efectivo.
-                  </p>
-                )}
-                {cajaSelected && !cajaTieneSaldo && (
-                  <p className="text-[11px] text-amber-600 mt-1">
-                    La caja seleccionada no tiene saldo suficiente para{" "}
-                    {formattMonedaGT(montoRecepcion)}.
-                  </p>
-                )}
-                {!cajasDisponibles.some(
-                  (c) => Number(c.disponibleEnCaja) >= montoRecepcion
-                ) && (
-                  <p className="text-[11px] text-amber-600 mt-1">
-                    Ninguna caja abierta tiene saldo suficiente. Cambie a método
-                    bancario o abra un turno.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Banco */}
-            {isBankMethod(metodoPago) && (
-              <div className="space-y-2">
-                <Label htmlFor="cuentaBancaria">
-                  Cuenta Bancaria (requerida por método)
-                </Label>
-                <Select
-                  value={cuentaBancariaSelected}
-                  onValueChange={setCuentaBancariaSelected}
-                >
-                  <SelectTrigger id="cuentaBancaria">
-                    <SelectValue placeholder="Seleccione una cuenta bancaria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(cuentasBancarias ?? []).map((c) => (
-                      <SelectItem key={c.id} value={c.id.toString()}>
-                        {c.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!cuentaBancariaSelected && (
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Requerida para {metodoPago?.toLowerCase()}.
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setOpenFormDialog(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={() => setOpenSendStock(true)}
-                disabled={!canContinue}
-              >
-                Continuar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PurchasePaymentFormDialog
+        open={openFormDialog}
+        onOpenChange={setOpenFormDialog}
+        proveedores={proveedores}
+        cuentasBancarias={cuentasBancarias}
+        cajasDisponibles={cajasDisponibles}
+        montoRecepcion={montoRecepcion}
+        formatMoney={formattMonedaGT}
+        observaciones={observaciones}
+        setObservaciones={setObservaciones}
+        proveedorSelected={proveedorSelected}
+        setProveedorSelected={setProveedorSelected}
+        metodoPago={metodoPago}
+        setMetodoPago={setMetodoPago}
+        cuentaBancariaSelected={cuentaBancariaSelected}
+        setCuentaBancariaSelected={setCuentaBancariaSelected}
+        cajaSelected={cajaSelected}
+        setCajaSelected={setCajaSelected}
+        onContinue={() => setOpenSendStock(true)}
+      />
 
       {/* FORM PREVIO A RECEPCION PARCIAL */}
       <PaymentMethodCompraDialogConfirm

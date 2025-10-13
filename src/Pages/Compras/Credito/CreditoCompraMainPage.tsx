@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import "dayjs/locale/es";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { TZGT } from "@/Pages/Utils/Utils"; // ej. "America/Guatemala"
 import { AlertCircle } from "lucide-react";
 import { useApiMutation } from "@/hooks/genericoCall/genericoCallHook";
@@ -26,6 +24,24 @@ import {
 } from "./helpers/helpersplan";
 import { CuotasManualEditor } from "./CuotasManualEditor";
 import { useStore } from "@/components/Context/ContextSucursal";
+import PurchasePaymentFormDialog, {
+  CajaConSaldo,
+} from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
+import { formattMonedaGT } from "@/utils/formattMoneda";
+import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
+import { toast } from "sonner";
+import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
+import { UICreditoCompra } from "./creditoCompraDisponible/interfaces/interfaces";
+import MapCreditoCompraMain from "./creditoCompraDisponible/MapCreditoCompraMain";
+type MetodoPago =
+  | "EFECTIVO"
+  | "TRANSFERENCIA"
+  | "TARJETA"
+  | "CHEQUE"
+  | "CREDITO"
+  | "OTRO"
+  | "CONTADO";
+
 interface CreditoCompraMainProps {
   compraId: number;
   proveedorId: number;
@@ -37,6 +53,14 @@ interface CreditoCompraMainProps {
     id: number;
     nombre: string;
   }[];
+
+  cajasDisponibles: CajaConSaldo[];
+
+  montoRecepcion: number;
+
+  creditoFromCompra: UICreditoCompra | undefined;
+
+  handleRefresAll: () => void;
 }
 export default function CreditoCompraMainPage({
   compraId,
@@ -45,12 +69,23 @@ export default function CreditoCompraMainPage({
   proveedores,
   recepciones = [],
   cuentasBancarias,
+  cajasDisponibles,
+  montoRecepcion,
+  handleRefresAll,
+  creditoFromCompra,
 }: CreditoCompraMainProps) {
+  const [openPaymentMethod, setOpenPaymentMethod] = useState<boolean>(false);
+  const [openConfirmPayment, setOpenConfirmPayment] = useState<boolean>(false);
+
+  const [metodoPago, setMetodoPago] = useState<MetodoPago | "">("");
+
   const userId = useStore((state) => state.userId) ?? 0;
   const sucursalId = useStore((state) => state.sucursalId) ?? 0;
+  const isCreditoRegistAvaliable: boolean = creditoFromCompra ? true : false;
 
-  const [enabled, setEnabled] = useState<boolean>(true);
-
+  const [proveedorSelected, setProveedorSelected] = useState<
+    string | undefined
+  >(undefined);
   const [form, setForm] = useState<CreditoCompraForm>({
     usuarioId: userId,
     proveedorId,
@@ -68,6 +103,7 @@ export default function CreditoCompraMainPage({
     enganche: null,
     registrarPagoEngancheAhora: false,
     cuentaBancariaId: 0,
+    observaciones: "",
     cuotas: [],
   });
 
@@ -75,18 +111,17 @@ export default function CreditoCompraMainPage({
   const [cuotasOverride, setCuotasOverride] = useState<PlanCuotaFila[] | null>(
     null
   );
+  const [cuentaBancariaSelected, setCuentaBancariaSelected] =
+    useState<string>("");
+  const [cajaSelected, setCajaSelected] = useState<string | null>(null);
 
   // POST mutation (usa tu hook genérico). Ajusta el tipo TData según tu API.
-  const { mutateAsync, isPending } = useApiMutation<any, any>(
-    "post",
-    `/compras/${compraId}/cxp-documentos`,
-    undefined,
-    {
-      onSuccess: () => {
-        // TODO: toast + navigate / invalidate queries
-      },
-    }
-  );
+  const { mutateAsync, isPending } = useApiMutation<
+    any,
+    CrearCreditoCompraPayload
+  >("post", `/credito-documento-compra/create-registro`, undefined, {
+    onSuccess: () => {},
+  });
 
   const canSubmit = useMemo(() => {
     const base =
@@ -98,74 +133,106 @@ export default function CreditoCompraMainPage({
     return base > 0 && form.cantidadCuotas >= 1 && form.diasEntrePagos > 0;
   }, [form, compraTotal, recepciones]);
 
-  // 1) Preview solo para mostrar en UI (derivado)
   const preview = useMemo(
     () => previewFrom(form, compraTotal, recepciones),
     [form, compraTotal, recepciones]
   );
 
-  // 2) Handlers opcionales para edición manual (sin loops)
   const adoptPreview = () => {
     setCuotasOverride(preview.cuotas.map(ensureId)); // o .map(x => x) si ya traen id
     setIsManual(true);
   };
 
-  // 3) Submit: transformas AHÍ MISMO (single source of truth)
   const onSubmit = async () => {
-    const cuotas = cuotasForSubmit(
-      isManual,
-      cuotasOverride,
-      form,
-      compraTotal,
-      recepciones
-    );
+    try {
+      const cuotas = cuotasForSubmit(
+        isManual,
+        cuotasOverride,
+        form,
+        compraTotal,
+        recepciones
+      );
 
-    const payload: CrearCreditoCompraPayload = {
-      //identificacion
-      compraId: compraId,
-      folioProveedor: undefined,
-      montoOriginal: getMontoBase(form, compraTotal, recepciones),
-      diasCredito: form.diasCredito,
-      cantidadCuotas: form.cantidadCuotas,
-      interes: form.interes,
-      recepcionId: form.modo === "POR_RECEPCION" ? form.recepcionId : undefined,
-      enganche:
-        typeof form.enganche === "number"
-          ? form.enganche
-          : form.enganche?.valor ?? 0,
-      diasEntrePagos: form.diasEntrePagos,
-      fechaEmisionISO: form.fechaEmisionISO,
-      modo: form.modo,
-      metodoPago: "CONTADO",
-      interesTipo: form.interesTipo,
-      usuarioId: userId,
-      planCuotaModo: form.planCuotaModo,
-      cuentaBancariaId: 1,
-      proveedorId: form.proveedorId,
-      sucursalId: sucursalId,
-      descripcion: "Descripcion de mi primer pago enganche",
-      registrarPagoEngancheAhora: form.registrarPagoEngancheAhora,
-      cuotas, // <- aquí ya va el array bueno
-    };
-    console.log("El payload es: ", payload);
+      const isPorRecepcion = form.modo === "POR_RECEPCION";
+      const cuentaId = Number.isFinite(Number(cuentaBancariaSelected))
+        ? Number(cuentaBancariaSelected)
+        : undefined;
 
-    await mutateAsync(payload);
+      const engancheMonto =
+        form.planCuotaModo === "PRIMERA_MAYOR" && cuotas.length > 0
+          ? cuotas[0].monto
+          : undefined;
+
+      const metodoPagoEnganche = form.registrarPagoEngancheAhora
+        ? "CONTADO"
+        : undefined;
+
+      const cuentaBancariaIdFinal =
+        form.registrarPagoEngancheAhora && metodoPagoEnganche !== "CONTADO"
+          ? cuentaId
+          : undefined;
+
+      const payload: CrearCreditoCompraPayload = {
+        compraId,
+        proveedorId: form.proveedorId,
+        usuarioId: userId,
+        modo: form.modo,
+        recepcionId: isPorRecepcion ? form.recepcionId : undefined,
+        fechaEmisionISO: form.fechaEmisionISO,
+        montoOriginal: getMontoBase(form, compraTotal, recepciones),
+        folioProveedor: undefined,
+        diasCredito: form.diasCredito,
+        diasEntrePagos: form.diasEntrePagos,
+        cantidadCuotas: form.cantidadCuotas,
+        interesTipo: form.interesTipo,
+        interes: form.interes,
+        planCuotaModo: form.planCuotaModo,
+        cuotas,
+        enganche:
+          form.planCuotaModo === "PRIMERA_MAYOR" ? engancheMonto : undefined,
+        registrarPagoEngancheAhora: form.registrarPagoEngancheAhora,
+        metodoPago: form.registrarPagoEngancheAhora ? "CONTADO" : undefined,
+        sucursalId: form.registrarPagoEngancheAhora ? sucursalId : undefined,
+        cuentaBancariaId: cuentaBancariaIdFinal,
+        descripcion: form.registrarPagoEngancheAhora
+          ? "Descripcion de mi primer pago enganche"
+          : undefined,
+      };
+
+      const p = mutateAsync(payload);
+
+      toast.promise(p, {
+        loading: "Registrando crédito...",
+        success: "Registro de crédito creado",
+        error: (e) => getApiErrorMessageAxios(e),
+      });
+
+      await p;
+      handleRefresAll();
+      setOpenConfirmPayment(false);
+      setOpenPaymentMethod(false);
+    } catch (e) {
+      toast.error(getApiErrorMessageAxios(e));
+    }
   };
-
-  console.log("El preview es: ", preview);
-  console.log("El formulario creando es: ", form);
-  console.log("Las cuotas manuales son: ", cuotasOverride);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Label>Generar crédito de compra</Label>
-        <Switch checked={enabled} onCheckedChange={setEnabled} />
-      </div>
-
-      {enabled ? (
+      {isCreditoRegistAvaliable ? (
+        <MapCreditoCompraMain
+          cajasDisponibles={cajasDisponibles}
+          sucursalId={sucursalId}
+          documentoId={creditoFromCompra?.id ?? 0}
+          userId={userId}
+          handleRefresAll={handleRefresAll}
+          creditoFromCompra={creditoFromCompra}
+          cuentasBancarias={cuentasBancarias}
+          proveedores={proveedores}
+        />
+      ) : (
         <>
           <GenerateCredito
+            cuentasBancarias={cuentasBancarias}
             form={form}
             setForm={setForm}
             proveedores={proveedores}
@@ -211,12 +278,68 @@ export default function CreditoCompraMainPage({
                 cuotas.
               </div>
             )}
-            <Button disabled={!canSubmit || isPending} onClick={onSubmit}>
+            <Button
+              disabled={!canSubmit || isPending}
+              onClick={() => {
+                setOpenPaymentMethod(true);
+              }}
+            >
               {isPending ? "Creando crédito…" : "Crear crédito"}
             </Button>
           </div>
         </>
-      ) : null}
+      )}
+
+      <PurchasePaymentFormDialog
+        open={openPaymentMethod}
+        onOpenChange={setOpenPaymentMethod}
+        proveedores={proveedores}
+        cuentasBancarias={cuentasBancarias}
+        cajasDisponibles={cajasDisponibles}
+        montoRecepcion={montoRecepcion}
+        formatMoney={formattMonedaGT}
+        observaciones={form.observaciones}
+        setObservaciones={(e) =>
+          setForm((previa) => ({
+            ...previa,
+            observaciones: e,
+          }))
+        }
+        proveedorSelected={proveedorSelected}
+        setProveedorSelected={setProveedorSelected}
+        metodoPago={metodoPago}
+        setMetodoPago={setMetodoPago}
+        cuentaBancariaSelected={cuentaBancariaSelected}
+        setCuentaBancariaSelected={setCuentaBancariaSelected}
+        cajaSelected={cajaSelected}
+        setCajaSelected={setCajaSelected}
+        onContinue={() => {
+          setOpenConfirmPayment(true);
+          setOpenPaymentMethod(false);
+        }}
+      />
+
+      <AdvancedDialog
+        open={openConfirmPayment}
+        onOpenChange={setOpenConfirmPayment}
+        title="Confirmar creacion de credito por compra"
+        description="Se comenzará un registro de credito a partir de esta compra"
+        confirmButton={{
+          label: "Si, continuar y crear",
+          onClick: () => {
+            onSubmit();
+          },
+          loading: isPending,
+          disabled: isPending,
+          loadingText: "Registrando crédito...",
+        }}
+        cancelButton={{
+          label: "Cancelar",
+          onClick: () => setOpenConfirmPayment(false),
+          disabled: isPending,
+          loadingText: "Cancelando...",
+        }}
+      />
     </div>
   );
 }

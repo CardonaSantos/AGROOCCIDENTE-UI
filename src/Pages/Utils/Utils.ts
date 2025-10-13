@@ -11,6 +11,10 @@ export const formattFecha = (value: string | Date | null) => {
   return dayjs(value).tz(zona).format("DD/MM/YYYY");
 };
 
+export const formattFechaConDiaSemana = (value: string | Date | null) => {
+  return dayjs(value).tz(zona).format("DD/MM/YYYY");
+};
+
 export const formattFechaWithMinutes = (value: string | Date | null) => {
   return dayjs(value).tz(zona).format("DD/MM/YYYY hh:mm a");
 };
