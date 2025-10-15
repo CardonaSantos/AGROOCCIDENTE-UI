@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
 import { UICreditoCompra } from "./creditoCompraDisponible/interfaces/interfaces";
 import MapCreditoCompraMain from "./creditoCompraDisponible/MapCreditoCompraMain";
+import { DetalleNormalizado } from "../table-select-recepcion/detalleNormalizado";
 type MetodoPago =
   | "EFECTIVO"
   | "TRANSFERENCIA"
@@ -55,12 +56,10 @@ interface CreditoCompraMainProps {
   }[];
 
   cajasDisponibles: CajaConSaldo[];
-
   montoRecepcion: number;
-
   creditoFromCompra: UICreditoCompra | undefined;
-
   handleRefresAll: () => void;
+  normalizados: DetalleNormalizado[];
 }
 export default function CreditoCompraMainPage({
   compraId,
@@ -73,6 +72,7 @@ export default function CreditoCompraMainPage({
   montoRecepcion,
   handleRefresAll,
   creditoFromCompra,
+  normalizados,
 }: CreditoCompraMainProps) {
   const [openPaymentMethod, setOpenPaymentMethod] = useState<boolean>(false);
   const [openConfirmPayment, setOpenConfirmPayment] = useState<boolean>(false);
@@ -138,6 +138,9 @@ export default function CreditoCompraMainPage({
     [form, compraTotal, recepciones]
   );
 
+  const isValidMovimientoFinanciero =
+    form.planCuotaModo === PlanCuotaModo.PRIMERA_MAYOR;
+
   const adoptPreview = () => {
     setCuotasOverride(preview.cuotas.map(ensureId)); // o .map(x => x) si ya traen id
     setIsManual(true);
@@ -167,11 +170,6 @@ export default function CreditoCompraMainPage({
         ? "CONTADO"
         : undefined;
 
-      const cuentaBancariaIdFinal =
-        form.registrarPagoEngancheAhora && metodoPagoEnganche !== "CONTADO"
-          ? cuentaId
-          : undefined;
-
       const payload: CrearCreditoCompraPayload = {
         compraId,
         proveedorId: form.proveedorId,
@@ -193,7 +191,7 @@ export default function CreditoCompraMainPage({
         registrarPagoEngancheAhora: form.registrarPagoEngancheAhora,
         metodoPago: form.registrarPagoEngancheAhora ? "CONTADO" : undefined,
         sucursalId: form.registrarPagoEngancheAhora ? sucursalId : undefined,
-        cuentaBancariaId: cuentaBancariaIdFinal,
+        cuentaBancariaId: parseInt(cuentaBancariaSelected),
         descripcion: form.registrarPagoEngancheAhora
           ? "Descripcion de mi primer pago enganche"
           : undefined,
@@ -216,18 +214,22 @@ export default function CreditoCompraMainPage({
     }
   };
 
+  console.log("creditoFromCompra es: ", creditoFromCompra);
+
   return (
     <div className="space-y-4">
       {isCreditoRegistAvaliable ? (
         <MapCreditoCompraMain
+          normalizados={normalizados}
           cajasDisponibles={cajasDisponibles}
           sucursalId={sucursalId}
-          documentoId={creditoFromCompra?.id ?? 0}
+          documentoId={creditoFromCompra?.id ?? 0} // ← ver fix #3
           userId={userId}
           handleRefresAll={handleRefresAll}
           creditoFromCompra={creditoFromCompra}
           cuentasBancarias={cuentasBancarias}
           proveedores={proveedores}
+          compraId={compraId} // ✅ pásalo aquí
         />
       ) : (
         <>
@@ -281,7 +283,11 @@ export default function CreditoCompraMainPage({
             <Button
               disabled={!canSubmit || isPending}
               onClick={() => {
-                setOpenPaymentMethod(true);
+                if (isValidMovimientoFinanciero) {
+                  setOpenPaymentMethod(true);
+                } else {
+                  setOpenConfirmPayment(true);
+                }
               }}
             >
               {isPending ? "Creando crédito…" : "Crear crédito"}

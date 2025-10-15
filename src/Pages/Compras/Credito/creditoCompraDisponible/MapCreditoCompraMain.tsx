@@ -30,6 +30,7 @@ import "dayjs/locale/es";
 import MapCuotasCreditoCompra from "./mapCuotas";
 import { CajaConSaldo } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
 import { DesvanecerHaciaArriba } from "@/Pages/movimientos-cajas/utils/animations";
+import { DetalleNormalizado } from "../../table-select-recepcion/detalleNormalizado";
 
 dayjs.locale("es");
 
@@ -41,9 +42,10 @@ interface CreditoAvaliableProps {
   sucursalId: number;
   cajasDisponibles: CajaConSaldo[];
 
-  // 👇 agrega
   cuentasBancarias: Array<{ id: number; nombre: string }>;
   proveedores: Array<{ id: number; nombre: string }>;
+  normalizados: DetalleNormalizado[];
+  compraId: number;
 }
 
 // ————— helpers —————
@@ -120,6 +122,8 @@ function MapCreditoCompraMain({
   cajasDisponibles,
   cuentasBancarias,
   proveedores,
+  normalizados,
+  compraId,
 }: CreditoAvaliableProps) {
   if (!creditoFromCompra) {
     return (
@@ -257,6 +261,7 @@ function MapCreditoCompraMain({
 
           {/* detalle de cuotas */}
           <MapCuotasCreditoCompra
+            normalizados={normalizados}
             cuentasBancarias={cuentasBancarias}
             proveedores={proveedores}
             cajasDisponibles={cajasDisponibles}
@@ -264,7 +269,8 @@ function MapCreditoCompraMain({
             documentoId={documentoId}
             userId={userId}
             handleRefresAll={handleRefresAll}
-            cuotas={creditoFromCompra?.cuotas ?? []} // <- del query directamente
+            cuotas={creditoFromCompra.cuotas} // ver fix #3
+            compraId={compraId} // ✅ pásalo aquí también
           />
         </CardContent>
       </Card>

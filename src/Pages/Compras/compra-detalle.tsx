@@ -33,6 +33,8 @@ import PurchasePaymentFormDialog, {
   CajaConSaldo,
 } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
 import { UICreditoCompra } from "./Credito/creditoCompraDisponible/interfaces/interfaces";
+import { normalizarDetalles } from "./Credito/helpers/normalizador";
+import { qk } from "./qk";
 
 interface Option {
   label: string;
@@ -120,17 +122,16 @@ export default function CompraDetalle() {
     }
   );
 
-  const queryKey = ["credito-from-compra", compraId] as const;
-
+  const queryKey = qk.creditoFromCompra(compraId);
   const { data: creditoFromCompra, refetch: refetchCredito } =
     useApiQuery<UICreditoCompra>(
       queryKey,
       `/credito-documento-compra/${compraId}`,
       undefined,
       {
-        // mientras debuggeas, evita sorpresas
         staleTime: 0,
         refetchOnWindowFocus: false,
+        // refetchOnMount: "always",
       }
     );
 
@@ -502,6 +503,10 @@ export default function CompraDetalle() {
     Boolean(creditoFromCompra?.id) &&
     (creditoFromCompra?.cuotas?.length ?? 0) > 0;
 
+  const normalizados = normalizarDetalles(
+    Array.isArray(registro?.detalles) ? registro.detalles : []
+  );
+
   if (loadingHard) {
     return (
       <div className="min-h-screen bg-background p-2 sm:p-4 flex items-center justify-center">
@@ -561,6 +566,7 @@ export default function CompraDetalle() {
     !!metodoPago &&
     (!requiereBanco || !!cuentaBancariaSelected) &&
     (!requiereCaja || (!!cajaSelected && cajaTieneSaldo));
+  console.log("Los detalles de la compra son: ", registro.detalles);
 
   return (
     <motion.div
@@ -630,6 +636,7 @@ export default function CompraDetalle() {
             montoRecepcion={registro.total}
             handleRefresAll={handleRefresAll}
             creditoFromCompra={creditoFromCompra}
+            normalizados={normalizados}
           />
         </TabsContent>
       </Tabs>

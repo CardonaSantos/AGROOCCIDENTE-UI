@@ -56,6 +56,7 @@ export interface CompraDetalleUI {
   subtotal: number;
   creadoEn: string | null; // ISO
   actualizadoEn: string | null; // ISO
+  fechaVencimiento: string | null;
   producto: CompraProductoUI;
   presentacion?: Presentacion | null;
 }

@@ -1,6 +1,5 @@
 // MapCuotasCreditoCompra.tsx
 "use client";
-
 import { useMemo, useState, ChangeEvent } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
@@ -13,10 +12,12 @@ import { toast } from "sonner";
 
 import { UICuota, UIPagoEnCuota } from "./interfaces/interfaces";
 import { PagoCxPPayload } from "./interfaces/payload";
-import { useApiMutation } from "@/hooks/genericoCall/genericoCallHook";
+import {
+  useApiMutation,
+  useApiQuery,
+} from "@/hooks/genericoCall/genericoCallHook";
 import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
 import { formattMonedaGT } from "@/utils/formattMoneda";
-
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,15 +41,23 @@ import {
   ReceiptText,
   RotateCcw,
 } from "lucide-react";
-
 import PurchasePaymentFormDialog, {
   MetodoPago,
   MetodoPagoOption,
   CajaConSaldo,
 } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
-
 import { useQueryClient } from "@tanstack/react-query";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
+
+import ReceptionPicker, {
+  DetalleNormalizado,
+  PickedItem,
+} from "./ReceptionPicker";
+import {
+  CreatePagoConRecepcionPayload,
+  CreateRecepcionBlock,
+} from "./interfaces/interfacess2";
+import { qk } from "../../qk";
 
 dayjs.extend(customParseFormat);
 dayjs.extend(utc);
@@ -70,16 +79,16 @@ interface PropsCuotas {
   documentoId: number;
   sucursalId: number;
   cajasDisponibles: CajaConSaldo[];
-
-  // NUEVO (opcional): si ya los tenés arriba en el árbol pásalos aquí
+  // NUEVOS / OPCIONALES
+  compraId: number; // para crear recepción y asociar
   cuentasBancarias?: CuentaBancaria[];
   proveedores?: ProveedorLite[];
+  normalizados: DetalleNormalizado[]; // líneas de compra normalizadas (con pendiente/recibido si los tienes)
 }
 
 // -----------------------------------------
-// Helpers UI
+// Helpers
 // -----------------------------------------
-
 const EstadoCuotaBadge = ({ estado }: { estado: string }) => {
   const map: Record<string, { label: string; className: string }> = {
     PENDIENTE: {
@@ -118,9 +127,6 @@ const leftStripeByEstado = (estado: string) =>
     VENCIDA: "before:bg-rose-500",
   }[estado] ?? "before:bg-muted-foreground/40");
 
-// -----------------------------------------
-// Normalización (UI -> backend)
-// -----------------------------------------
 function normalizeMetodoPagoUIToBackend(
   value: string
 ): "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "CHEQUE" | "CREDITO" | "OTRO" {
@@ -156,22 +162,19 @@ function toAmountString(n: string | number) {
   return num.toFixed(2);
 }
 
-// Mapea método -> canal
 const metodoPagoOptions: MetodoPagoOption[] = [
   { value: "EFECTIVO", label: "Efectivo", canal: "CAJA" },
   { value: "TRANSFERENCIA", label: "Transferencia/Depósito", canal: "BANCO" },
   { value: "TARJETA", label: "Tarjeta", canal: "BANCO" },
   { value: "CHEQUE", label: "Cheque", canal: "BANCO" },
-  // si usás CONTADO en UI:
-  // { value: "CONTADO",       label: "Contado",               canal: "CAJA" },
 ];
 
-interface DeletePagoPayment {
-  documentoId: number;
-  cuotaId: number;
-  observaciones: string | undefined;
-  usuarioId: number;
-}
+// pendiente helper (si no traes recibido/pendiente, toma “cantidad” como todo pendiente)
+const getPendiente = (l: DetalleNormalizado) => {
+  if (typeof l.pendiente === "number") return Math.max(0, l.pendiente);
+  const recibido = typeof l.recibido === "number" ? l.recibido : 0;
+  return Math.max(0, (l.cantidad ?? 0) - recibido);
+};
 // -----------------------------------------
 // Componente principal
 // -----------------------------------------
@@ -184,14 +187,24 @@ function MapCuotasCreditoCompra({
   cajasDisponibles,
   cuentasBancarias = [],
   proveedores = [],
+  normalizados,
+  compraId,
 }: PropsCuotas) {
   const qc = useQueryClient();
+  console.log("las compras id son: ", compraId);
 
-  const [open, setOpen] = useState(false);
+  // --- dialogs / states
+  const [openPay, setOpenPay] = useState(false); // dialog de pago
+  const [openPicker, setOpenPicker] = useState(false); // dialog de recepción
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState<UICuota | null>(
     null
   );
 
+  // selección del picker
+  const [picked, setPicked] = useState<PickedItem[]>([]);
+  const [wasTotal, setWasTotal] = useState(false); // si el usuario eligió "recibir todo"
+
+  // pago
   const [payloadPayment, setPayloadPayment] = useState<PagoCxPPayload>({
     documentoId,
     metodoPago: "EFECTIVO",
@@ -201,68 +214,59 @@ function MapCuotasCreditoCompra({
     observaciones: "",
     referencia: "",
   });
-
   const [cuentaBancariaSelected, setCuentaBancariaSelected] =
     useState<string>("");
   const [cajaSelected, setCajaSelected] = useState<string | null>(null);
-
-  // Si necesitás cumplir con el contract del util aunque no muestres proveedor:
   const [proveedorSelected, setProveedorSelected] = useState<
     string | undefined
   >(undefined);
 
-  const { mutateAsync, isPending: isLoading } = useApiMutation(
-    "post",
-    "/compras-pagos-creditos/"
-  );
-
-  const deletePagoCuota = useApiMutation<DeletePagoPayment>(
-    "delete",
-    `compras-pagos-creditos/delete-cuota-payed`
-  );
-
-  const handleDeletePayment = async () => {
-    try {
-      const payload: DeletePagoPayment = {
-        cuotaId: cuotaSeleccionada?.id ?? 0,
-        documentoId: documentoId,
-        usuarioId: userId,
-        observaciones: "",
-      };
-
-      toast.promise(deletePagoCuota.mutateAsync(payload), {
-        loading: "Eliminando registro de pago...",
-        success: "Registro de pago de cuota eliminado",
-        error: (e) => getApiErrorMessageAxios(e),
-      });
-
-      qc.invalidateQueries({ queryKey: ["credito-from-compra"] });
-      await handleRefresAll?.();
-      setOpenDelete(false);
-    } catch (error) {
-      console.log(error);
-      throw error;
+  const {
+    data: products = [],
+    isFetching: loadingProducts,
+    refetch: refetchProducts,
+  } = useApiQuery<DetalleNormalizado[]>(
+    ["detalles-recepcion", compraId],
+    `compras-pagos-creditos/get-detalles-productos-recepcion/${compraId}`,
+    undefined,
+    {
+      enabled: !!compraId && openPicker, // 👈 carga solo cuando abres
+      staleTime: 0, // 👈 siempre fresco
+      refetchOnWindowFocus: false,
+      // refetchOnMount: "always",       // (si tu wrapper lo soporta)
     }
-  };
+  );
 
+  // api mutations
+  const postPago = useApiMutation(
+    "post",
+    "/compras-pagos-creditos/",
+    undefined,
+    {
+      onSuccess: async () => {
+        await qc.invalidateQueries({
+          queryKey: qk.creditoFromCompra(compraId),
+        });
+        await qc.invalidateQueries({
+          queryKey: qk.compraRecepcionable(compraId),
+        });
+        await qc.invalidateQueries({ queryKey: qk.compra(compraId) });
+      },
+    }
+  );
+  const deletePagoCuota = useApiMutation<{
+    documentoId: number;
+    cuotaId: number;
+    observaciones?: string;
+    usuarioId: number;
+  }>("delete", "compras-pagos-creditos/delete-cuota-payed");
+
+  // --- derived
   const saldoCuota = useMemo(
     () => cuotaSeleccionada?.saldo ?? cuotaSeleccionada?.monto ?? 0,
     [cuotaSeleccionada]
   );
 
-  // Canal segun metodo actual
-  const metodoDef = useMemo(
-    () =>
-      metodoPagoOptions.find(
-        (m) => m.value === (payloadPayment.metodoPago as MetodoPago)
-      ),
-    [payloadPayment.metodoPago]
-  );
-  const isBankMethod = metodoDef?.canal === "BANCO";
-  const isCashMethod =
-    metodoDef?.canal === "CAJA" || payloadPayment.metodoPago === "CONTADO";
-
-  // Validaciones monto/fecha -> se usan para extraDisableReason
   const montoN = useMemo(
     () => parseFloat(String(payloadPayment.monto || 0)),
     [payloadPayment.monto]
@@ -278,22 +282,130 @@ function MapCuotasCreditoCompra({
     ? `Monto inválido. Máximo permitido: ${formattMonedaGT(saldoCuota)}.`
     : null;
 
-  // Handlers
-  const handleOpenDialog = (cuota: UICuota) => {
+  // ¿todo recepcionado?
+  const isTodoRecibido = useMemo(
+    () => normalizados.every((n) => getPendiente(n) === 0),
+    [normalizados]
+  );
+
+  // --- handlers
+  const handleOpenPayFlow = (cuota: UICuota) => {
     setCuotaSeleccionada(cuota);
-    setPayloadPayment((prev) => ({
-      ...prev,
-      documentoId,
-      monto: toAmountString(cuota.saldo ?? cuota.monto ?? 0),
-      fechaPago: dayjs().format("YYYY-MM-DD"),
-      metodoPago: "EFECTIVO",
-      observaciones: "",
-      referencia: "",
-    }));
-    setCuentaBancariaSelected("");
-    setCajaSelected(null);
-    setOpen(true);
+    setPicked([]);
+    setWasTotal(false);
+
+    if (isTodoRecibido) {
+      setPayloadPayment((prev) => ({
+        ...prev,
+        documentoId,
+        monto: toAmountString(cuota.saldo ?? cuota.monto ?? 0),
+        fechaPago: dayjs().format("YYYY-MM-DD"),
+        metodoPago: "EFECTIVO",
+        observaciones: "",
+        referencia: "",
+      }));
+      setCuentaBancariaSelected("");
+      setCajaSelected(null);
+      setOpenPay(true);
+    } else {
+      // primero seleccionar recepción
+      setOpenPicker(true);
+      queueMicrotask(() => refetchProducts());
+    }
   };
+
+  const handlePickerConfirm = (items: PickedItem[], wasTotalLocal: boolean) => {
+    setPicked(items);
+    setWasTotal(wasTotalLocal);
+    // abrir pago con defaults
+    if (cuotaSeleccionada) {
+      setPayloadPayment((prev) => ({
+        ...prev,
+        documentoId,
+        monto: toAmountString(
+          cuotaSeleccionada.saldo ?? cuotaSeleccionada.monto ?? 0
+        ),
+        fechaPago: dayjs().format("YYYY-MM-DD"),
+        metodoPago: "EFECTIVO",
+        observaciones: "",
+        referencia: "",
+      }));
+      setCuentaBancariaSelected("");
+      setCajaSelected(null);
+      setOpenPicker(false);
+      setOpenPay(true);
+    }
+  };
+
+  const handleRegistPayment = async () => {
+    if (!cuotaSeleccionada) return;
+    // Bloque recepcion (opcional)
+    let recepcionBlock: CreateRecepcionBlock | undefined = undefined;
+    if ((picked?.length ?? 0) > 0) {
+      if (!compraId) {
+        toast.error("No se puede registrar recepción: falta compraId.");
+        return;
+      }
+      recepcionBlock = {
+        compraId,
+        items: picked.map((p) => ({
+          compraDetalleId: p.compraDetalleId,
+          refId: p.refId,
+          tipo: p.tipo,
+          cantidad: p.cantidad,
+          fechaVencimientoISO: p.fechaVencimientoISO ?? null,
+        })),
+      };
+    }
+
+    // canal según método
+    const metodo = normalizeMetodoPagoUIToBackend(
+      String(payloadPayment.metodoPago)
+    );
+    const body: CreatePagoConRecepcionPayload = {
+      documentoId,
+      sucursalId,
+      cuotaId: cuotaSeleccionada.id,
+      registradoPorId: userId,
+      metodoPago: metodo,
+      monto: toAmountString(payloadPayment.monto || 0),
+      fechaPago: ymdToISO(payloadPayment.fechaPago || undefined),
+      observaciones: payloadPayment.observaciones?.trim() || undefined,
+      referencia: payloadPayment.referencia?.trim() || undefined,
+      expectedCuotaSaldo: toAmountString(cuotaSeleccionada.saldo ?? 0),
+
+      // canal (marcar opcional y validar en backend)
+      cajaId:
+        metodo === "EFECTIVO"
+          ? cajaSelected
+            ? Number(cajaSelected)
+            : undefined
+          : undefined,
+      cuentaBancariaId:
+        metodo !== "EFECTIVO"
+          ? cuentaBancariaSelected
+            ? Number(cuentaBancariaSelected)
+            : undefined
+          : undefined,
+
+      recepcion: recepcionBlock, // ← si no hay picked, va undefined
+    };
+
+    console.log("El payload nuevo es: ", body);
+    try {
+      await toast.promise(postPago.mutateAsync(body), {
+        loading: "Procesando…",
+        success: "Pago registrado" + (recepcionBlock ? " con recepción" : ""),
+        error: (e) => getApiErrorMessageAxios(e),
+      });
+    } finally {
+      await handleRefresAll();
+      setOpenPay(false);
+      setPicked([]);
+    }
+  };
+
+  console.log("Los picked son: ", picked);
 
   const [openDelete, setOpenDelete] = useState<boolean>(false);
   const handleOpenDelete = (cuota: UICuota) => {
@@ -301,60 +413,39 @@ function MapCuotasCreditoCompra({
     setOpenDelete(true);
   };
 
+  const handleDeletePayment = async () => {
+    if (!cuotaSeleccionada) return;
+    try {
+      await toast.promise(
+        deletePagoCuota.mutateAsync({
+          cuotaId: cuotaSeleccionada.id,
+          documentoId,
+          usuarioId: userId,
+          observaciones: "",
+        }),
+        {
+          loading: "Eliminando registro de pago...",
+          success: "Registro de pago eliminado",
+          error: (e) => getApiErrorMessageAxios(e),
+        }
+      );
+
+      await qc.invalidateQueries({ queryKey: qk.creditoFromCompra(compraId) });
+      await handleRefresAll(); // por consistencia
+
+      setOpenDelete(false);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   const handleChangeEvent = <K extends keyof PagoCxPPayload>(
     keyName: K,
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const newValue = e.target.value;
-    setPayloadPayment((prev) => ({
-      ...prev,
-      [keyName]: newValue as any,
-    }));
+    setPayloadPayment((prev) => ({ ...prev, [keyName]: newValue as any }));
   };
-
-  const handleRegistPayment = async () => {
-    if (!cuotaSeleccionada) return;
-
-    const body = {
-      documentoId,
-      cuotaId: cuotaSeleccionada.id,
-      registradoPorId: userId,
-      metodoPago: normalizeMetodoPagoUIToBackend(
-        String(payloadPayment.metodoPago)
-      ),
-      monto: toAmountString(payloadPayment.monto || 0),
-      fechaPago: ymdToISO(payloadPayment.fechaPago || undefined),
-      observaciones: payloadPayment.observaciones?.trim() || undefined,
-      referencia: payloadPayment.referencia?.trim() || undefined,
-      expectedCuotaSaldo: toAmountString(cuotaSeleccionada.saldo ?? 0),
-      sucursalId,
-
-      // NUEVO: asocia caja o cuenta según el método seleccionado
-      cajaId: isCashMethod && cajaSelected ? Number(cajaSelected) : undefined,
-      cuentaBancariaId:
-        isBankMethod && cuentaBancariaSelected
-          ? Number(cuentaBancariaSelected)
-          : undefined,
-    };
-
-    try {
-      await toast.promise(mutateAsync(body), {
-        success: "Pago de cuota registrado",
-        error: (e) => getApiErrorMessageAxios(e),
-        loading: "Registrando pago...",
-      });
-
-      qc.invalidateQueries({ queryKey: ["credito-from-compra"] });
-      await handleRefresAll?.();
-
-      setOpen(false);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  console.log("Payload de: ", payloadPayment);
-  console.log("El cuentaBancariaSelected es: ", cuentaBancariaSelected);
 
   if (!Array.isArray(cuotas) || cuotas.length === 0) {
     return (
@@ -363,6 +454,8 @@ function MapCuotasCreditoCompra({
       </p>
     );
   }
+  console.log("Los pickeados son: ", picked);
+  console.log("los productos fetcheados son: ", products);
 
   return (
     <div className="space-y-2">
@@ -414,7 +507,7 @@ function MapCuotasCreditoCompra({
                     variant={isPayed ? "secondary" : "default"}
                     size="sm"
                     disabled={isPayed}
-                    onClick={() => handleOpenDialog(c)}
+                    onClick={() => handleOpenPayFlow(c)}
                     className="gap-1.5"
                   >
                     <ReceiptText className="h-4 w-4" />
@@ -423,7 +516,7 @@ function MapCuotasCreditoCompra({
 
                   {isPayed ? (
                     <Button
-                      variant={isPayed ? "destructive" : "default"}
+                      variant="destructive"
                       size="sm"
                       onClick={() => handleOpenDelete(c)}
                       className="gap-1.5"
@@ -460,10 +553,22 @@ function MapCuotasCreditoCompra({
         );
       })}
 
-      {/* Dialog reutilizable */}
+      {/* Picker de recepción (solo si hay pendiente) */}
+      <ReceptionPicker
+        open={openPicker}
+        onOpenChange={setOpenPicker}
+        normalizados={products}
+        picked={picked}
+        setPicked={setPicked}
+        onConfirm={(items, wasTotalLocal) =>
+          handlePickerConfirm(items, wasTotalLocal)
+        }
+      />
+
+      {/* Dialog de pago (igual que hoy) */}
       <PurchasePaymentFormDialog
-        open={open}
-        onOpenChange={setOpen}
+        open={openPay}
+        onOpenChange={setOpenPay}
         title={
           cuotaSeleccionada
             ? `Pagar cuota #${cuotaSeleccionada.numero ?? cuotaSeleccionada.id}`
@@ -476,7 +581,6 @@ function MapCuotasCreditoCompra({
         montoRecepcion={montoN || 0}
         formatMoney={(n) => formattMonedaGT(Number(n))}
         metodoPagoOptions={metodoPagoOptions}
-        // Control del estado desde el padre:
         observaciones={payloadPayment.observaciones ?? ""}
         setObservaciones={(v) =>
           setPayloadPayment((prev) => ({ ...prev, observaciones: v }))
@@ -494,19 +598,17 @@ function MapCuotasCreditoCompra({
         setCuentaBancariaSelected={setCuentaBancariaSelected}
         cajaSelected={cajaSelected}
         setCajaSelected={setCajaSelected}
-        // Para pagos de cuota: no requerimos proveedor ni observaciones
         showProveedor={false}
         requireProveedor={false}
         showObservaciones={true}
         requireObservaciones={false}
-        // Bloqueo extra por validaciones locales (monto/fecha)
         extraDisableReason={
-          extraDisableReason || (isLoading ? "Registrando..." : null)
+          extraDisableReason || (postPago.isPending ? "Registrando..." : null)
         }
-        continueLabel={isLoading ? "Registrando…" : "Registrar pago"}
+        continueLabel={postPago.isPending ? "Registrando…" : "Registrar pago"}
         onContinue={handleRegistPayment}
       >
-        {/* ---- Campos extra (Monto / Fecha / Referencia) ---- */}
+        {/* Campos extra (Monto / Fecha / Referencia) */}
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="monto">Monto</Label>
@@ -547,18 +649,17 @@ function MapCuotasCreditoCompra({
         </div>
       </PurchasePaymentFormDialog>
 
+      {/* Deshacer pago */}
       <AdvancedDialog
         title="Eliminación de registro de pago de cuota"
-        description="Se procederá a eliminar el registro del pago a este credito, y el stock ingresado se restará"
-        question="Estas seguro de querer continuar?"
+        description="Se eliminará el registro del pago y se revertirá el movimiento financiero si existiera. (El stock no se modifica)."
+        question="¿Seguro que deseas continuar?"
         open={openDelete}
         onOpenChange={setOpenDelete}
         confirmButton={{
-          label: "Si, continuar y eliminar pago de cuota",
-          onClick: () => {
-            handleDeletePayment();
-          },
-          loadingText: "Eliminado...",
+          label: "Sí, eliminar pago",
+          onClick: () => handleDeletePayment(),
+          loadingText: "Eliminando...",
           loading: deletePagoCuota.isPending,
           disabled: deletePagoCuota.isPending,
         }}
@@ -577,7 +678,7 @@ function MapCuotasCreditoCompra({
 }
 
 // -----------------------------------------
-// Lista de pagos
+// Lista de pagos (igual que tenías)
 // -----------------------------------------
 function PagosList({ pagos }: { pagos: UIPagoEnCuota[] }) {
   if (!Array.isArray(pagos) || pagos.length === 0) return null;

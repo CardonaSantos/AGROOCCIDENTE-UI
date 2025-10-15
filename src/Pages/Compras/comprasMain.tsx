@@ -46,6 +46,7 @@ import TableRecepcionCompraSelect from "./table-select-recepcion/table-recepcion
 import CardSummary from "./ResumenRecepcionParcial/CardSummary/CardSummary";
 import { QueryObserverResult, RefetchOptions } from "@tanstack/react-query";
 import { CompraRecepcionableResponse } from "./ResumenRecepcionParcial/Interfaces/detalleRecepcionable";
+import { normalizarDetalles } from "./Credito/helpers/normalizador";
 // Animaciones
 
 const itemVariants = {
@@ -162,33 +163,6 @@ function ComprasMain({
       </Badge>
     );
   };
-
-  function normalizarDetalles(
-    detalles: CompraDetalleUI[]
-  ): DetalleNormalizado[] {
-    return detalles.map((d) => {
-      const usarPresentacion = d.presentacion != null;
-
-      return {
-        id: d.id,
-        cantidad: d.cantidad,
-        costoUnitario: d.costoUnitario,
-        subtotal: d.subtotal,
-        creadoEn: d.creadoEn,
-        actualizadoEn: d.actualizadoEn,
-        producto: {
-          id: usarPresentacion ? d.presentacion!.id : d.producto.id!,
-          nombre: usarPresentacion ? d.presentacion!.nombre : d.producto.nombre,
-          codigo: usarPresentacion
-            ? d.presentacion!.codigoBarras
-            : d.producto.codigo,
-          sku: usarPresentacion ? d.presentacion!.sku : undefined,
-          tipo: usarPresentacion ? "PRESENTACION" : "PRODUCTO",
-          precioCosto: d.costoUnitario,
-        },
-      };
-    });
-  }
 
   // RETORNO EXPLICITO
 
