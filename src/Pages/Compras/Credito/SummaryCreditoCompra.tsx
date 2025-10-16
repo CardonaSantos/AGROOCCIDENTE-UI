@@ -32,20 +32,30 @@ export function SummaryCreditoCompra({ preview }: { preview: PlanPreview }) {
           <div className="col-span-5 text-right">Monto</div>
         </div>
         <div className="max-h-64 overflow-y-auto divide-y">
-          {preview.cuotas.map((c) => (
-            <div
-              key={c.id ?? c.numero}
-              className="grid grid-cols-12 py-2 text-sm"
-            >
-              <div className="col-span-2">{c.numero}</div>
-              <div className="col-span-5">
-                {dayjs(c.fechaISO).tz(TZGT).format("dddd DD/MM/YYYY")}
+          {preview.cuotas.map((c, idx) => {
+            const isEnganche = idx === 0; // porque la cuota #1 es el enganche si existe
+            return (
+              <div
+                key={c.id ?? c.numero}
+                className="grid grid-cols-12 py-2 text-sm items-center"
+              >
+                <div className="col-span-2 flex items-center gap-2">
+                  <span>{c.numero}</span>
+                  {isEnganche && (
+                    <span className="text-[10px] px-2 py-[2px] rounded bg-muted">
+                      Enganche
+                    </span>
+                  )}
+                </div>
+                <div className="col-span-5">
+                  {dayjs(c.fechaISO).tz(TZGT).format("dddd DD/MM/YYYY")}
+                </div>
+                <div className="col-span-5 text-right">
+                  Q {c.monto.toFixed(2)}
+                </div>
               </div>
-              <div className="col-span-5 text-right">
-                Q {c.monto.toFixed(2)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <Separator className="my-3" />
         <div className="flex items-center justify-between text-sm">

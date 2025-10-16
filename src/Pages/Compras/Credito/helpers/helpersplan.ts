@@ -7,6 +7,7 @@ import {
   RecepcionValorada,
 } from "../interfaces/types";
 import { buildPlanPreview } from "./helpers2";
+import { round2 } from "./helpers1";
 
 export function getMontoBase(
   form: CreditoCompraForm,
@@ -15,9 +16,9 @@ export function getMontoBase(
 ) {
   if (form.modo === "POR_RECEPCION" && form.recepcionId) {
     const r = recepciones.find((x) => x.id === form.recepcionId);
-    return form.montoOriginal ?? r?.valor ?? compraTotal;
+    return round2(form.montoOriginal ?? r?.valor ?? compraTotal);
   }
-  return form.montoOriginal ?? compraTotal;
+  return round2(form.montoOriginal ?? compraTotal);
 }
 
 export function previewFrom(

@@ -16,7 +16,6 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Barcode, CirclePlus, Eye, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { ProductosResponse } from "@/Types/Venta/ProductosResponse";
 import sinFoto from "@/assets/sin foto.png";
 import { formattMonedaGT } from "@/utils/formattMoneda";
 import {
@@ -24,9 +23,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ProductoData } from "./interfaces/newProductsPOSResponse";
 
 interface ProductListProps {
-  productos: ProductosResponse[];
+  isLoadingProducts: boolean;
+  productos: ProductoData[];
   onAddToCart: (product: any) => void;
   onImageClick: (images: string[]) => void;
 }
@@ -116,13 +117,13 @@ export default function ProductList({
                       <div
                         className="w-10 h-10 rounded-md overflow-hidden bg-muted/20 group relative"
                         onClick={() => {
-                          onImageClick(
-                            product.imagenesProducto.map((img) => img.url)
-                          );
+                          // onImageClick(
+                          //   product.imagenesProducto.map((img) => img.url)
+                          // );
                         }}
                       >
                         <img
-                          src={product.imagenesProducto[0]?.url || sinFoto}
+                          src={product.images[0]?.url || sinFoto}
                           width={40}
                           height={40}
                           alt={product.nombre}
@@ -170,13 +171,15 @@ export default function ProductList({
                     </TableCell>
 
                     {/* Verificación de existencia de stock */}
-                    {product.stock && product.stock.length > 0 ? (
+                    {product.stocks && product.stocks.length > 0 ? (
                       <>
                         {/* Cantidad total de stock */}
                         <TableCell className="text-center py-2">
-                          {product.stock.some((stock) => stock.cantidad > 0) ? (
+                          {product.stocks.some(
+                            (stock) => stock.cantidad > 0
+                          ) ? (
                             <Badge variant="outline" className="font-bold">
-                              {product.stock.reduce(
+                              {product.stocks.reduce(
                                 (total, stocks) => total + stocks.cantidad,
                                 0
                               )}
@@ -199,7 +202,7 @@ export default function ProductList({
                             className="h-8 w-8 p-0 rounded-full"
                             onClick={() => onAddToCart(product)}
                             disabled={
-                              product.stock.reduce(
+                              product.stocks.reduce(
                                 (total, stocks) => total + stocks.cantidad,
                                 0
                               ) === 0

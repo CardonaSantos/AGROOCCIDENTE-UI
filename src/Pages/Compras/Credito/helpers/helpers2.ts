@@ -1,3 +1,4 @@
+// helpers/helpers2.ts
 import dayjs from "dayjs";
 import {
   EngancheInput,
@@ -13,11 +14,11 @@ export function buildPlanPreview(args: {
   fechaEmisionISO: string;
   diasCredito: number;
   diasEntrePagos: number;
-  n: number; // total de cuotas (incluye #1 si hay enganche en plan)
+  n: number; // <-- CUOTAS FINANCIADAS (NO INCLUYE ENGANCHE)
   interesTipo: InteresTipo;
-  interes: number; // tasa por periodo
+  interes: number; // tasa por periodo, ej. 0.02
   planCuotaModo: PlanCuotaModo;
-  enganche: EngancheInput; // null = sin enganche
+  enganche: EngancheInput | null; // null = sin enganche
 }): PlanPreview {
   const {
     montoTotal,
@@ -27,112 +28,139 @@ export function buildPlanPreview(args: {
     n,
     interesTipo,
     interes,
-    // planCuotaModo,
+    planCuotaModo,
     enganche,
   } = args;
 
-  const firstDueISO = addDaysISO(fechaEmisionISO, diasCredito);
-  const cuotas: PlanCuotaFila[] = [];
+  const M = round2(montoTotal);
+  // Enganche: si tipo = "%", valor viene en porcentaje (10 => 10%), por eso /100
+  const e =
+    planCuotaModo === PlanCuotaModo.PRIMERA_MAYOR && enganche
+      ? round2(
+          enganche.tipo === "%"
+            ? M * (enganche.valor / 100)
+            : enganche.valor ?? 0
+        )
+      : 0;
 
-  // 1) Enganche como cuota #1 (en plan)
-  const eng = enganche
-    ? enganche.tipo === "%"
-      ? round2(montoTotal * (enganche.valor / 100))
-      : round2(enganche.valor)
-    : 0;
+  if (e < 0) throw new Error("Enganche inválido.");
+  if (e >= M) throw new Error("El enganche debe ser menor al monto.");
+
+  const cuotas: PlanCuotaFila[] = [];
   let numero = 1;
-  if (eng > 0) {
+
+  // (1) Enganche como CUOTA #1 (hoy = fechaEmisionISO)
+  if (e > 0) {
+    const id = `${dayjs(fechaEmisionISO).format("YYYYMMDD")}-${numero}`;
+    cuotas.push({
+      numero,
+      fechaISO: dayjs(fechaEmisionISO).toDate().toISOString(),
+      monto: e,
+      id,
+    });
+    numero++;
   }
 
-  const restantes = Math.max(0, n - (eng > 0 ? 1 : 0));
-  const P = round2(montoTotal - eng); // principal financiado
+  // (2) Cuotas financiadas sobre P = M - e
+  const P = round2(M - e);
+  const restantes = Math.max(0, n);
 
   if (restantes === 0) {
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
+    const totalAPagar = round2(cuotas.reduce((a, c) => a + c.monto, 0));
+    const interesTotal = round2(totalAPagar - M);
     return {
       cuotas,
-      interesTotal: 0,
+      interesTotal,
       principalFinanciado: P,
-      totalAPagar: total,
+      totalAPagar,
     };
   }
 
-  const start2ISO =
-    eng > 0 ? addDaysISO(firstDueISO, diasEntrePagos) : firstDueISO;
+  // Primera financiada: fechaEmision + diasCredito
+  const firstDueISO = addDaysISO(fechaEmisionISO, diasCredito);
 
   if (interesTipo === InteresTipo.NONE) {
-    // repartir P en 'restantes', ajuste a la última (o primera si quisieras moverlo)
-    const base = Math.floor((P / restantes) * 100) / 100; // floor a 2d
+    // Reparto lineal con ajuste a la última cuota
+    const base = Math.floor((P / restantes) * 100) / 100; // floor 2d
     let acum = 0;
-    for (let k = 1; k <= restantes; k++) {
-      const id = `${dayjs(
-        addDaysISO(start2ISO, diasEntrePagos * (k - 1))
-      ).format("YYYYMMDD")}-${numero}`;
-
-      const isLast = k === restantes;
+    for (let k = 0; k < restantes; k++) {
+      const fecha = addDaysISO(firstDueISO, diasEntrePagos * k);
+      const isLast = k === restantes - 1;
       const monto = isLast ? round2(P - acum) : round2(base);
-      cuotas.push({
-        numero: numero++,
-        fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-        monto,
-        id,
-      });
+      const id = `${dayjs(fecha).format("YYYYMMDD")}-${numero}`;
+      cuotas.push({ numero, fechaISO: fecha, monto, id });
+      numero++;
       acum = round2(acum + monto);
     }
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
+
+    const totalAPagar = round2(cuotas.reduce((a, c) => a + c.monto, 0));
+    // Invariante: sin interés, total = M (enganche + financiadas)
+    if (Math.abs(totalAPagar - M) > 0.01) {
+      throw new Error(
+        "Con interés NONE, la suma de cuotas debe igualar el monto original."
+      );
+    }
     return {
       cuotas,
       interesTotal: 0,
       principalFinanciado: P,
-      totalAPagar: total,
+      totalAPagar: totalAPagar,
     };
   }
 
   if (interesTipo === InteresTipo.SIMPLE) {
-    const capital = round2(P / restantes);
+    // Principal lineal, interés sobre saldo
+    const principal = round2(P / restantes);
     let saldo = P;
     let interesTotal = 0;
-    for (let k = 1; k <= restantes; k++) {
-      const id = `${dayjs(
-        addDaysISO(start2ISO, diasEntrePagos * (k - 1))
-      ).format("YYYYMMDD")}-${numero}`;
+
+    for (let k = 0; k < restantes; k++) {
+      const fecha = addDaysISO(firstDueISO, diasEntrePagos * k);
       const interesK = round2(saldo * interes);
-      const cuotaK = round2(capital + interesK);
-      cuotas.push({
-        numero: numero++,
-        fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-        monto: cuotaK,
-        id,
-      });
+      const principalK = k < restantes - 1 ? principal : round2(saldo); // ajuste final
+      const monto = round2(principalK + interesK);
+      const id = `${dayjs(fecha).format("YYYYMMDD")}-${numero}`;
+      cuotas.push({ numero, fechaISO: fecha, monto, id });
+      numero++;
       interesTotal = round2(interesTotal + interesK);
-      saldo = round2(saldo - capital);
+      saldo = round2(saldo - principalK);
     }
-    const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-    return { cuotas, interesTotal, principalFinanciado: P, totalAPagar: total };
+    const totalAPagar = round2(cuotas.reduce((a, c) => a + c.monto, 0));
+    return {
+      cuotas,
+      interesTotal,
+      principalFinanciado: P,
+      totalAPagar,
+    };
   }
 
-  // COMPUESTO (francés): cuota fija A sobre P y 'restantes'
+  // Interés compuesto (francés): cuota fija A
   const i = interes;
-  const A = round2((P * i) / (1 - Math.pow(1 + i, -restantes)));
-  let interesTotal = 0;
+  const A =
+    i > 0
+      ? round2((P * i) / (1 - Math.pow(1 + i, -restantes)))
+      : round2(P / restantes);
   let saldo = P;
-  for (let k = 1; k <= restantes; k++) {
+  let interesTotal = 0;
+
+  for (let k = 0; k < restantes; k++) {
+    const fecha = addDaysISO(firstDueISO, diasEntrePagos * k);
     const interesK = round2(saldo * i);
-    const capitalK = round2(A - interesK);
-
-    const id = `${dayjs(addDaysISO(start2ISO, diasEntrePagos * (k - 1))).format(
-      "YYYYMMDD"
-    )}-${numero}`;
-
-    cuotas.push({
-      numero: numero++,
-      fechaISO: addDaysISO(start2ISO, diasEntrePagos * (k - 1)),
-      monto: A,
-      id: id,
-    });
+    let principalK = round2(A - interesK);
+    if (k === restantes - 1) principalK = round2(saldo); // ajuste final
+    const monto = round2(principalK + interesK);
+    const id = `${dayjs(fecha).format("YYYYMMDD")}-${numero}`;
+    cuotas.push({ numero, fechaISO: fecha, monto, id });
+    numero++;
     interesTotal = round2(interesTotal + interesK);
-    saldo = round2(saldo - capitalK);
+    saldo = round2(saldo - principalK);
   }
-  const total = round2(cuotas.reduce((a, c) => a + c.monto, 0));
-  return { cuotas, interesTotal, principalFinanciado: P, totalAPagar: total };
+
+  const totalAPagar = round2(cuotas.reduce((a, c) => a + c.monto, 0));
+  return {
+    cuotas,
+    interesTotal,
+    principalFinanciado: P,
+    totalAPagar,
+  };
 }

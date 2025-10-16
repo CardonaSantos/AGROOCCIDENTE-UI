@@ -44,12 +44,13 @@ interface Precios {
 }
 
 interface CartItem {
+  uid: string; // 👈 NUEVO
   id: number;
   nombre: string;
   quantity: number;
   selectedPriceId: number;
   selectedPrice: number;
-  selectedPriceRole: RolPrecio; // Nuevo campo para el rol del precio seleccionado
+  selectedPriceRole: RolPrecio;
   precios: Precios[];
   stock: { cantidad: number }[];
 }
@@ -87,13 +88,7 @@ interface CartCheckoutProps {
   observaciones: string;
   setObservaciones: (observaciones: string) => void;
   customerOptions: CustomerOption[];
-  onUpdateQuantity: (productId: number, newQuantity: number) => void;
-  onUpdatePrice: (
-    productId: number,
-    newPrice: number,
-    newRole: RolPrecio
-  ) => void;
-  onRemoveFromCart: (productId: number) => void;
+
   onCompleteSale: () => void;
   formatCurrency: (amount: number) => string;
   //PARA METODO DE PAGO Y OTROS
@@ -107,6 +102,11 @@ interface CartCheckoutProps {
 
   setApellidos: React.Dispatch<React.SetStateAction<string>>;
   apellidos: string;
+
+  //NUEVOS
+  onUpdateQuantity: (uid: string, newQuantity: number) => void; // 👈
+  onUpdatePrice: (uid: string, newPrice: number, newRole: RolPrecio) => void; // 👈
+  onRemoveFromCart: (uid: string) => void;
 }
 
 export default function CartCheckout({
@@ -204,7 +204,7 @@ export default function CartCheckout({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 min-w-[360px] max-w-[440px]">
       {/* Carrito */}
       <Card className="border-0 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2 bg-background">
@@ -254,59 +254,61 @@ export default function CartCheckout({
         </div>
         <div className="border-t">
           {/* Encabezados de tabla */}
-          <div className="grid grid-cols-4 px-4 py-2 text-sm text-muted-foreground border-b">
+
+          <div
+            className="
+    grid px-4 py-2 text-sm text-muted-foreground border-b
+    grid-cols-[minmax(0,1fr)_72px_100px_96px]  /* nombre | cant | precio | total */
+  "
+          >
             <div className="col-span-1">Producto</div>
-            <div className="col-span-1 text-center">Cant.</div>
-            <div className="col-span-1 text-center">Precio</div>
-            <div className="col-span-1 text-center">Total</div>
+            <div className="text-center">Cant.</div>
+            <div className="text-center">Precio</div>
+            <div className="text-center">Total</div>
           </div>
           {/* Productos en el carrito */}
-          <div className="overflow-y-auto max-h-[calc(100vh-450px)]">
+          <div className="overflow-y-auto max-h-[calc(100vh-430px)]">
             {cart.length > 0 ? (
               <div className="divide-y">
                 {cart.map((item) => (
                   <div
-                    key={item.id}
-                    className="grid grid-cols-4 px-4 py-2 items-center"
+                    key={item.uid}
+                    className="
+            grid items-center gap-x-2 px-4 py-2
+            grid-cols-[minmax(0,1fr)_72px_100px_96px]
+          "
                   >
-                    <div className="col-span-1 text-sm pr-2">
-                      <div className="line-clamp-1">{item.nombre}</div>
+                    <div className="text-sm pr-2 min-w-0">
+                      <div className="truncate">{item.nombre}</div>
                     </div>
-                    <div className="col-span-1 flex justify-center">
+
+                    <div className="flex justify-center">
                       <Input
                         type="number"
                         value={item.quantity}
                         onChange={(e) => {
                           const val = Number.parseInt(e.target.value);
                           if (!isNaN(val) && val > 0) {
-                            onUpdateQuantity(item.id, val);
+                            onUpdateQuantity(item.uid, val); // 👈 antes: item.id
                           }
                         }}
                         min="1"
-                        max={item.stock.reduce(
-                          (total, stock) => total + stock.cantidad,
-                          0
-                        )}
-                        className="h-7 w-14 text-center"
+                        max={item.stock.reduce((t, s) => t + s.cantidad, 0)}
+                        className="h-7 w-[72px] text-center"
                       />
                     </div>
-                    <div className="col-span-1 flex justify-center">
+
+                    <div className="flex justify-center">
                       <Select
                         value={item.selectedPriceId.toString()}
                         onValueChange={(newPriceId) => {
-                          const selectedPrice = item.precios.find(
-                            (price) => price.id === Number.parseInt(newPriceId)
+                          const p = item.precios.find(
+                            (x) => x.id === Number(newPriceId)
                           );
-                          if (selectedPrice) {
-                            onUpdatePrice(
-                              item.id,
-                              selectedPrice.precio,
-                              selectedPrice.rol
-                            );
-                          }
+                          if (p) onUpdatePrice(item.uid, p.precio, p.rol);
                         }}
                       >
-                        <SelectTrigger className="h-7 w-28">
+                        <SelectTrigger className="h-7 w-[100px] justify-between">
                           <SelectValue
                             placeholder={formatCurrency(item.selectedPrice)}
                           />
@@ -319,9 +321,11 @@ export default function CartCheckout({
                                 key={precio.id}
                                 value={precio.id.toString()}
                               >
-                                <div className="flex items-center justify-between w-full">
-                                  <span>{formatCurrency(precio.precio)}</span>
-                                  <span className="text-xs text-muted-foreground ml-2">
+                                <div className="flex w-full items-center justify-between">
+                                  <span className="tabular-nums">
+                                    {formatCurrency(precio.precio)}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground ml-2">
                                     {precio.rol.toLowerCase()}
                                   </span>
                                 </div>
@@ -330,15 +334,16 @@ export default function CartCheckout({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="col-span-1 flex items-center justify-between">
-                      <span className="text-xs font-medium">
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium tabular-nums">
                         {formatCurrency(item.selectedPrice * item.quantity)}
                       </span>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-100/20"
-                        onClick={() => onRemoveFromCart(item.id)}
+                        className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-100/20 shrink-0"
+                        onClick={() => onRemoveFromCart(item.uid)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

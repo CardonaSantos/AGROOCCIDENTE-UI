@@ -166,6 +166,17 @@ export default function CreditoCompraMainPage({
           ? cuotas[0].monto
           : undefined;
 
+      const needsAccount = ["TRANSFERENCIA", "TARJETA", "CHEQUE"].includes(
+        String(metodoPago)
+      );
+
+      const cuentaIdSafe =
+        form.registrarPagoEngancheAhora &&
+        needsAccount &&
+        Number.isFinite(Number(cuentaBancariaSelected))
+          ? Number(cuentaBancariaSelected)
+          : undefined;
+
       const metodoPagoEnganche = form.registrarPagoEngancheAhora
         ? "CONTADO"
         : undefined;
@@ -175,13 +186,14 @@ export default function CreditoCompraMainPage({
         proveedorId: form.proveedorId,
         usuarioId: userId,
         modo: form.modo,
-        recepcionId: isPorRecepcion ? form.recepcionId : undefined,
+        recepcionId:
+          form.modo === "POR_RECEPCION" ? form.recepcionId : undefined,
         fechaEmisionISO: form.fechaEmisionISO,
         montoOriginal: getMontoBase(form, compraTotal, recepciones),
         folioProveedor: undefined,
         diasCredito: form.diasCredito,
         diasEntrePagos: form.diasEntrePagos,
-        cantidadCuotas: form.cantidadCuotas,
+        cantidadCuotas: form.cantidadCuotas, // SIN contar enganche
         interesTipo: form.interesTipo,
         interes: form.interes,
         planCuotaModo: form.planCuotaModo,
@@ -189,13 +201,15 @@ export default function CreditoCompraMainPage({
         enganche:
           form.planCuotaModo === "PRIMERA_MAYOR" ? engancheMonto : undefined,
         registrarPagoEngancheAhora: form.registrarPagoEngancheAhora,
-        metodoPago: form.registrarPagoEngancheAhora ? "CONTADO" : undefined,
+        metodoPago: form.registrarPagoEngancheAhora ? metodoPago : undefined, // <- usa el elegido
         sucursalId: form.registrarPagoEngancheAhora ? sucursalId : undefined,
-        cuentaBancariaId: parseInt(cuentaBancariaSelected),
+        cuentaBancariaId: cuentaIdSafe, // <- evita NaN
         descripcion: form.registrarPagoEngancheAhora
-          ? "Descripcion de mi primer pago enganche"
+          ? form.observaciones?.trim() || "Pago de enganche (cuota #1)"
           : undefined,
       };
+
+      console.log("El payload generado con enganche es: ", payload);
 
       const p = mutateAsync(payload);
 

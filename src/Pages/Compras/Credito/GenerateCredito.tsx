@@ -253,7 +253,7 @@ export function GenerateCredito({
 
         {/* Cuotas */}
         <div className="space-y-2">
-          <Label>Cantidad de cuotas</Label>
+          <Label>Cantidad de cuotas (sin contar enganche)</Label>
           <Input
             inputMode="numeric"
             value={form.cantidadCuotas}
