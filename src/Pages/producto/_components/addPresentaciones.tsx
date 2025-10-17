@@ -20,7 +20,14 @@ import {
   TipoEmpaque,
 } from "../interfaces/preciosCreateInterfaces";
 import AddPrices from "@/Pages/Inventario/AddPrices";
-import React, { Dispatch, memo, SetStateAction, useRef, useState } from "react";
+import React, {
+  Dispatch,
+  memo,
+  SetStateAction,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Select,
   SelectContent,
@@ -74,9 +81,10 @@ export default function AddPresentaciones({
         esDefault: prev.length === 0,
         precios: [],
         costoReferencialPresentacion: "",
-        tipoPresentacion: TipoEmpaque.UNIDAD,
+        tipoPresentacion: TipoEmpaque as unknown as TipoEmpaque, // ajusta si usas enum
         descripcion: "",
         stockMinimo: 0,
+        imagenes: [], // NEW
       },
     ]);
   };
@@ -168,10 +176,16 @@ const PresentacionRow = memo(function PresentacionRow({
   onUpdatePrecios,
   onRemove,
 }: RowProps) {
+  // —— Imagenes por presentación —— //
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [cropped, setCropped] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Mantener sincronizado con el padre si viene precargado
+  useEffect(() => {
+    setCropped(p.imagenes ?? []);
+  }, [p.imagenes]);
 
   return (
     <Card className="border-l-4 border-l-primary/20">
@@ -341,8 +355,8 @@ const PresentacionRow = memo(function PresentacionRow({
             <Textarea
               placeholder="Descripción de la presentación"
               className="min-h-[84px] pr-10"
-              value={p.descripcion}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+              value={p.descripcion ?? ""}
+              onChange={(e) =>
                 onUpdateField(idx, "descripcion", e.target.value)
               }
             />
@@ -359,7 +373,7 @@ const PresentacionRow = memo(function PresentacionRow({
           />
         </div>
 
-        {/* Imágenes / Cropper */}
+        {/* —— Imágenes por presentación —— */}
         <div className="rounded-lg border bg-background/40">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3">
             <div className="flex items-center gap-2">
@@ -408,6 +422,7 @@ const PresentacionRow = memo(function PresentacionRow({
                 onClick={() => {
                   setFiles([]);
                   setCropped([]);
+                  onUpdateField(idx, "imagenes", []); // sync con padre
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
                 className="text-muted-foreground"
@@ -421,9 +436,11 @@ const PresentacionRow = memo(function PresentacionRow({
           <div className="px-3 pb-3">
             <CroppedGrid
               files={cropped}
-              onRemove={(i) =>
-                setCropped((arr) => arr.filter((_, j) => j !== i))
-              }
+              onRemove={(i) => {
+                const next = cropped.filter((_, j) => j !== i);
+                setCropped(next);
+                onUpdateField(idx, "imagenes", next); // sync con padre
+              }}
             />
           </div>
         </div>
@@ -435,6 +452,7 @@ const PresentacionRow = memo(function PresentacionRow({
           files={files}
           onDone={(croppedFiles) => {
             setCropped(croppedFiles);
+            onUpdateField(idx, "imagenes", croppedFiles); // sync con padre
           }}
         />
       </CardContent>

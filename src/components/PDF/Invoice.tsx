@@ -1,57 +1,60 @@
+// pages/ventas/Invoice.tsx
+"use client";
 import { useEffect, useRef, useState } from "react";
-import logo from "@/assets/AGROSIL.jpg";
+import { useParams } from "react-router-dom";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { useParams } from "react-router-dom";
-import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { User } from "lucide-react";
 
+import logo from "@/assets/AGROSIL.jpg";
 import type { VentaHistorialPDF } from "@/Types/PDF/VentaHistorialPDF";
 import { formatearMoneda } from "@/Pages/Requisicion/PDF/Pdf";
+import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 dayjs.locale("es");
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 const formatDate = (fecha: string) =>
   dayjs(fecha).format("DD MMMM YYYY, hh:mm:ss A");
 
-const Invoice = () => {
+export default function Invoice() {
   const { id } = useParams();
-  const [venta, setVenta] = useState<VentaHistorialPDF>();
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const facturaRef = useRef<HTMLDivElement>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    const getSale = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`${API_URL}/venta/get-sale/${id}`);
-        if (response.status === 200) {
-          setVenta(response.data);
-        }
-      } catch (error) {
-        console.error("Error al cargar la venta", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    getSale();
-  }, [id]);
+  // GET con wrapper (⚠️ cuidado con undefined)
+  const {
+    data: venta, // VentaHistorialPDF | undefined
+    isLoading,
+    isError,
+  } = useApiQuery<VentaHistorialPDF>(
+    ["venta-pdf", id],
+    `/venta/get-sale/${id}`,
+    undefined,
+    {
+      enabled: Boolean(id),
+      refetchOnWindowFocus: false,
+    }
+  );
 
+  // Generar PDF cuando la venta está disponible y el contenedor listo
   useEffect(() => {
     if (!venta || !facturaRef.current) return;
 
+    let revoked = false;
+
     const generarPDF = async () => {
       try {
-        const canvas = await html2canvas(facturaRef.current!, {
+        // esperar un frame para que el layout pinte
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+
+        const canvas = await html2canvas(facturaRef.current as HTMLDivElement, {
           scale: 1.5,
           useCORS: true,
           backgroundColor: "#ffffff",
@@ -65,23 +68,28 @@ const Invoice = () => {
 
         pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
         const blob = pdf.output("blob");
-        setPdfUrl(URL.createObjectURL(blob));
+
+        if (!revoked) setPdfUrl(URL.createObjectURL(blob));
       } catch (error) {
         console.error("Error al generar PDF:", error);
       }
     };
 
-    const timer = setTimeout(generarPDF, 500);
-    return () => clearTimeout(timer);
+    generarPDF();
+
+    return () => {
+      revoked = true;
+    };
   }, [venta]);
 
+  // Limpieza del object URL
   useEffect(() => {
     return () => {
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     };
   }, [pdfUrl]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -94,7 +102,7 @@ const Invoice = () => {
     );
   }
 
-  if (!venta) {
+  if (isError || !venta) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-lg text-red-600">
@@ -108,7 +116,7 @@ const Invoice = () => {
     venta.productos?.reduce(
       (acc, item) => acc + item.precioVenta * item.cantidad,
       0
-    ) || 0;
+    ) ?? 0;
 
   const nombreCliente =
     [venta.cliente?.nombre, venta.cliente?.apellidos]
@@ -121,6 +129,11 @@ const Invoice = () => {
   return (
     <div className="p-4 bg-gray-50 min-h-screen">
       {/* Factura para PDF */}
+      <PageHeader
+        title="Comprobante de venta"
+        fallbackBackTo="/"
+        sticky={false}
+      />
       <div
         ref={facturaRef}
         className={`shadow-lg rounded-lg ${pdfUrl ? "hidden" : "block"}`}
@@ -134,12 +147,10 @@ const Invoice = () => {
           fontFamily: "Arial, sans-serif",
         }}
       >
-        {/* Header con logo y título */}
+        {/* Header */}
         <div className="flex justify-between items-start mb-8">
           <div className="flex items-center space-x-4">
-            <div className="">
-              <img className="w-24 h-24" src={logo} />
-            </div>
+            <img className="w-24 h-24" src={logo} />
             <div>
               <h1 className="text-lg font-semibold text-gray-800">
                 {venta.sucursal.nombre}
@@ -150,25 +161,23 @@ const Invoice = () => {
             </div>
           </div>
           <div className="text-right">
-            <div className="">
-              <p className="text-xs font-medium text-[#1a3773]">#{venta.id}</p>
-            </div>
+            <p className="text-xs font-medium text-[#1a3773]">#{venta.id}</p>
           </div>
         </div>
 
-        {/* Información de la empresa */}
+        {/* Empresa */}
         <div className="bg-gray-50 p-3 rounded-lg mb-6">
           <div className="grid grid-cols-2 text-xs">
             <div className="flex items-center space-x-2">
               <span>
                 <strong>Dirección:</strong>{" "}
-                {venta.sucursal?.direccion || "Dirección no disponible"}
+                {venta.sucursal?.direccion || "No disponible"}
               </span>
             </div>
             <div className="flex items-center space-x-2">
               <span>
                 <strong>Teléfono:</strong>{" "}
-                {venta.sucursal?.telefono || "Tel no disponible"}
+                {venta.sucursal?.telefono || "No disponible"}
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -185,7 +194,7 @@ const Invoice = () => {
           </div>
         </div>
 
-        {/* Información del cliente */}
+        {/* Cliente */}
         <div className="p-3 mb-6">
           {venta.cliente ? (
             <>
@@ -200,7 +209,6 @@ const Invoice = () => {
                   <p>
                     <strong>Nombre:</strong> {nombreCliente}
                   </p>
-
                   <p>
                     <strong>Teléfono:</strong>{" "}
                     {venta.cliente?.telefono ||
@@ -237,7 +245,7 @@ const Invoice = () => {
           )}
         </div>
 
-        {/* Tabla de productos */}
+        {/* Tabla de productos (ya unificados) */}
         <div className="mb-6">
           <div className="overflow-hidden rounded-sm border border-gray-200">
             <table
@@ -257,7 +265,7 @@ const Invoice = () => {
               <tbody>
                 {venta.productos?.map((item, index) => (
                   <tr
-                    key={index}
+                    key={item.id ?? index}
                     className={index % 2 === 0 ? "bg-gray-50" : "bg-white"}
                     style={{ borderBottom: "1px solid #e5e7eb" }}
                   >
@@ -291,11 +299,7 @@ const Invoice = () => {
 
         {/* Total */}
         <div className="flex justify-end mb-6">
-          <p
-            className="text-sm font-semibold
-            text-[#ffd12c]
-            "
-          >
+          <p className="text-sm font-semibold text-[#ffd12c]">
             TOTAL: {formatearMoneda(total)}
           </p>
         </div>
@@ -327,6 +331,4 @@ const Invoice = () => {
       )}
     </div>
   );
-};
-
-export default Invoice;
+}

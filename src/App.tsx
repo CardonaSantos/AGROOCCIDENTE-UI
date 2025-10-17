@@ -8,7 +8,6 @@ import { Toaster } from "sonner";
 // import Reportes from "./Pages/Reports/Reportes";
 import EntregasStock from "./Pages/EntregasStock";
 import Vencimientos from "./Pages/Vencimientos";
-import HistorialVentas from "./Pages/HistorialVentas/HistorialVentas";
 import Invoice from "./components/PDF/Invoice";
 import Login from "./Pages/Auth/Login";
 import RegisterView from "./Pages/Auth/Register";
@@ -84,6 +83,7 @@ import CuentasBancariasPage from "./Pages/cuentas-bancarias/CuentasBancariasPage
 import CreateProductPage from "./Pages/producto/createProductoMain";
 import CreateVentaCuotaForm from "./Pages/VentaCuotas/_components/CreateVentaCuotaForm";
 import CategoriasMainPage from "./Pages/Categorias/CategoriasMainPage";
+import HistorialVentasMain from "./Pages/HistorialVentas/HistorialVentas";
 
 function App() {
   const { checkAuth } = useAuthStore();
@@ -231,7 +231,7 @@ function App() {
               path="/historial/ventas"
               element={
                 <ProtectedRoute>
-                  <HistorialVentas />
+                  <HistorialVentasMain />
                 </ProtectedRoute>
               }
             />

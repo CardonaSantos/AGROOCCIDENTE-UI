@@ -379,62 +379,6 @@ export default function PuntoVenta() {
     };
   }
 
-  const removeFromCart = (productId: number, source?: SourceType) => {
-    setCart((prev) =>
-      prev.filter((item) =>
-        source
-          ? item.id !== productId || item.source !== source
-          : item.id !== productId
-      )
-    );
-  };
-
-  const updateQuantity = (
-    productId: number,
-    newQuantity: number,
-    source?: SourceType
-  ) => {
-    setCart((prev) =>
-      prev.map((item) =>
-        source
-          ? item.id === productId && item.source === source
-            ? { ...item, quantity: newQuantity }
-            : item
-          : item.id === productId
-          ? { ...item, quantity: newQuantity }
-          : item
-      )
-    );
-  };
-
-  // Cambiar precio / rol seleccionado
-  const updatePrice = (
-    productId: number,
-    newPrice: number,
-    newRole: RolPrecio,
-    source?: SourceType
-  ) => {
-    setCart((prev) =>
-      prev.map((item) =>
-        (
-          source
-            ? item.id === productId && item.source === source
-            : item.id === productId
-        )
-          ? {
-              ...item,
-              selectedPrice: newPrice,
-              selectedPriceRole: newRole,
-              selectedPriceId:
-                item.precios.find(
-                  (p) => p.precio === newPrice && p.rol === newRole
-                )?.id ?? item.selectedPriceId,
-            }
-          : item
-      )
-    );
-  };
-
   const handleImageClick = (images: string[]) => {
     setOpenImage(true);
     setImagesProduct(images);

@@ -16,7 +16,7 @@ import {
 import { PageHeader } from "@/utils/components/PageHeaderPos";
 import { ReusableSelect } from "@/utils/components/ReactSelectComponent/ReusableSelect";
 import { motion } from "framer-motion";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   AlertCircleIcon,
   Asterisk,
@@ -37,11 +37,13 @@ import {
   Presentacion,
   TipoEmpaque,
 } from "./interfaces/preciosCreateInterfaces";
-import { ImageCropperUploader } from "../Cropper";
-import { CroppedImage } from "./interfaces/croppedImage";
 import AddPresentaciones from "./_components/addPresentaciones";
 import { toast } from "sonner";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
+
+// NUEVO: unificar cropper y preview
+import ProductImagesCropper from "@/utils/components/Image/ProductImagesCropper";
+import { CroppedGrid } from "@/utils/components/Image/croppedGrid";
 
 interface Categorias {
   id: number;
@@ -52,7 +54,6 @@ interface ProductCreatePartialWithPresentations extends ProductCreate {
 }
 
 const isNonEmpty = (s?: string | null) => !!s && s.trim().length > 0;
-
 const isPositiveDecimalStr = (s?: string | null) => {
   if (s == null) return false;
   const str = String(s).trim();
@@ -60,11 +61,11 @@ const isPositiveDecimalStr = (s?: string | null) => {
   const n = Number(str);
   return Number.isFinite(n) && n > 0;
 };
-
 const isPositiveInt = (n: unknown) => Number.isInteger(n) && (n as number) > 0;
 
 function CreateProductPage() {
   const userID = useStore((state) => state.userId) ?? 0;
+
   const [productCreate, setProductCreate] =
     useState<ProductCreatePartialWithPresentations>({
       precioCostoActual: null,
@@ -77,21 +78,28 @@ function CreateProductPage() {
       creadoPorId: userID,
       stockMinimo: null,
       imagenes: [],
-      presentaciones: [],
+      presentaciones: [], // <-- fuente de verdad
     });
+
   const [preciosProducto, setPreciosProducto] = useState<
     PrecioProductoInventario[]
   >([]);
   const [openCreate, setOpenCreate] = useState<boolean>(false);
-  const [presentaciones, setPresentaciones] = useState<Presentacion[]>([]);
-  const [croppedImages, setCroppedImages] = useState<CroppedImage[]>([]);
+
+  // —— NUEVO: manejo de imágenes del PRODUCTO con ProductImagesCropper —— //
+  const [rawProductFiles, setRawProductFiles] = useState<File[]>([]);
+  const [croppedProductImages, setCroppedProductImages] = useState<File[]>([]);
+  const [openProductCropper, setOpenProductCropper] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const {
     data: categorias = [],
     isError: isErrorCategorias = true,
     error: errorCategorias,
-    // isFetching: isLoadingCategorias,
-    // refetch: reFetchCategorias,
   } = useApiQuery<Categorias[]>(["categorias"], "/categoria", undefined, {});
+
+  console.log("El producto creando es: ", productCreate);
+  console.log("La presentacion creando es: ", productCreate.presentaciones);
 
   if (isErrorCategorias) {
     return (
@@ -124,10 +132,7 @@ function CreateProductPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setProductCreate((previa) => ({
-      ...previa,
-      [name]: value,
-    }));
+    setProductCreate((previa) => ({ ...previa, [name]: value }));
   };
 
   const handleClear = () => {
@@ -142,90 +147,79 @@ function CreateProductPage() {
       creadoPorId: userID,
       stockMinimo: null,
       imagenes: [],
-      presentaciones: [],
+      presentaciones: [], // ← aquí se limpian las presentaciones
     });
-    setPresentaciones([]);
     setPreciosProducto([]);
+    setRawProductFiles([]);
+    setCroppedProductImages([]);
   };
-  console.log("El producto creando es: ", productCreate);
-  console.log("Las presentaciones : ", presentaciones);
-  // Construye el payload final a partir de los estados actuales:
-  const buildPresentacionesDto = (presentaciones: Presentacion[]) => {
-    return presentaciones.map((p) => ({
+
+  // —— Construcción DTO de presentaciones (solo JSON, sin archivos) —— //
+  const buildPresentacionesDto = (presentaciones: Presentacion[]) =>
+    (presentaciones ?? []).map((p) => ({
       nombre: p.nombre.trim(),
       codigoBarras: p.codigoBarras || undefined,
       esDefault: !!p.esDefault,
-
       tipoPresentacion: p.tipoPresentacion,
       costoReferencialPresentacion: String(
         p.costoReferencialPresentacion
       ).trim(),
-
+      // NUEVO
+      descripcion: (p.descripcion ?? "").trim() || null,
+      stockMinimo: typeof p.stockMinimo === "number" ? p.stockMinimo : null,
       preciosPresentacion: (p.precios ?? []).map((pp) => ({
         rol: pp.rol,
         orden: Number(pp.orden),
         precio: String(pp.precio).trim(),
       })),
     }));
-  };
 
   const createProducto = useApiMutation<void, FormData>("post", "/products", {
     timeout: 60_000,
   });
 
+  // —— FormData final —— //
   const buildFormDataProducto = (
     productCreate: ProductCreatePartialWithPresentations,
     preciosProducto: PrecioProductoInventario[],
-    presentaciones: Presentacion[],
-    croppedImages: CroppedImage[],
+    productImages: File[],
     userID: number
   ) => {
     const fd = new FormData();
-
-    // Primitivos / strings
     const safeAppend = (k: string, v: unknown) => {
       if (v === null || v === undefined) return;
       fd.append(k, String(v));
     };
 
+    // primitivas
     safeAppend("nombre", productCreate.nombre);
     safeAppend("descripcion", productCreate.descripcion || "");
     safeAppend("codigoProducto", productCreate.codigoProducto);
     safeAppend("codigoProveedor", productCreate.codigoProveedor || "");
-
-    if (productCreate.stockMinimo != null) {
-      // respeta null => el backend decide default; si quieres 0 explícito, conviértelo aquí
+    if (productCreate.stockMinimo != null)
       safeAppend("stockMinimo", productCreate.stockMinimo);
-    }
-
-    if (productCreate.precioCostoActual != null) {
-      // mándalo como string decimal; evita floats
+    if (productCreate.precioCostoActual != null)
       safeAppend("precioCostoActual", productCreate.precioCostoActual);
-    }
-
-    // IDs/usuario
     safeAppend("creadoPorId", productCreate.creadoPorId ?? userID);
 
-    // Arreglos/objetos → JSON
+    // JSON
     fd.append(
       "categorias",
-      JSON.stringify(productCreate.categorias.map((cat) => cat.id) || [])
+      JSON.stringify(productCreate.categorias.map((c) => c.id) || [])
     );
     fd.append("precioVenta", JSON.stringify(preciosProducto || []));
 
-    fd.append(
-      "presentaciones",
-      JSON.stringify(buildPresentacionesDto(presentaciones || []))
-    );
+    const pres = productCreate.presentaciones ?? [];
+    fd.append("presentaciones", JSON.stringify(buildPresentacionesDto(pres)));
 
-    // Imágenes
-    croppedImages.forEach((img, idx) => {
-      const fileName = img.fileName || `image_${idx + 1}`;
-      const ext = img.blob?.type?.split("/")[1] || "webp"; // intenta inferir
-      const file = new File([img.blob], `${fileName}.${ext}`, {
-        type: img.blob.type || "image/webp",
+    // archivos del PRODUCTO
+    productImages.forEach((file) => fd.append("images", file));
+
+    // archivos por PRESENTACIÓN (mismo índice del JSON)
+    pres.forEach((p, i) => {
+      (p.imagenes ?? []).forEach((file) => {
+        fd.append(`presentaciones[${i}].images`, file);
       });
-      fd.append("images", file);
     });
 
     return fd;
@@ -233,8 +227,8 @@ function CreateProductPage() {
 
   const createProductSubmit = async () => {
     try {
-      // —— Tus validaciones tal cual —— //
       const errores: string[] = [];
+      const pres = productCreate.presentaciones ?? [];
 
       if (!isNonEmpty(productCreate.nombre)) {
         errores.push("El nombre es requerido (mínimo 1 carácter).");
@@ -266,16 +260,14 @@ function CreateProductPage() {
           return true;
         });
 
-      const hasPresentaciones = presentaciones.length > 0;
+      const hasPresentaciones = pres.length > 0;
       if (hasPresentaciones) {
-        const names = presentaciones
-          .map((p) => p.nombre.trim())
-          .filter(Boolean);
+        const names = pres.map((p) => p.nombre.trim()).filter(Boolean);
         const setNames = new Set(names);
         if (setNames.size !== names.length) {
           errores.push("Hay nombres de presentación repetidos.");
         }
-        const defaults = presentaciones.filter((p) => !!p.esDefault).length;
+        const defaults = pres.filter((p) => !!p.esDefault).length;
         if (defaults > 1) {
           errores.push("Solo puede haber una presentación por defecto.");
         }
@@ -283,19 +275,17 @@ function CreateProductPage() {
 
       const presentacionesValidas =
         !hasPresentaciones ||
-        presentaciones.every((presentacion, idxP) => {
+        pres.every((presentacion, idxP) => {
           if (!isNonEmpty(presentacion.nombre)) {
             errores.push(`Presentación #${idxP + 1}: el nombre es requerido.`);
             return false;
           }
-
           if (presentacion.precios.length === 0) {
             errores.push(
               `Presentación #${idxP + 1}: debe tener al menos un precio.`
             );
             return false;
           }
-
           if (
             !Object.values(TipoEmpaque).includes(presentacion.tipoPresentacion)
           ) {
@@ -303,14 +293,12 @@ function CreateProductPage() {
               `Presentación #${idxP + 1}: tipo de empaque inválido.`
             );
           }
-
           if (
             !isPositiveDecimalStr(presentacion.costoReferencialPresentacion)
           ) {
             errores.push(`Costo referencial #${idxP + 1}: debe ser > 0.`);
             return false;
           }
-
           const okPrecios = presentacion.precios.every((p, idxPP) => {
             if (!isPositiveInt(p.orden)) {
               errores.push(
@@ -347,21 +335,30 @@ function CreateProductPage() {
         return;
       }
 
-      // —— Construir FormData —— //
       const formData = buildFormDataProducto(
         productCreate,
         preciosProducto,
-        presentaciones,
-        croppedImages,
+        croppedProductImages,
         userID
       );
+
+      // Debug útil: ver qué se manda de verdad
+      for (const [k, v] of formData.entries()) {
+        if (k === "presentaciones" && typeof v === "string") {
+          console.log("presentaciones JSON =>", v.slice(0, 400));
+        } else if (v instanceof File) {
+          console.log("file =>", k, v.name);
+        } else {
+          console.log(k, v);
+        }
+      }
 
       await toast.promise(createProducto.mutateAsync(formData), {
         loading: "Creando producto...",
         success: "Producto creado",
         error: (err) => getApiErrorMessageAxios(err),
       });
-      handleClear();
+
       setOpenCreate(false);
     } catch (error) {
       console.error("Error al crear producto", error);
@@ -385,6 +382,7 @@ function CreateProductPage() {
             Ingrese los datos mínimos para crear un producto
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <form className="space-y-6">
             {/* Sección 1: Datos básicos */}
@@ -488,14 +486,84 @@ function CreateProductPage() {
               />
             </div>
 
-            {/* Sección 3: Imágenes */}
-            <div className="grid gap-2">
-              <Label>Imágenes</Label>
-              <ImageCropperUploader
-                croppedImages={croppedImages}
-                setCroppedImages={setCroppedImages}
-              />
+            {/* —— Sección 3: Imágenes del PRODUCTO (nuevo cropper unificado) —— */}
+            <div className="rounded-lg border bg-background/40">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = Array.from(e.target.files ?? []);
+                      if (!f.length) return;
+                      setRawProductFiles(f);
+                      setOpenProductCropper(true);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Elegir archivos
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {croppedProductImages.length
+                      ? `${croppedProductImages.length} archivo(s)`
+                      : "Sin imágenes"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setOpenProductCropper(true)}
+                    disabled={!rawProductFiles.length}
+                    className="text-muted-foreground"
+                  >
+                    Re-cortar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setRawProductFiles([]);
+                      setCroppedProductImages([]);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    className="text-muted-foreground"
+                  >
+                    Limpiar
+                  </Button>
+                </div>
+              </div>
+
+              <div className="px-3 pb-3">
+                <CroppedGrid
+                  files={croppedProductImages}
+                  onRemove={(i) =>
+                    setCroppedProductImages((arr) =>
+                      arr.filter((_, j) => j !== i)
+                    )
+                  }
+                />
+              </div>
             </div>
+
+            <ProductImagesCropper
+              open={openProductCropper}
+              onOpenChange={setOpenProductCropper}
+              files={rawProductFiles}
+              onDone={(croppedFiles) => {
+                setCroppedProductImages(croppedFiles);
+              }}
+            />
 
             {/* Sección 4: Precios */}
             <div className="grid gap-2">
@@ -506,30 +574,35 @@ function CreateProductPage() {
               />
             </div>
 
+            {/* Sección 5: Presentaciones (con imágenes propias) */}
             <div className="grid gap-2">
               <Label>Presentaciones del Producto</Label>
               <AddPresentaciones
-                presentaciones={presentaciones}
-                setPresentaciones={setPresentaciones}
+                presentaciones={productCreate.presentaciones ?? []}
+                setPresentaciones={(next) =>
+                  setProductCreate((prev) => ({
+                    ...prev,
+                    presentaciones:
+                      typeof next === "function"
+                        ? next(prev.presentaciones ?? [])
+                        : next,
+                  }))
+                }
               />
             </div>
           </form>
         </CardContent>
 
         <CardFooter className="flex justify-end gap-2">
-          <Button
-            onClick={() => {
-              setOpenCreate(true);
-            }}
-            type="submit"
-          >
+          <Button onClick={() => setOpenCreate(true)} type="submit">
             Guardar producto
           </Button>
-          <Button type="button" variant="outline">
+          <Button type="button" variant="outline" onClick={handleClear}>
             Cancelar
           </Button>
         </CardFooter>
       </Card>
+
       <AdvancedDialog
         title="Confirmación de creación de producto"
         description="¿Estás seguro de crear este producto con estos datos?"
@@ -546,9 +619,7 @@ function CreateProductPage() {
           label: "Cancelar",
           disabled: createProducto.isPending,
           loadingText: "Cancelando...",
-          onClick: () => {
-            setOpenCreate(false);
-          },
+          onClick: () => setOpenCreate(false),
         }}
       />
     </motion.div>

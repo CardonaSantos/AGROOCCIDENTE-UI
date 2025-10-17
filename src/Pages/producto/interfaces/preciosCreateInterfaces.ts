@@ -43,4 +43,5 @@ export interface Presentacion {
   costoReferencialPresentacion: string;
   descripcion: string;
   stockMinimo: number;
+  imagenes?: File[];
 }
