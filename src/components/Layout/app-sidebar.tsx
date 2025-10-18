@@ -157,6 +157,8 @@ const menuItemsAdmin = [
   // === Créditos ===
   { icon: CreditCard, label: "Créditos", href: "/creditos" },
 
+  { icon: CreditCard, label: "Venta a Créditos", href: "/creditos-manage" },
+
   // === Inventario y Stock ===
   {
     icon: Package,

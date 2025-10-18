@@ -433,6 +433,7 @@ export default function CreateVentaCuotaForm() {
     }
   }, [isInMetodoPago]);
   console.log("metodo pago: ", metodoPago, "cuenta bancaria: ", cuentaBancaria);
+  console.log("");
 
   return (
     <Tabs

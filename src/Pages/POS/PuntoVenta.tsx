@@ -50,6 +50,9 @@ import {
 } from "./interfaces/newProductsPOSResponse";
 import TablePOS from "./table/header";
 import { keepPreviousData } from "@tanstack/react-query";
+import { MetodoPagoMainPOS } from "./interfaces/methodPayment";
+import CreditoForm from "./credito-props-components/credito-form-component";
+import { FormCreditoState } from "./credito-props-components/credito-venta.interfaces";
 
 // =================== Dayjs ===================
 dayjs.extend(localizedFormat);
@@ -165,7 +168,9 @@ export default function PuntoVenta() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const [paymentMethod, setPaymentMethod] = useState<string>("CONTADO");
+  const [paymentMethod, setPaymentMethod] = useState<MetodoPagoMainPOS>(
+    MetodoPagoMainPOS.EFECTIVO
+  );
   const [tipoComprobante, setTipoComprobante] =
     useState<TipoComprobante | null>(TipoComprobante.RECIBO);
   const [referenciaPago, setReferenciaPago] = useState<string>("");
@@ -194,9 +199,91 @@ export default function PuntoVenta() {
   const [telefono, setTelefono] = useState<string>("");
   const [direccion, setDireccion] = useState<string>("");
   const [observaciones, setObservaciones] = useState<string>("");
+  // Estado controlado del formulario de crédito
+
+  const totalCarrito = useMemo(
+    () =>
+      cart.reduce((acc, prod) => acc + prod.selectedPrice * prod.quantity, 0),
+    [cart]
+  );
+  const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+  const [creditoForm, setCreditoForm] = useState<FormCreditoState>(() => ({
+    sucursalId,
+    clienteId: selectedCustomerID?.id,
+    nombreCliente: "",
+    telefonoCliente: "",
+    direccionCliente: "",
+    totalPropuesto: r2(totalCarrito),
+    cuotaInicialPropuesta: 0,
+    cuotasTotalesPropuestas: 2,
+    interesTipo: "NONE",
+    interesPorcentaje: 0,
+    planCuotaModo: "IGUALES",
+    diasEntrePagos: 30,
+    fechaPrimeraCuota: dayjs().add(30, "day").format("YYYY-MM-DD"),
+    comentario: "",
+    garantiaMeses: 0,
+    testigos: undefined,
+    cuotasPropuestas: [],
+    lineas: [],
+  }));
+  type LineaForm = NonNullable<FormCreditoState["lineas"]>[number];
+
+  // Mapea carrito -> líneas del crédito
+  const mapCartToLineas = React.useCallback(
+    (items: CartItem[]): NonNullable<FormCreditoState["lineas"]> =>
+      items.map<LineaForm>((i) => ({
+        productoId: i.source === "presentacion" ? undefined : i.id,
+        presentacionId: i.source === "presentacion" ? i.id : undefined,
+        cantidad: i.quantity,
+        precioUnitario: i.selectedPrice,
+        subtotal:
+          Math.round((i.quantity * i.selectedPrice + Number.EPSILON) * 100) /
+          100,
+        nombreProductoSnapshot: i.nombre,
+        presentacionNombreSnapshot:
+          i.source === "presentacion" ? i.nombre : undefined,
+        codigoBarrasSnapshot: undefined,
+      })),
+    []
+  );
+
+  // 1) Sync cliente/sucursal/total hacia el formulario
+  useEffect(() => {
+    setCreditoForm((f) => ({
+      ...f,
+      sucursalId,
+      clienteId: selectedCustomerID?.id,
+      totalPropuesto: r2(totalCarrito),
+    }));
+  }, [sucursalId, selectedCustomerID?.id, totalCarrito]);
+
+  // 2) Sync líneas desde el carrito
+  useEffect(() => {
+    setCreditoForm((f) => ({
+      ...f,
+      lineas: mapCartToLineas(cart),
+    }));
+  }, [cart, mapCartToLineas]);
+
+  // 3) Defaults sensatos cuando se cambia a CREDITO
+  useEffect(() => {
+    if (paymentMethod === MetodoPagoMainPOS.CREDITO) {
+      setCreditoForm((f) => ({
+        ...f,
+        planCuotaModo: f.planCuotaModo ?? "IGUALES",
+        interesTipo: f.interesTipo ?? "NONE",
+        cuotasTotalesPropuestas: f.cuotasTotalesPropuestas || 6,
+        diasEntrePagos: f.diasEntrePagos || 30,
+        fechaPrimeraCuota:
+          f.fechaPrimeraCuota || dayjs().add(30, "day").format("YYYY-MM-DD"),
+      }));
+    }
+  }, [paymentMethod]);
 
   // Paginación / filtros del query server
-  const [limit, setLimit] = useState<number>(10);
+  const [limit, setLimit] = useState<number>(5);
   const [page, setPage] = useState<number>(1);
 
   // ✅ Arma NewQueryDTO correctamente (sin strings vacíos / tipos incorrectos)
@@ -210,7 +297,6 @@ export default function PuntoVenta() {
     sucursalId,
     limit,
     page,
-    // Resto opcionales: nombreItem, tipoEmpaque, codigoItem, codigoProveedor, cats, priceRange
   });
 
   // Mantener query en sync con page/limit/sucursal
@@ -295,6 +381,23 @@ export default function PuntoVenta() {
   const productos = Array.isArray(productsResponse.data)
     ? productsResponse.data
     : [];
+
+  const meta = productsResponse.meta ?? {
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+    totalCount: 0,
+  };
+
+  // Handlers para la paginación (server-side)
+  const handlePageChange = (nextPage: number) => {
+    setPage(Math.max(1, Math.min(nextPage, meta.totalPages || 1)));
+  };
+
+  const handleLimitChange = (nextLimit: number) => {
+    setLimit(nextLimit);
+    setPage(1); // reset page cuando cambia pageSize
+  };
 
   // Errores
   useEffect(() => {
@@ -401,11 +504,6 @@ export default function PuntoVenta() {
   );
 
   // =================== Validaciones & helpers ===================
-  const totalCarrito = useMemo(
-    () =>
-      cart.reduce((acc, prod) => acc + prod.selectedPrice * prod.quantity, 0),
-    [cart]
-  );
 
   const isReferenceInvalid =
     paymentMethod === "TRANSFERENCIA" && !referenciaPago;
@@ -495,7 +593,7 @@ export default function PuntoVenta() {
       const resp = await createSale(saleData);
       toast.success("Venta completada con éxito");
       setReferenciaPago("");
-      setPaymentMethod("CONTADO");
+      setPaymentMethod(MetodoPagoMainPOS.CONTADO);
       setTipoComprobante(TipoComprobante.RECIBO);
       setIsDialogOpen(false);
       setCart([]);
@@ -552,8 +650,13 @@ export default function PuntoVenta() {
     setCart((prev) => prev.filter((i) => i.uid !== uid));
   };
 
+  const isCreditoVenta = paymentMethod === MetodoPagoMainPOS.CREDITO;
+
   console.log("Los registro de productos son: ", productos);
   console.log("El carrito es: ", cart);
+  console.log("el resultado del server es: ", productsResponse);
+  console.log("el cliente seleccionado es: ", selectedCustomerID);
+  console.log("el creditoForm es: ", creditoForm);
 
   return (
     <div className="container">
@@ -564,7 +667,7 @@ export default function PuntoVenta() {
   xl:[grid-template-columns:minmax(0,1fr)_clamp(380px,32vw,440px)]
 "
       >
-        {/* Lista de Productos (se mantiene) */}
+        {/* Lista de Productos (se  mantiene) */}
         <div className="min-w-0">
           <TablePOS
             defaultMapToCartProduct={defaultMapToCartProduct}
@@ -574,12 +677,21 @@ export default function PuntoVenta() {
             handleSearchItemsInput={handleSearchItemsInput}
             queryOptions={queryOptions}
             data={productos}
+            //NUEVO
+            // 👇 NUEVO: props de paginación
+            page={meta.page}
+            limit={meta.limit}
+            totalPages={meta.totalPages}
+            totalCount={meta.totalCount}
+            onPageChange={handlePageChange}
+            onLimitChange={handleLimitChange}
           />
         </div>
 
         <div className="min-w-0">
           {/* Carrito & Checkout (se mantiene) */}
           <CartCheckout
+            isCreditoVenta={isCreditoVenta}
             apellidos={apellidos}
             setApellidos={setApellidos}
             cart={cart}
@@ -621,6 +733,14 @@ export default function PuntoVenta() {
           />
         </div>
       </div>
+
+      {isCreditoVenta ? (
+        <CreditoForm
+          value={creditoForm}
+          onChange={setCreditoForm}
+          // opcional: onSubmit={(payload) => createCreditRequest(payload)}
+        />
+      ) : null}
 
       {/* PETICIÓN DE PRECIO ESPECIAL */}
       <div className="mt-10">

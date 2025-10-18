@@ -50,6 +50,10 @@ export default function CreditProducts({
   const { data, isLoading } = useSearchProducts(sucursalId, q);
   const productos = data ?? [];
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  console.log(
+    "El formato retornado de productos por el servidor es: ",
+    productos
+  );
 
   return (
     <div className="space-y-3">

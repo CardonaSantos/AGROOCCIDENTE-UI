@@ -84,6 +84,7 @@ import CreateProductPage from "./Pages/producto/createProductoMain";
 import CreateVentaCuotaForm from "./Pages/VentaCuotas/_components/CreateVentaCuotaForm";
 import CategoriasMainPage from "./Pages/Categorias/CategoriasMainPage";
 import HistorialVentasMain from "./Pages/HistorialVentas/HistorialVentas";
+import CreditoMainPage from "./Pages/credito-ventas/credito-venta-main-page";
 
 function App() {
   const { checkAuth } = useAuthStore();

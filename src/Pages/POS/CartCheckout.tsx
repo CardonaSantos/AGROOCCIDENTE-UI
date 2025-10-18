@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import SelectM from "react-select";
 import { TipoComprobante } from "./interfaces";
+import { MetodoPagoMainPOS } from "./interfaces/methodPayment";
 
 enum RolPrecio {
   PUBLICO = "PUBLICO",
@@ -68,9 +69,10 @@ interface CustomerOption {
 }
 
 interface CartCheckoutProps {
+  isCreditoVenta: boolean;
   cart: CartItem[];
   paymentMethod: string;
-  setPaymentMethod: (method: string) => void;
+  setPaymentMethod: React.Dispatch<React.SetStateAction<MetodoPagoMainPOS>>;
   imei: string;
   setImei: (imei: string) => void;
   selectedCustomerID: Customer | null;
@@ -110,6 +112,7 @@ interface CartCheckoutProps {
 }
 
 export default function CartCheckout({
+  isCreditoVenta,
   apellidos,
   setApellidos,
   cart,
@@ -202,6 +205,8 @@ export default function CartCheckout({
     }
     setActiveTab(value);
   };
+
+  const truncateButton: boolean = cart.length <= 0 || isCreditoVenta;
 
   return (
     <div className="space-y-3 min-w-[360px] max-w-[440px]">
@@ -371,7 +376,7 @@ export default function CartCheckout({
             </div>
             <Button
               className="w-full h-10 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-              disabled={cart.length <= 0}
+              disabled={truncateButton}
               onClick={onCompleteSale}
             >
               <ShoppingCart className="h-5 w-5 mr-2" />
@@ -394,20 +399,35 @@ export default function CartCheckout({
               <Select
                 disabled={!!referenciaPago}
                 value={paymentMethod}
-                onValueChange={setPaymentMethod}
+                onValueChange={(e: MetodoPagoMainPOS) => setPaymentMethod(e)}
               >
                 <SelectTrigger className="w-full h-8 min-h-0 py-1 px-2 text-xs">
                   <SelectValue placeholder="Método de Pago" />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
-                  <SelectItem className="text-xs" value="CONTADO">
+                  <SelectItem
+                    className="text-xs"
+                    value={MetodoPagoMainPOS.EFECTIVO}
+                  >
                     Contado
                   </SelectItem>
-                  <SelectItem className="text-xs" value="TARJETA">
+                  <SelectItem
+                    className="text-xs"
+                    value={MetodoPagoMainPOS.TARJETA}
+                  >
                     Tarjeta
                   </SelectItem>
-                  <SelectItem className="text-xs" value="TRANSFERENCIA">
+                  <SelectItem
+                    className="text-xs"
+                    value={MetodoPagoMainPOS.TRANSFERENCIA}
+                  >
                     Transferencia Bancaria
+                  </SelectItem>
+                  <SelectItem
+                    className="text-xs"
+                    value={MetodoPagoMainPOS.CREDITO}
+                  >
+                    Credito
                   </SelectItem>
                 </SelectContent>
               </Select>

@@ -14,6 +14,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SortingState } from "@tanstack/react-table";
 import React from "react";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
+
 enum RolPrecio {
   PUBLICO = "PUBLICO",
   MAYORISTA = "MAYORISTA",
@@ -26,13 +28,13 @@ enum RolPrecio {
 type Stock = {
   id: number;
   cantidad: number;
-  fechaIngreso: string; // ISO
-  fechaVencimiento: string; // ISO
+  fechaIngreso: string;
+  fechaVencimiento: string;
 };
 
 export type Precios = {
   id: number;
-  precio: number; // <- importante: number (parse de string del backend)
+  precio: number;
   rol: RolPrecio;
 };
 
@@ -45,7 +47,7 @@ type SourceType = "producto" | "presentacion";
 
 type ProductoPOS = {
   id: number;
-  source: SourceType; // 👈 NUEVO
+  source: SourceType;
   nombre: string;
   descripcion: string;
   precioVenta: number;
@@ -66,6 +68,125 @@ interface Props {
   handleSearchItemsInput: (e: React.ChangeEvent<HTMLInputElement>) => void;
   defaultMapToCartProduct(p: ProductoData): ProductoPOS;
   mapToCartProduct?: (p: ProductoData) => ProductoPOS;
+
+  // server-side pagination props
+  page: number;
+  limit: number;
+  totalPages: number;
+  totalCount: number;
+  onPageChange: (page: number) => void;
+  onLimitChange: (limit: number) => void;
+
+  /** opcional: si quieres forzar una altura máxima concreta (px) */
+  maxDesktopHeightPx?: number;
+  maxMobileHeightPx?: number;
+}
+
+/** Barra de paginación compacta (usada arriba y abajo) */
+function PaginationBar({
+  page,
+  totalPages,
+  totalCount,
+  from,
+  to,
+  limit,
+  onPageChange,
+  onLimitChange,
+  isDisabled,
+  showPageSize = true,
+  className = "",
+}: {
+  page: number;
+  totalPages: number;
+  totalCount: number;
+  from: number;
+  to: number;
+  limit: number;
+  onPageChange: (p: number) => void;
+  onLimitChange: (n: number) => void;
+  isDisabled: boolean;
+  showPageSize?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="navigation"
+      className={`flex flex-wrap items-center justify-between gap-2 p-2 border-t bg-muted/30 ${className}`}
+    >
+      <div className="text-xs text-muted-foreground">
+        Mostrando <span className="font-medium">{from}</span>–
+        <span className="font-medium">{to}</span> de{" "}
+        <span className="font-medium">{totalCount}</span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {showPageSize && (
+          <>
+            <label className="text-xs">Filas:</label>
+            <select
+              className="h-8 rounded-md border px-2 text-sm text-black"
+              value={limit}
+              onChange={(e) => onLimitChange(Number(e.target.value))}
+              disabled={isDisabled}
+            >
+              {[5, 10, 20, 30, 50, 100].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <span className="mx-1 text-muted-foreground">|</span>
+          </>
+        )}
+
+        <button
+          type="button"
+          className="h-8 rounded-md border px-2 text-sm disabled:opacity-50"
+          onClick={() => onPageChange(1)}
+          disabled={isDisabled || page <= 1}
+          aria-label="Primera página"
+          title="Primera"
+        >
+          «
+        </button>
+        <button
+          type="button"
+          className="h-8 rounded-md border px-3 text-sm disabled:opacity-50"
+          onClick={() => onPageChange(page - 1)}
+          disabled={isDisabled || page <= 1}
+          aria-label="Página anterior"
+          title="Anterior"
+        >
+          ←
+        </button>
+
+        <span className="text-sm tabular-nums">
+          {page} / {Math.max(totalPages, 1)}
+        </span>
+
+        <button
+          type="button"
+          className="h-8 rounded-md border px-3 text-sm disabled:opacity-50"
+          onClick={() => onPageChange(page + 1)}
+          disabled={isDisabled || page >= totalPages}
+          aria-label="Página siguiente"
+          title="Siguiente"
+        >
+          →
+        </button>
+        <button
+          type="button"
+          className="h-8 rounded-md border px-2 text-sm disabled:opacity-50"
+          onClick={() => onPageChange(totalPages)}
+          disabled={isDisabled || page >= totalPages}
+          aria-label="Última página"
+          title="Última"
+        >
+          »
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function TablePOS({
@@ -77,6 +198,14 @@ export default function TablePOS({
   isLoadingProducts,
   mapToCartProduct,
   defaultMapToCartProduct,
+  limit,
+  onLimitChange,
+  onPageChange,
+  page,
+  totalCount,
+  totalPages,
+  maxDesktopHeightPx,
+  maxMobileHeightPx,
 }: Props) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "nombre", desc: false },
@@ -90,7 +219,6 @@ export default function TablePOS({
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    /** pasamos funciones a las columnas vía meta */
     meta: {
       onAddToCart: (p: ProductoData) => {
         const mapper = mapToCartProduct ?? defaultMapToCartProduct;
@@ -99,6 +227,38 @@ export default function TablePOS({
       onPreviewImages: handleImageClick,
     },
   });
+
+  const hasData = Array.isArray(data) && data.length > 0;
+
+  // Rango mostrado (1–10 de N)
+  const from = totalCount === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, totalCount);
+
+  /** ====== Alturas estimadas para scroll por "limit" ======
+   * Ajusta si cambias densidad de filas:
+   *  - HEADER ~ 44px  |  ROW ~ 56px  |  margen interior ~ 8px
+   */
+  const ESTIMATED_HEADER_H = 44;
+  const ESTIMATED_ROW_H = 56;
+  const ESTIMATED_PADDING = 8;
+
+  // alto deseado del área scrolleable (solo el body)
+  const computedBodyMaxH =
+    ESTIMATED_HEADER_H +
+    ESTIMATED_ROW_H * Math.max(5, limit) +
+    ESTIMATED_PADDING;
+
+  // límite final (permite forzar desde props o por viewport)
+  const desktopBodyMaxH = Math.min(
+    maxDesktopHeightPx ?? computedBodyMaxH,
+    // no exceder el viewport en escritorio
+    Math.max(320, Math.round(0.72 * window.innerHeight || computedBodyMaxH))
+  );
+
+  const mobileBodyMaxH = Math.min(
+    maxMobileHeightPx ?? computedBodyMaxH,
+    Math.max(280, Math.round(0.65 * window.innerHeight || computedBodyMaxH))
+  );
 
   /** --------- UI Helpers --------- */
   const renderSkeleton = (rows = 6) => (
@@ -125,108 +285,160 @@ export default function TablePOS({
     </tbody>
   );
 
-  const hasData = Array.isArray(data) && data.length > 0;
-
   return (
     <div className="w-full">
       {/* Search */}
+      <PageHeader title="POS" fallbackBackTo="/" sticky={false} />
       <div className="mb-3">
         <Input
           placeholder="Buscar por nombre o código…"
           value={queryOptions.nombreItem}
           onChange={handleSearchItemsInput}
-          className="h-9"
+          className="h-7"
         />
       </div>
 
-      {/* Desktop: tabla */}
+      {/* ===== DESKTOP ===== */}
 
-      <div className="hidden md:block overflow-hidden rounded-xl border bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/40">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="text-left">
-                {headerGroup.headers.map((header) => {
-                  const canSort = header.column.getCanSort();
-                  const sort = header.column.getIsSorted(); // false | 'asc' | 'desc'
-                  return (
-                    <th
-                      key={header.id}
-                      onClick={
-                        canSort
-                          ? header.column.getToggleSortingHandler()
-                          : undefined
-                      }
-                      className={`px-3 py-2 font-semibold select-none ${
-                        canSort ? "cursor-pointer hover:bg-muted/60" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-1">
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                        {sort === "asc" && <span>▲</span>}
-                        {sort === "desc" && <span>▼</span>}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
+      <div className="hidden md:flex flex-col rounded-xl border bg-card">
+        {/* Paginación superior (compacta) */}
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          from={from}
+          to={to}
+          limit={limit}
+          onPageChange={onPageChange}
+          onLimitChange={onLimitChange}
+          isDisabled={isLoadingProducts}
+          showPageSize
+          className="border-t-0"
+        />
 
-          {isLoadingProducts && renderSkeleton(6)}
-
-          {!isLoadingProducts && hasData && (
-            <tbody>
-              <AnimatePresence initial={false}>
-                {table.getRowModel().rows.map((row) => (
-                  <motion.tr
-                    key={row.id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.18 }}
-                    className="hover:bg-muted/30"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td
-                        key={cell.id}
-                        className="px-3 py-2 border-t align-top"
+        {/* Área scrolleable con header sticky */}
+        <div className="overflow-y-auto" style={{ maxHeight: desktopBodyMaxH }}>
+          <table className="min-w-full text-sm">
+            <thead className="bg-muted/40 sticky top-0 z-10">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id} className="text-left">
+                  {headerGroup.headers.map((header) => {
+                    const canSort = header.column.getCanSort();
+                    const sort = header.column.getIsSorted();
+                    return (
+                      <th
+                        key={header.id}
+                        onClick={
+                          canSort
+                            ? header.column.getToggleSortingHandler()
+                            : undefined
+                        }
+                        className={`px-3 py-2 font-semibold select-none ${
+                          canSort ? "cursor-pointer hover:bg-muted/60" : ""
+                        }`}
                       >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </td>
-                    ))}
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </tbody>
-          )}
+                        <div className="flex items-center gap-1">
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          {sort === "asc" && <span>▲</span>}
+                          {sort === "desc" && <span>▼</span>}
+                        </div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              ))}
+            </thead>
 
-          {!isLoadingProducts && !hasData && (
-            <tbody>
-              <tr>
-                <td
-                  colSpan={table.getAllColumns().length}
-                  className="px-3 py-8 text-center text-muted-foreground"
-                >
-                  No se encontraron productos con ese criterio.
-                </td>
-              </tr>
-            </tbody>
-          )}
-        </table>
+            {isLoadingProducts && renderSkeleton(limit)}
+
+            {!isLoadingProducts && hasData && (
+              <tbody>
+                <AnimatePresence initial={false}>
+                  {table.getRowModel().rows.map((row) => (
+                    <motion.tr
+                      key={row.id}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18 }}
+                      className="hover:bg-muted/30"
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td
+                          key={cell.id}
+                          className="px-3 py-2 border-t align-top"
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </td>
+                      ))}
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            )}
+
+            {!isLoadingProducts && !hasData && (
+              <tbody>
+                <tr>
+                  <td
+                    colSpan={table.getAllColumns().length}
+                    className="px-3 py-8 text-center text-muted-foreground"
+                  >
+                    No se encontraron productos con ese criterio.
+                  </td>
+                </tr>
+              </tbody>
+            )}
+          </table>
+        </div>
+
+        {/* Paginación inferior (compacta) */}
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          from={from}
+          to={to}
+          limit={limit}
+          onPageChange={onPageChange}
+          onLimitChange={onLimitChange}
+          isDisabled={isLoadingProducts}
+          showPageSize={false} // abajo solemos ocultar el selector de filas
+        />
       </div>
 
-      {/* Mobile: tarjetas */}
-      <div className="md:hidden space-y-2">
+      {/* ===== MOBILE ===== */}
+      {/* Barra superior de paginación (¡afuera del contenedor hidden!) */}
+      <div className="md:hidden">
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          from={from}
+          to={to}
+          limit={limit}
+          onPageChange={onPageChange}
+          onLimitChange={onLimitChange}
+          isDisabled={isLoadingProducts}
+          showPageSize
+          className="rounded-xl border bg-white"
+        />
+      </div>
+
+      {/* Lista móvil scrolleable */}
+      <div
+        className="md:hidden space-y-2 overflow-y-auto rounded-xl border bg-white p-2"
+        style={{ maxHeight: mobileBodyMaxH }}
+      >
         {isLoadingProducts &&
-          Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="rounded-xl border p-3">
+          Array.from({ length: Math.min(limit, 6) }).map((_, i) => (
+            <div key={i} className="rounded-lg border p-3">
               <Skeleton className="h-4 w-44 mb-2" />
               <Skeleton className="h-3 w-28 mb-2" />
               <Skeleton className="h-3 w-60 mb-3" />
@@ -247,12 +459,12 @@ export default function TablePOS({
               );
               return (
                 <motion.div
-                  key={`${p.__source ?? "producto"}-${p.id}`} // 👈 clave única
+                  key={`${p.__source ?? "producto"}-${p.id}`}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
-                  className="rounded-xl border p-3 bg-white"
+                  className="rounded-lg border p-3 bg-white"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -301,10 +513,27 @@ export default function TablePOS({
         )}
 
         {!isLoadingProducts && !hasData && (
-          <div className="rounded-xl border p-6 text-center text-muted-foreground bg-white">
+          <div className="rounded-lg border p-6 text-center text-muted-foreground bg-white">
             No se encontraron productos.
           </div>
         )}
+      </div>
+
+      {/* Barra inferior de paginación en mobile */}
+      <div className="md:hidden mt-2">
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          from={from}
+          to={to}
+          limit={limit}
+          onPageChange={onPageChange}
+          onLimitChange={onLimitChange}
+          isDisabled={isLoadingProducts}
+          showPageSize={false}
+          className="rounded-xl border bg-white"
+        />
       </div>
     </div>
   );
