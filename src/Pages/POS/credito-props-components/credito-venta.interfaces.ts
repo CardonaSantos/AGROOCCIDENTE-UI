@@ -27,6 +27,7 @@ export type LineaCarrito = {
 export interface FormCreditoState {
   // Contexto
   sucursalId: number;
+  solicitadoPorId: number;
   clienteId?: number | undefined;
   nombreCliente?: string;
   telefonoCliente?: string;

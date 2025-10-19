@@ -200,7 +200,7 @@ export default function PuntoVenta() {
   const [direccion, setDireccion] = useState<string>("");
   const [observaciones, setObservaciones] = useState<string>("");
   // Estado controlado del formulario de crédito
-
+  const [openCreateRequest, setOpenCreateRequest] = useState<boolean>(false);
   const totalCarrito = useMemo(
     () =>
       cart.reduce((acc, prod) => acc + prod.selectedPrice * prod.quantity, 0),
@@ -210,6 +210,7 @@ export default function PuntoVenta() {
 
   const [creditoForm, setCreditoForm] = useState<FormCreditoState>(() => ({
     sucursalId,
+    solicitadoPorId: userId,
     clienteId: selectedCustomerID?.id,
     nombreCliente: "",
     telefonoCliente: "",
@@ -347,13 +348,12 @@ export default function PuntoVenta() {
     isError: isErrorProducts,
     error: errorProducts,
   } = useApiQuery<ProductosResponse>(
-    ["products-pos-response", apiParams], // 👈 key cambia con apiParams
+    ["products-pos-response", apiParams], //  key cambia con apiParams
     "products/get-products-presentations-for-pos",
-    { params: apiParams }, // 👈 mismos params
+    { params: apiParams },
     {
-      refetchOnWindowFocus: false, // evita refetch “fantasma”
-      placeholderData: keepPreviousData, // Replaces keepPreviousData: true
-      // staleTime: 0 está bien para búsquedas
+      refetchOnWindowFocus: false,
+      placeholderData: keepPreviousData,
     }
   );
 
@@ -376,6 +376,14 @@ export default function PuntoVenta() {
   const { mutateAsync: createPriceRequest, isPending: isCreatingPriceRequest } =
     useApiMutation<any, any>("post", "price-request");
 
+  //esperar respuesta del admin? como?
+  const {
+    mutateAsync: createCreditRequest,
+    isPending: isPendingCreditRequest,
+  } = useApiMutation<any, any>(
+    "post",
+    "credito-authorization/create-authorization"
+  );
   // =================== Efectos de datos ===================
   // PRODUCTOS SEGUROS
   const productos = Array.isArray(productsResponse.data)
@@ -537,6 +545,26 @@ export default function PuntoVenta() {
       toast.error(getApiErrorMessageAxios(error));
     }
   }
+
+  const handleCreateCreditRequest = async (payload: any) => {
+    try {
+      //validar cliente, metodo de pago, monto, etc.
+      console.log(
+        "El payload recibiendo en funcion handle padre, es: ",
+        payload
+      );
+
+      toast.promise(createCreditRequest(payload), {
+        success: "Crédito enviado para autorización, esperando respuesta...",
+        loading: "Enviando solicitud de aprovación de crédito",
+        error: (error) => getApiErrorMessageAxios(error),
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessageAxios(error));
+    } finally {
+      //limpiar campos, limpiar cart, cliente, etc... Y fetchear datos de nuevo, refresh
+    }
+  };
 
   const handleCompleteSale = async () => {
     setIsDisableButton(true);
@@ -736,8 +764,12 @@ export default function PuntoVenta() {
 
       {isCreditoVenta ? (
         <CreditoForm
+          openCreateRequest={openCreateRequest}
+          setOpenCreateRequest={setOpenCreateRequest}
           value={creditoForm}
           onChange={setCreditoForm}
+          handleCreateCreditRequest={handleCreateCreditRequest} //reemplazo temporal
+          isPendingCreditRequest={isPendingCreditRequest}
           // opcional: onSubmit={(payload) => createCreditRequest(payload)}
         />
       ) : null}

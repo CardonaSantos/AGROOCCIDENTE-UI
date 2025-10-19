@@ -41,6 +41,7 @@ import {
   PlanCuotaModo,
   PropuestaCuota,
 } from "./credito-venta.interfaces";
+import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 
 // ========================= Utils =========================
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -128,15 +129,24 @@ type PropsCreditoForm = {
   value: FormCreditoState;
   onChange: React.Dispatch<React.SetStateAction<FormCreditoState>>; // requerido
   onSubmit?: (payload: any) => void;
+  handleCreateCreditRequest: (payload: any) => Promise<void>;
   autoRecalc?: boolean;
   readOnly?: boolean;
+  isPendingCreditRequest: boolean;
+
+  setOpenCreateRequest: React.Dispatch<React.SetStateAction<boolean>>;
+  openCreateRequest: boolean;
 };
 
 // ========================= Componente =========================
 export default function CreditoForm({
   value,
   onChange,
-  onSubmit,
+  //   onSubmit, volver a usar?
+  handleCreateCreditRequest,
+  isPendingCreditRequest,
+  openCreateRequest,
+  setOpenCreateRequest,
   autoRecalc = true,
   readOnly = false,
 }: PropsCreditoForm) {
@@ -261,7 +271,8 @@ export default function CreditoForm({
     }
 
     const payload = buildSolicitudPayload(form);
-    if (onSubmit) onSubmit(payload);
+    // if (onSubmit) onSubmit(payload);//volver a usar, una de ambas con la firma del payload ya puesto para poder hacer verificaciones
+    if (handleCreateCreditRequest) handleCreateCreditRequest(payload);
     else {
       console.log("Payload solicitud crédito (sin onSubmit):", payload);
       alert("Payload construido. Revisa la consola del navegador.");
@@ -692,9 +703,34 @@ export default function CreditoForm({
                 >
                   Recalcular y validar
                 </Button>
-                <Button type="button" onClick={handleSubmit} className="gap-2">
+                <Button
+                  type="button"
+                  onClick={() => setOpenCreateRequest(true)}
+                  className="gap-2"
+                >
                   <FileCheck2 className="h-4 w-4" /> Enviar a aprobación
                 </Button>
+
+                <AdvancedDialog
+                  type="warning"
+                  title="Autorización de Crédito Venta"
+                  description="Se procederá a notificar a los administradores sobre el registro y se creará el credito a partir de tus datos ingresados. ¿Estás seguro de enviar estos datos? Está acción no se puede deshacer."
+                  onOpenChange={setOpenCreateRequest}
+                  open={openCreateRequest}
+                  confirmButton={{
+                    label: "Si, continuar y enviar petición de autorización",
+                    disabled: isPendingCreditRequest,
+                    loading: isPendingCreditRequest,
+                    loadingText: "Enviando petición...",
+                    onClick: () =>
+                      handleCreateCreditRequest(buildSolicitudPayload(form)),
+                  }}
+                  cancelButton={{
+                    label: "Cancelar",
+                    disabled: isPendingCreditRequest,
+                    onClick: () => setOpenCreateRequest(false),
+                  }}
+                />
               </div>
             </CardFooter>
           </Card>
@@ -733,18 +769,22 @@ export function buildSolicitudPayload(form: FormCreditoState) {
 
     comentario: form.comentario || undefined,
     garantiaMeses: Number(form.garantiaMeses || 0),
-
-    lineas: (form.lineas || []).map((l) => ({
-      productoId: l.productoId,
-      presentacionId: l.presentacionId,
-      cantidad: Number(l.cantidad || 0),
-      precioUnitario: r2(Number(l.precioUnitario || 0)),
-      descuento: l.descuento ? Number(l.descuento) : undefined,
-      subtotal: r2(Number(l.subtotal ?? l.cantidad * l.precioUnitario)),
-      nombreProductoSnapshot: l.nombreProductoSnapshot,
-      presentacionNombreSnapshot: l.presentacionNombreSnapshot,
-      codigoBarrasSnapshot: l.codigoBarrasSnapshot,
-    })),
+    solicitadoPorId: form.solicitadoPorId,
+    lineas: (form.lineas || []).map((l) => {
+      const flagItem: string = l.presentacionId ? "PRESENTACION" : "PRODUCTO";
+      return {
+        productoId: l.productoId,
+        presentacionId: l.presentacionId,
+        cantidad: Number(l.cantidad || 0),
+        precioUnitario: r2(Number(l.precioUnitario || 0)),
+        descuento: l.descuento ? Number(l.descuento) : undefined,
+        subtotal: r2(Number(l.subtotal ?? l.cantidad * l.precioUnitario)),
+        nombreProductoSnapshot: l.nombreProductoSnapshot,
+        presentacionNombreSnapshot: l.presentacionNombreSnapshot,
+        codigoBarrasSnapshot: l.codigoBarrasSnapshot,
+        flagItem: flagItem,
+      };
+    }),
 
     planPropuesto: {
       cuotasPropuestas: (form.cuotasPropuestas || []).map((c) => ({
