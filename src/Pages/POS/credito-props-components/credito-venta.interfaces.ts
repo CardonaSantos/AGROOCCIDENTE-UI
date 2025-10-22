@@ -56,6 +56,9 @@ export interface FormCreditoState {
     presentacionId?: number;
     cantidad: number;
     precioUnitario: number;
+
+    precioSeleccionadoId: number; //NUEVO
+
     descuento?: number;
     subtotal?: number;
     nombreProductoSnapshot?: string;

@@ -11,6 +11,18 @@ export type SocketManagerOptions = {
   withCredentials?: boolean; // si usas cookies
   debug?: boolean;
 };
+function decodeJwtPayload(token?: string | null): any {
+  if (!token) return null;
+  const raw = token.startsWith("Bearer ") ? token.slice(7) : token;
+  const parts = raw.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const payload = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(payload);
+  } catch {
+    return null;
+  }
+}
 
 export class SocketManager {
   private socket: Socket | null = null;
@@ -28,7 +40,7 @@ export class SocketManager {
 
   public async connect(): Promise<Socket> {
     if (this.socket?.connected) return this.socket;
-    if (this.connecting)
+    if (this.connecting) {
       return new Promise((r) => {
         const i = setInterval(() => {
           if (this.socket?.connected) {
@@ -37,9 +49,22 @@ export class SocketManager {
           }
         }, 50);
       });
+    }
 
     this.connecting = true;
     const token = await this.resolveToken();
+    const bearer = token
+      ? token.startsWith("Bearer ")
+        ? token
+        : `Bearer ${token}`
+      : null;
+
+    // intentar extraer identidad del JWT: sub/id/sucursalId/rol
+    const payload = decodeJwtPayload(bearer);
+    const userId =
+      Number(payload?.sub ?? payload?.id ?? payload?.userId) || undefined;
+    const sucursalId = Number(payload?.sucursalId) || undefined;
+    const rol = String(payload?.rol || "") || undefined;
 
     const url = this.opts.baseUrl + (this.opts.namespace ?? "/ws");
 
@@ -47,7 +72,10 @@ export class SocketManager {
       path: this.opts.path,
       transports: ["websocket"],
       withCredentials: this.opts.withCredentials ?? false,
-      auth: { token },
+      // manda token + identidad en auth (server lo leerá de handshake.auth)
+      auth: { token: bearer, userId, sucursalId, rol },
+      query: { userId, sucursalId, rol },
+
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 500,
@@ -58,20 +86,19 @@ export class SocketManager {
 
     this.socket = io(url, socketOpts);
 
-    // Debug
     if (this.opts.debug) {
       this.socket.on("connect", () =>
         console.log("[WS] CONECTADO AL SOCKET", this.socket?.id)
       );
-      this.socket.on("disconnect", (r) => console.log("[WS] disconnected", r));
-      this.socket.on("connect_error", (e) =>
-        console.log("[WS] connect_error", e.message)
+      this.socket.on("disconnect", (reason) =>
+        console.log("[WS] disconnected", reason)
       );
+      this.socket.on("connect_error", (e: any) => {
+        console.log("[WS] connect_error", e?.message, e?.data || "");
+      });
     }
 
-    // Exponer para inspección en dev
     (window as any).socket = this.socket;
-
     this.connecting = false;
     return this.socket;
   }

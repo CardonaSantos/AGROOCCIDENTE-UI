@@ -39,7 +39,6 @@ import axios from "axios";
 import { Sucursal } from "@/Types/Sucursal/Sucursal_Info";
 import { toast } from "sonner";
 import { Card, CardContent } from "../ui/card";
-import { useSocket } from "../Context/SocketContext";
 
 import dayjs from "dayjs";
 import localizedFormat from "dayjs/plugin/localizedFormat";
@@ -47,9 +46,11 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import logo from "@/assets/NOVALOGO.jpeg";
+
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 dayjs.locale("es");
+
 const formatearFecha = (fecha: string) => {
   let nueva_fecha = dayjs(fecha).format("DD MMMM YYYY, hh:mm A");
   return nueva_fecha;
@@ -94,7 +95,6 @@ export default function Layout2({ children }: LayoutProps) {
   const userID = useStore((state) => state.userId);
 
   // Local state
-  const socket = useSocket();
   const [sucursalInfo, setSucursalInfo] = useState<Sucursal>();
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
 
@@ -122,8 +122,7 @@ export default function Layout2({ children }: LayoutProps) {
     setSucursalId,
   ]);
 
-  // Obtener datos de usuario del backend cuando cambie el userID
-
+  // Obtener info de sucursal cuando cambie sucursalId
   useEffect(() => {
     if (!sucursalId) return;
     axios
@@ -149,18 +148,6 @@ export default function Layout2({ children }: LayoutProps) {
   useEffect(() => {
     getNotificaciones();
   }, [userID]);
-
-  // Escuchar nuevas notificaciones via socket
-  useEffect(() => {
-    if (!socket) return;
-    const handler = (nueva: Notificacion) => {
-      setNotificaciones((prev) => [nueva, ...prev]);
-    };
-    socket.on("recibirNotificacion", handler);
-    return () => {
-      socket.off("recibirNotificacion", handler);
-    };
-  }, [socket]);
 
   // Eliminar notificación
   const deleteNoti = async (id: number) => {
@@ -332,7 +319,6 @@ export default function Layout2({ children }: LayoutProps) {
                     aria-label="User menu"
                   >
                     <Avatar className="h-8 w-8">
-                      {" "}
                       {/* Si tuvieras imagen, la pones aquí con <AvatarImage src="..." /> */}
                       <AvatarFallback className="h-8 w-8 bg-[#29daa5] text-white font-semibold uppercase flex items-center justify-center">
                         {getInitials(posNombre)}
@@ -359,7 +345,6 @@ export default function Layout2({ children }: LayoutProps) {
             </div>
           </header>
 
-          {/* <main className="flex-1 overflow-y-auto px-3 py-2 lg:px-6 lg:py-3"> */}
           <main className="flex-1 overflow-y-auto px-2 md:px-3 lg:px-0 py-2 lg:py-3">
             {children || <Outlet />}
           </main>

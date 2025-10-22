@@ -7,9 +7,9 @@ import { GoogleMapsProvider } from "./Crm/CrmRutas/CrmRutasCobro/GoogleMapsProvi
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { QueryProvider } from "./Server/QueryProvider.tsx";
 import { SocketProvider } from "./Web/realtime/SocketProvider.tsx";
-const WS_URL = import.meta.env.VITE_WS_URL; // ej: http://localhost:3000
-const WS_NS = import.meta.env.VITE_WS_NAMESPACE ?? "/ws"; // ej: /ws
-const WS_PATH = import.meta.env.VITE_WS_PATH ?? "/socket.io";
+const VITE_WS_URL = "http://localhost:3000";
+const VITE_WS_NAMESPACE = "/legacy";
+const VITE_WS_PATH = "/socket.io";
 
 const getToken = () => localStorage.getItem("authTokenPos");
 
@@ -18,9 +18,9 @@ createRoot(document.getElementById("root")!).render(
   <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
     <StrictMode>
       <SocketProvider
-        baseUrl={WS_URL}
-        namespace={WS_NS}
-        path={WS_PATH}
+        baseUrl={VITE_WS_URL}
+        namespace={VITE_WS_NAMESPACE}
+        path={VITE_WS_PATH}
         getToken={getToken}
         debug={import.meta.env.DEV}
         withCredentials={false}

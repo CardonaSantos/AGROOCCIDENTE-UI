@@ -7,7 +7,6 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { useStore } from "@/components/Context/ContextSucursal";
-import { useSocket } from "@/components/Context/SocketContext";
 import type {
   CreditoRegistro,
   DailyMoney,
@@ -41,15 +40,39 @@ import { TimeLineDto } from "../components/API/interfaces.interfaces";
 import { createNewTimeLine } from "../components/API/api";
 import { EstadoGarantia, GarantiaType } from "../types/newGarantyTypes";
 import { formattMonedaGT } from "@/utils/formattMoneda";
+import { useSocketCtx, useSocketEvent } from "@/Web/realtime/SocketProvider"; // ✅ nuevo
+import {
+  useApiMutation,
+  useApiQuery,
+} from "@/hooks/genericoCall/genericoCallHook";
+import {
+  CreditAuthorizationListResponse,
+  NormalizedSolicitud,
+} from "../credit-authorizations/interfaces/Interfaces.interfaces";
+import { useQueryClient } from "@tanstack/react-query";
+import Authorizations from "../credit-authorizations/credit-autorizations-main-page";
+import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
+import { Button } from "@/components/ui/button";
+import { PayloadAcceptCredito } from "../credit-authorizations/interfaces/accept-credito.dto";
+import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
+import { MetodoPagoMainPOS } from "@/Pages/POS/interfaces/methodPayment";
+
 // import { useSocketCtx, useSocketEvent } from "@/Web/realtime/SocketProvider";
 // import { Button } from "@/components/ui/button";
+
 const API_URL = import.meta.env.VITE_API_URL;
 // Otras utilidades
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 dayjs.locale("es");
 
+// arriba del componente
+const AUTH_FILTERS = { estado: "PENDIENTE" } as const;
+const AUTH_KEY = ["credit-authorizations", AUTH_FILTERS] as const;
+
 export default function DashboardPageMain() {
+  const { socket } = useSocketCtx(); // ✅
+
   const formatearFecha = (fecha: string) => {
     const nueva_fecha = dayjs(fecha).format("DD MMMM YYYY, hh:mm A");
     return nueva_fecha;
@@ -61,7 +84,7 @@ export default function DashboardPageMain() {
   };
 
   const sucursalId = useStore((state) => state.sucursalId);
-  const userID = useStore((state) => state.userId);
+  const userID = useStore((state) => state.userId) ?? 0;
 
   const [ventasMes, setVentasMes] = useState(0);
   const [ventasSemana, setVentasSemana] = useState(0);
@@ -98,9 +121,10 @@ export default function DashboardPageMain() {
   const [estadoRegistFinishW, setEstadoFinishW] = useState("");
   const [conclusion, setConclusion] = useState("");
   const [accionesRealizadas, setAccionesRealizadas] = useState("");
-  // Update timeline warranty dialog states
 
-  const socket = useSocket();
+  // Update timeline warranty dialog states
+  const queryClient = useQueryClient();
+
   const getInfo = async () => {
     try {
       const [
@@ -205,6 +229,33 @@ export default function DashboardPageMain() {
     }
   };
 
+  //credit authorizations
+  const { data: authorizations } = useApiQuery<CreditAuthorizationListResponse>(
+    AUTH_KEY, // 👈 usa la key con filtros
+    "credito-authorization",
+    { params: AUTH_FILTERS },
+    {
+      // asegura refetch inmediato al montar o remount
+      refetchOnMount: "always",
+      staleTime: 0,
+    }
+  );
+
+  const { mutateAsync: acceptCreditAuth } = useApiMutation<
+    any,
+    PayloadAcceptCredito
+  >("post", "credito-authorization/create-credito-from-auth", undefined, {
+    // dispara refetch de todas las listas de autorizaciones (cualquier filtro)
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["credit-authorizations"],
+        exact: false,
+      });
+    },
+    // si quieres estrictamente la lista de PENDIENTES:
+    // onSettled: () => queryClient.invalidateQueries({ queryKey: AUTH_KEY })
+  });
+
   useEffect(() => {
     if (sucursalId) {
       getInfo();
@@ -219,6 +270,7 @@ export default function DashboardPageMain() {
     getReparacionesRegis();
   }, []);
 
+  //reemplazazr esto por lo de abajo
   useEffect(() => {
     if (socket) {
       const handleSolicitud = (solicitudNueva: Solicitud) => {
@@ -248,6 +300,14 @@ export default function DashboardPageMain() {
       };
     }
   }, [socket]);
+
+  //   useSocketEvent("recibirSolicitud", (s: Solicitud) => {
+  //   setSolicitudes(prev => [s, ...prev]);
+  // });
+
+  // useSocketEvent("recibirSolicitudTransferencia", (s: SolicitudTransferencia) => {
+  //   setSolicitudesTransferencia(prev => [s, ...prev]);
+  // });
 
   const handleAceptRequest = async (idSolicitud: number) => {
     try {
@@ -380,12 +440,44 @@ export default function DashboardPageMain() {
     }
   };
 
+  const handleAcceptCredit = async () => {
+    const payload: PayloadAcceptCredito = {
+      adminId: userID,
+      comentario: "Comentario",
+      metodoPago: MetodoPagoMainPOS.EFECTIVO,
+      authCreditoId: selectedAuth?.id ?? 0,
+      cuentaBancariaId: 1,
+    };
+    try {
+      await toast.promise(acceptCreditAuth(payload), {
+        success: "Crédito aceptado y registrado correctamente",
+        loading: "Registrando crédito...",
+        error: (error) => getApiErrorMessageAxios(error),
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const authorizationsData = Array.isArray(authorizations?.data)
+    ? authorizations.data
+    : [];
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedAuth, setSelectedAuth] = useState<NormalizedSolicitud | null>(
+    null
+  );
+
+  const handleReview = (auth: NormalizedSolicitud) => {
+    setSelectedAuth(auth);
+    setDialogOpen(true);
+  };
+
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const toggleCard = (id: number) => {
     setExpandedCard(expandedCard === id ? null : id);
   };
 
-  // 2) Mapa de colores para cada estado
   const estadoColor: Record<EstadoGarantia, string> = {
     [EstadoGarantia.RECIBIDO]: "bg-blue-500",
     [EstadoGarantia.DIAGNOSTICO]: "bg-yellow-500",
@@ -400,31 +492,70 @@ export default function DashboardPageMain() {
 
   const [openTimeLine, setOpenTimeLine] = useState(false);
 
-  // const { manager } = useSocketCtx();
-  // const solicitar = () =>
-  //   new Promise<void>((resolve, reject) => {
-  //     if (!manager?.instance) return reject(new Error("WS desconectado"));
-  //     manager.instance.emit(
-  //       "solicitud:precio.request", // 👈 nombre del evento
-  //       { productoID: 10, nuevoPrecio: 99.5 }, // 👈 payload
-  //       (
-  //         ack: { ok: true; solicitudId: number } | { ok: false; error: string }
-  //       ) => {
-  //         if (ack.ok) resolve();
-  //         else reject(new Error(ack.error));
-  //       }
-  //     );
-  //   });
+  useSocketEvent(
+    "credit:authorization.created",
+    (payload: NormalizedSolicitud) => {
+      console.log("[socket] credit:authorization.created", payload);
+      console.log("cache antes:", queryClient.getQueryData(AUTH_KEY));
+      queryClient.setQueryData<CreditAuthorizationListResponse>(
+        AUTH_KEY,
+        (prev) => {
+          if (!prev) return prev;
 
-  // useSocketEvent(
-  //   "credit:request.created",
-  //   (p) => {
-  //     toast.info("Nueva solicitud de crédito: ", {
-  //       description: `ID ${p.id}, nuevo precio es: ${p.nuevoPrecio}`,
-  //     });
-  //   },
-  //   []
-  // );
+          const exists = prev.data.some((x) => x.id === payload.id);
+          const nextData = exists
+            ? prev.data.map((x) => (x.id === payload.id ? payload : x))
+            : [payload, ...prev.data];
+          const total = exists ? prev.meta.total : prev.meta.total + 1;
+
+          return {
+            ...prev,
+            data: nextData,
+            meta: {
+              ...prev.meta,
+              total,
+              pages: Math.ceil(total / prev.meta.limit),
+            },
+          };
+        }
+      );
+      console.log("cache después:", queryClient.getQueryData(AUTH_KEY));
+    }
+  );
+
+  console.log("Los registros de autorizaciones son: ", authorizationsData);
+
+  // helpers para el copy (opcional arriba del JSX)
+  const nombreClienteSel = selectedAuth
+    ? `${selectedAuth.cliente.nombre}${
+        selectedAuth.cliente.apellidos
+          ? " " + selectedAuth.cliente.apellidos
+          : ""
+      }`
+    : "…";
+
+  const montoSel = selectedAuth
+    ? formattMonedaGT(selectedAuth.economico.totalPropuesto)
+    : "…";
+
+  const resumenPlan = selectedAuth
+    ? `Plan: ${selectedAuth.economico.cuotasTotalesPropuestas} cuota${
+        selectedAuth.economico.cuotasTotalesPropuestas === 1 ? "" : "s"
+      } • Interés: ${selectedAuth.economico.interesTipo} ${
+        selectedAuth.economico.interesPorcentaje
+      }% • Primera cuota: ${
+        selectedAuth.fechas.primeraCuotaISO
+          ? new Date(selectedAuth.fechas.primeraCuotaISO).toLocaleDateString(
+              "es-GT",
+              {
+                year: "numeric",
+                month: "short",
+                day: "2-digit",
+              }
+            )
+          : "N/A"
+      }`
+    : "";
 
   return (
     <motion.div {...DesvanecerHaciaArriba} className="container p-4 space-y-4">
@@ -437,6 +568,47 @@ export default function DashboardPageMain() {
         ventasDia={ventasDia}
         formattMonedaGT={formattMonedaGT}
       />
+      <Authorizations
+        authorizationsData={authorizationsData}
+        onReview={handleReview}
+      />
+
+      {/* ÚNICO diálogo global */}
+      <AdvancedDialog
+        type="warning"
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title="Aprobación de crédito"
+        question="¿Deseas aprobar y registrar este crédito?"
+        description={
+          selectedAuth
+            ? `Al aprobar el crédito para ${nombreClienteSel} por ${montoSel}, se creará el registro de crédito y su seguimiento con la información proporcionada por el solicitante. Podrás editar los datos posteriormente si es necesario. ${
+                resumenPlan ? "\n" + resumenPlan : ""
+              }`
+            : "…"
+        }
+        cancelButton={{
+          label: "No aprobar",
+          onClick: () => setDialogOpen(false),
+          variant: "destructive",
+        }}
+        confirmButton={{
+          label: "Aprobar y registrar crédito",
+          onClick: () => {
+            if (!selectedAuth) return;
+            handleAcceptCredit();
+            setDialogOpen(false);
+          },
+        }}
+      >
+        <Button
+          className="w-full sm:w-full"
+          onClick={() => setDialogOpen(false)}
+        >
+          Cerrar diálogo
+        </Button>
+      </AdvancedDialog>
+
       <TableAlertStocks />
       {/* MOSTRAR LOS CRÉDITOS ACTIVOS */}
       <CreditCardList

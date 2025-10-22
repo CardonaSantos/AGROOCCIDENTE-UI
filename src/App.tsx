@@ -81,10 +81,9 @@ import GastoOperativoHistoricoPage from "./Pages/CajaAdministrativo/_gastos-oper
 import FlujoEfectivoPage from "./Pages/CajaAdministrativo/_flujoEfectivo/FlujoEfectivoPage";
 import CuentasBancariasPage from "./Pages/cuentas-bancarias/CuentasBancariasPage";
 import CreateProductPage from "./Pages/producto/createProductoMain";
-import CreateVentaCuotaForm from "./Pages/VentaCuotas/_components/CreateVentaCuotaForm";
 import CategoriasMainPage from "./Pages/Categorias/CategoriasMainPage";
 import HistorialVentasMain from "./Pages/HistorialVentas/HistorialVentas";
-import CreditoMainPage from "./Pages/credito-ventas/credito-venta-main-page";
+import CreditoMainPageManage from "./Pages/creditos/credito-main-page";
 
 function App() {
   const { checkAuth } = useAuthStore();
@@ -520,7 +519,7 @@ function App() {
               path="/creditos"
               element={
                 <ProtectedRoute>
-                  <CreateVentaCuotaForm />
+                  <CreditoMainPageManage />
                 </ProtectedRoute>
               }
             />

@@ -66,7 +66,6 @@ function TableAlertStocks() {
       </div>
     );
   }
-  console.log("Los alerts son: ", alerts);
 
   return (
     <div className="rounded-md border shadow-md">

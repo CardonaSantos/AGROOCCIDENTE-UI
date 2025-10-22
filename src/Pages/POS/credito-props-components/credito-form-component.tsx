@@ -1,5 +1,4 @@
 "use client";
-
 import * as React from "react";
 import dayjs from "dayjs";
 import {
@@ -42,6 +41,15 @@ import {
   PropuestaCuota,
 } from "./credito-venta.interfaces";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
+import {
+  BuildPayload,
+  CuotaPropuestaPayload,
+  InteresTipoServer,
+  LineaPayload,
+  PlanCuotaModoServer,
+} from "../interfaces/buildpayload.interface";
+import { toInt, toMoney } from "./helpers";
+import { formattMoneda } from "@/Pages/Utils/Utils";
 
 // ========================= Utils =========================
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -154,7 +162,6 @@ export default function CreditoForm({
   const setForm = onChange;
 
   const [editingCuotas, setEditingCuotas] = React.useState(true);
-  // Auto-recalcular cuotas cuando cambian campos clave
   React.useEffect(() => {
     if (!autoRecalc) return;
 
@@ -200,20 +207,6 @@ export default function CreditoForm({
           .reduce((a, c) => a + Number(c.monto || 0), 0)
       ),
     [form.cuotasPropuestas]
-  );
-
-  const engancheUI = React.useMemo(
-    () =>
-      r2(
-        (form.cuotasPropuestas || []).find((c) => c.etiqueta === "ENGANCHE")
-          ?.monto || 0
-      ),
-    [form.cuotasPropuestas]
-  );
-
-  const principalUI = React.useMemo(
-    () => r2(Number(form.totalPropuesto || 0) - engancheUI),
-    [form.totalPropuesto, engancheUI]
   );
 
   // =================== Mutadores ===================
@@ -281,6 +274,30 @@ export default function CreditoForm({
 
   // =================== Render ===================
   const planEsPrimeraMayor = form.planCuotaModo === "PRIMERA_MAYOR";
+  const totalUI = r2(form.totalPropuesto);
+
+  const cuotas = Array.isArray(form.cuotasPropuestas)
+    ? form.cuotasPropuestas
+    : [];
+  const engancheUI = r2(
+    cuotas.find((c) => c?.etiqueta === "ENGANCHE" || c?.numero === 0)?.monto ??
+      (form.planCuotaModo === "PRIMERA_MAYOR" ? form.cuotaInicialPropuesta : 0)
+  );
+  const principalUI = r2(totalUI - engancheUI);
+  const sumCuotasSinEnganche = r2(
+    cuotas
+      .filter(
+        (c) =>
+          (c?.etiqueta ?? (c?.numero === 0 ? "ENGANCHE" : "NORMAL")) !==
+          "ENGANCHE"
+      )
+      .reduce((acc, c) => acc + r2(c?.monto), 0)
+  );
+
+  const interesUI = r2(sumCuotasSinEnganche - principalUI);
+  const isConsistent =
+    Math.abs(sumCuotasSinEnganche - (principalUI + interesUI)) <= 0.01;
+  const interesPct = Number(form?.interesPorcentaje || 0);
 
   return (
     <div className="mx-auto w-full max-w-6xl mt-2">
@@ -688,13 +705,23 @@ export default function CreditoForm({
             <CardFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-medium">Comprobación:</span>
-                <span>
-                  Total = {Number(form.totalPropuesto || 0).toFixed(2)} GTQ
-                </span>
+                <span> Total = {totalUI.toFixed(2)} GTQ</span>
                 <span>· Enganche = {engancheUI.toFixed(2)}</span>
                 <span>· Principal = {principalUI.toFixed(2)}</span>
-                <span>· Suma cuotas = {sumCuotas.toFixed(2)}</span>
+                <span>· Suma cuotas = {sumCuotasSinEnganche.toFixed(2)}</span>
+                {interesPct > 0 && (
+                  <span>
+                    · Interés = {interesPct.toFixed(2)}% que es igual a:{" "}
+                    {formattMoneda(interesUI)}
+                  </span>
+                )}
+                {!isConsistent && (
+                  <span className="text-red-500">
+                    · Inconsistencia en montos
+                  </span>
+                )}
               </div>
+
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -714,11 +741,11 @@ export default function CreditoForm({
                 <AdvancedDialog
                   type="warning"
                   title="Autorización de Crédito Venta"
-                  description="Se procederá a notificar a los administradores sobre el registro y se creará el credito a partir de tus datos ingresados. ¿Estás seguro de enviar estos datos? Está acción no se puede deshacer."
+                  description="Se procederá a notificar a los administradores sobre el registro y se creará el crédito a partir de tus datos ingresados. ¿Estás seguro de enviar estos datos? Esta acción no se puede deshacer."
                   onOpenChange={setOpenCreateRequest}
                   open={openCreateRequest}
                   confirmButton={{
-                    label: "Si, continuar y enviar petición de autorización",
+                    label: "Sí, continuar y enviar petición de autorización",
                     disabled: isPendingCreditRequest,
                     loading: isPendingCreditRequest,
                     loadingText: "Enviando petición...",
@@ -741,58 +768,88 @@ export default function CreditoForm({
 }
 
 // ========================= Builder de payload =========================
-export function buildSolicitudPayload(form: FormCreditoState) {
-  const enganche =
-    form.planCuotaModo === "PRIMERA_MAYOR"
-      ? r2(Number(form.cuotaInicialPropuesta || 0))
-      : 0;
+export function buildSolicitudPayload(form: FormCreditoState): BuildPayload {
+  // Reglas mínimas
+  if (!form.clienteId) {
+    throw new Error("clienteId es requerido por el DTO del servidor.");
+  }
 
-  return {
-    sucursalId: Number(form.sucursalId),
-    clienteId: form.clienteId || undefined,
-    nombreCliente: form.clienteId ? undefined : form.nombreCliente || undefined,
-    telefonoCliente: form.clienteId
-      ? undefined
-      : form.telefonoCliente || undefined,
-    direccionCliente: form.clienteId
-      ? undefined
-      : form.direccionCliente || undefined,
+  // ===== Líneas (XOR producto/presentación) =====
+  const lineas: LineaPayload[] = (form.lineas || [])
+    .map((l) => {
+      const cantidad = toInt(l.cantidad);
+      const precioUnitario = toMoney(l.precioUnitario);
+      const precioListaRef = toMoney(
+        // si en el form en algún momento guardas precioListaRef, úsalo; si no, fallback
+        (l as any).precioListaRef ?? cantidad * precioUnitario
+      );
+      const subtotal = toMoney(l.subtotal ?? cantidad * precioUnitario);
 
-    totalPropuesto: r2(Number(form.totalPropuesto || 0)),
-    cuotaInicialPropuesta: enganche,
-    cuotasTotalesPropuestas: Number(form.cuotasTotalesPropuestas || 1),
-    interesTipo: form.interesTipo,
-    interesPorcentaje: Number(form.interesPorcentaje || 0),
-    planCuotaModo: form.planCuotaModo,
-    diasEntrePagos: Number(form.diasEntrePagos || 30),
-    fechaPrimeraCuota: form.fechaPrimeraCuota,
+      const productoId = l.productoId ?? undefined;
+      const presentacionId = l.presentacionId ?? undefined;
 
-    comentario: form.comentario || undefined,
-    garantiaMeses: Number(form.garantiaMeses || 0),
-    solicitadoPorId: form.solicitadoPorId,
-    lineas: (form.lineas || []).map((l) => {
-      const flagItem: string = l.presentacionId ? "PRESENTACION" : "PRODUCTO";
       return {
-        productoId: l.productoId,
-        presentacionId: l.presentacionId,
-        cantidad: Number(l.cantidad || 0),
-        precioUnitario: r2(Number(l.precioUnitario || 0)),
-        descuento: l.descuento ? Number(l.descuento) : undefined,
-        subtotal: r2(Number(l.subtotal ?? l.cantidad * l.precioUnitario)),
-        nombreProductoSnapshot: l.nombreProductoSnapshot,
-        presentacionNombreSnapshot: l.presentacionNombreSnapshot,
-        codigoBarrasSnapshot: l.codigoBarrasSnapshot,
-        flagItem: flagItem,
+        productoId,
+        presentacionId,
+        cantidad,
+        precioUnitario,
+        precioListaRef,
+        subtotal,
+        precioSeleccionadoId: l.precioSeleccionadoId, //nuevo
       };
-    }),
+    })
+    .filter((ln) => ln.productoId || ln.presentacionId);
 
-    planPropuesto: {
-      cuotasPropuestas: (form.cuotasPropuestas || []).map((c) => ({
-        numero: c.numero,
-        fechaISO: c.fechaISO,
-        monto: r2(Number(c.monto || 0)),
-        etiqueta: c.etiqueta,
-      })),
-    },
+  if (lineas.length === 0) {
+    throw new Error(
+      "Debe existir al menos una línea válida (producto o presentación)."
+    );
+  }
+
+  // ===== Cuotas propuestas (lo que ves en el calendario del UI) =====
+  const cuotasPropuestas: CuotaPropuestaPayload[] = (
+    form.cuotasPropuestas || []
+  )
+    .map((c) => ({
+      numero: toInt(c.numero),
+      fechaISO: c.fechaISO, // ya viene como 'YYYY-MM-DD'
+      monto: toMoney(c.monto),
+      etiqueta: c.etiqueta ?? (c.numero === 0 ? "ENGANCHE" : "NORMAL"),
+      // origen/esManual: los omito; el server setea AUTO/false por default
+    }))
+    .sort((a, b) => a.numero - b.numero);
+
+  if (cuotasPropuestas.length === 0) {
+    throw new Error("Debe enviar al menos una cuota propuesta.");
+  }
+
+  // Enganche “consistente”: si hay cuota #0/ENGANCHE, úsala; si no, respeta regla del plan
+  const engancheDeCuotas =
+    cuotasPropuestas.find((q) => q.etiqueta === "ENGANCHE")?.monto ?? 0;
+  const enganchePorPlan =
+    form.planCuotaModo === "PRIMERA_MAYOR"
+      ? toMoney(form.cuotaInicialPropuesta)
+      : 0;
+  const cuotaInicialPropuesta =
+    engancheDeCuotas > 0 ? engancheDeCuotas : enganchePorPlan || undefined;
+
+  // ===== Cabecera =====
+  const payload: BuildPayload = {
+    sucursalId: toInt(form.sucursalId),
+    clienteId: toInt(form.clienteId),
+    totalPropuesto: toMoney(form.totalPropuesto),
+    cuotaInicialPropuesta, // opcional si 0
+    cuotasTotalesPropuestas: toInt(form.cuotasTotalesPropuestas || 1),
+    interesTipo: form.interesTipo as InteresTipoServer,
+    interesPorcentaje: toInt(form.interesPorcentaje || 0),
+    planCuotaModo: form.planCuotaModo as PlanCuotaModoServer,
+    diasEntrePagos: toInt(form.diasEntrePagos || 30),
+    fechaPrimeraCuota: form.fechaPrimeraCuota || undefined, // 'YYYY-MM-DD'
+    comentario: form.comentario || undefined,
+    solicitadoPorId: toInt(form.solicitadoPorId),
+    lineas,
+    cuotasPropuestas,
   };
+
+  return payload;
 }

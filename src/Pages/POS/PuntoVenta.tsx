@@ -239,6 +239,7 @@ export default function PuntoVenta() {
         presentacionId: i.source === "presentacion" ? i.id : undefined,
         cantidad: i.quantity,
         precioUnitario: i.selectedPrice,
+        precioSeleccionadoId: i.selectedPriceId, //NUEVO
         subtotal:
           Math.round((i.quantity * i.selectedPrice + Number.EPSILON) * 100) /
           100,
@@ -250,7 +251,6 @@ export default function PuntoVenta() {
     []
   );
 
-  // 1) Sync cliente/sucursal/total hacia el formulario
   useEffect(() => {
     setCreditoForm((f) => ({
       ...f,
@@ -260,7 +260,6 @@ export default function PuntoVenta() {
     }));
   }, [sucursalId, selectedCustomerID?.id, totalCarrito]);
 
-  // 2) Sync líneas desde el carrito
   useEffect(() => {
     setCreditoForm((f) => ({
       ...f,
@@ -268,7 +267,6 @@ export default function PuntoVenta() {
     }));
   }, [cart, mapCartToLineas]);
 
-  // 3) Defaults sensatos cuando se cambia a CREDITO
   useEffect(() => {
     if (paymentMethod === MetodoPagoMainPOS.CREDITO) {
       setCreditoForm((f) => ({
@@ -283,11 +281,9 @@ export default function PuntoVenta() {
     }
   }, [paymentMethod]);
 
-  // Paginación / filtros del query server
   const [limit, setLimit] = useState<number>(5);
   const [page, setPage] = useState<number>(1);
 
-  // ✅ Arma NewQueryDTO correctamente (sin strings vacíos / tipos incorrectos)
   const [queryOptions, setQueryOptions] = useState<NewQueryDTO>({
     cats: [],
     codigoItem: "",

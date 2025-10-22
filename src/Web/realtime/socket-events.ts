@@ -1,3 +1,5 @@
+import { NormalizedSolicitud } from "@/Pages/NewDashboard/credit-authorizations/interfaces/Interfaces.interfaces";
+
 //HELPER PARA DEFINIR EVENTOS
 export type WsEventMap = {
   pong: { ts: number };
@@ -28,6 +30,7 @@ export type WsEventMap = {
   };
 
   "debug:hello": { ts: number };
+  "credit:authorization.created": NormalizedSolicitud;
 };
 
 export type WsEventName = keyof WsEventMap;
