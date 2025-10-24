@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  CompraDetalleUI,
   CompraPedidoUI,
   CompraRegistroUI,
   CompraRequisicionUI,
@@ -36,7 +35,6 @@ import { useNavigate } from "react-router-dom";
 import { EstadoCompra } from "./API/interfaceQuery";
 import { Badge } from "@/components/ui/badge";
 import { formattMonedaGT } from "@/utils/formattMoneda";
-import { DetalleNormalizado } from "./table-select-recepcion/detalleNormalizado";
 import {
   ItemDetallesPayloadParcial,
   PayloadRecepcionParcial,

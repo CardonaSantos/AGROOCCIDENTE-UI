@@ -20,7 +20,7 @@ import {
   TipoEmpaque,
 } from "../interfaces/preciosCreateInterfaces";
 import AddPrices from "@/Pages/Inventario/AddPrices";
-import React, {
+import {
   Dispatch,
   memo,
   SetStateAction,

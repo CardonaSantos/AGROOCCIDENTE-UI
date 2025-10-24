@@ -68,7 +68,7 @@ function TableAlertStocks() {
   }
 
   return (
-    <div className="rounded-md border shadow-md">
+    <div className="rounded-md border shadow-md my-4">
       <ScrollArea
         className="overflow-y-auto
         max-h-60"

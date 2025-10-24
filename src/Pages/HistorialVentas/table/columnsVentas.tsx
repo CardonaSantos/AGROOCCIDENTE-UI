@@ -1,5 +1,4 @@
 // components/ventas/table/columnsVentas.tsx
-import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";

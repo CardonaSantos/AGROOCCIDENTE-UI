@@ -52,19 +52,6 @@ type ProductoPOS = {
   imagenesProducto: imagenesProducto[];
 };
 
-interface CartItem {
-  uid: string; // 👈 clave única (source+id)
-  id: number;
-  source: SourceType; // 👈 NUEVO
-  nombre: string;
-  quantity: number;
-  selectedPriceId: number;
-  selectedPrice: number;
-  selectedPriceRole: RolPrecio;
-  precios: Precios[];
-  stock: { cantidad: number }[];
-}
-
 function CreditoMainPage() {
   const sucursalId = useStore((s) => s.sucursalId) ?? 0;
 

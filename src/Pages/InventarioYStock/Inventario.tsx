@@ -9,7 +9,7 @@ import "dayjs/locale/es";
 import utc from "dayjs/plugin/utc";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 
-import { Category, ProductCreate } from "./interfaces.interface";
+import { Categorias, Category, ProductCreate } from "./interfaces.interface";
 import { motion } from "framer-motion";
 
 import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
@@ -19,6 +19,7 @@ import TableInventario from "./table/table";
 import { PaginatedInventarioResponse } from "./interfaces/InventaryInterfaces";
 import { RotateCcw, Tag, X } from "lucide-react";
 import { Link } from "react-router-dom";
+import FiltersSection from "./filters/filters-sections";
 
 dayjs.extend(utc);
 dayjs.extend(localizedFormat);
@@ -31,13 +32,6 @@ interface InventarioProps {
   setOpenCategory: React.Dispatch<React.SetStateAction<boolean>>;
   loadInventoryData: () => Promise<void>;
   //crear categoria
-  createCategory: (nombreCategorya: string) => Promise<void>;
-  deleteCategory: (categoryID: number) => Promise<void>;
-
-  updateOneCategory: (
-    nombreCategory: string,
-    categoryID: number
-  ) => Promise<void>;
   //Para crear producto y limpiar
   productCreate: ProductCreate;
   setProductCreate: React.Dispatch<React.SetStateAction<ProductCreate>>;
@@ -59,25 +53,23 @@ interface InventarioProps {
   };
 
   isloadingInventario: boolean;
+
+  handleSelectCat: (ids: number[]) => void;
+  cats: Categorias[];
 }
 
 export default function Inventario({
   categorias,
   proveedores,
-  //para dialog de category
-  // openCategory,
-  // setOpenCategory,
   loadInventoryData,
-  //
-  // createCategory,
-  // deleteCategory,
-  // updateOneCategory,
   setSearchQuery,
   searchQuery,
   productsInventario,
   setPagination,
   pagination,
   isloadingInventario,
+
+  handleSelectCat,
 }: //croper images
 //precios del producto
 InventarioProps) {
@@ -128,6 +120,11 @@ InventarioProps) {
           />
         </div>
 
+        <FiltersSection
+          searchQuery={searchQuery}
+          cats={categorias}
+          handleSelectCat={handleSelectCat}
+        />
         {/* === Botones === */}
         <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2">
           <Button

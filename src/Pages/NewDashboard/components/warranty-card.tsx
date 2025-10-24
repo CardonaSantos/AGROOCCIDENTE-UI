@@ -106,8 +106,6 @@ export function WarrantyCard({
     }
   };
 
-  console.log("La garantia es: ", garantia);
-
   return (
     <>
       <Card

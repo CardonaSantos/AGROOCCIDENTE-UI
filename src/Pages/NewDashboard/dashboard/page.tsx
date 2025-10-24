@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { useStore } from "@/components/Context/ContextSucursal";
 import type {
-  CreditoRegistro,
   DailyMoney,
   MasVendidos,
   Reparacion,
@@ -26,7 +25,6 @@ import { OverviewCards } from "../components/overview-cards";
 import { SalesChartCard } from "../components/sales-chart-card";
 import { TopSellingProductsTable } from "../components/top-selling-products-table";
 import { RecentTransactionsTable } from "../components/recent-transactions-table";
-import { CreditCardList } from "../components/credit-card-list";
 import { RepairCardList } from "../components/repair-card-list";
 import { WarrantyCardList } from "../components/warranty-card-list";
 import { PriceRequestList } from "../components/price-request-list";
@@ -56,6 +54,12 @@ import { Button } from "@/components/ui/button";
 import { PayloadAcceptCredito } from "../credit-authorizations/interfaces/accept-credito.dto";
 import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
 import { MetodoPagoMainPOS } from "@/Pages/POS/interfaces/methodPayment";
+import PurchasePaymentFormDialog, {
+  CajaConSaldo,
+} from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
+import { SimpleCredit } from "../credit-authorizations/interfaces/credit-records";
+import CreditCardList from "../credit-records-dashboard/credit-card-list";
+import { AUTH_KEY, CREDIT_QK } from "./query";
 
 // import { useSocketCtx, useSocketEvent } from "@/Web/realtime/SocketProvider";
 // import { Button } from "@/components/ui/button";
@@ -68,18 +72,12 @@ dayjs.locale("es");
 
 // arriba del componente
 const AUTH_FILTERS = { estado: "PENDIENTE" } as const;
-const AUTH_KEY = ["credit-authorizations", AUTH_FILTERS] as const;
 
 export default function DashboardPageMain() {
   const { socket } = useSocketCtx(); // ✅
 
   const formatearFecha = (fecha: string) => {
     const nueva_fecha = dayjs(fecha).format("DD MMMM YYYY, hh:mm A");
-    return nueva_fecha;
-  };
-
-  const formatearFechaSimple = (fecha: string) => {
-    const nueva_fecha = dayjs(fecha).format("DD MMMM YYYY");
     return nueva_fecha;
   };
 
@@ -103,8 +101,6 @@ export default function DashboardPageMain() {
     SolicitudTransferencia[]
   >([]);
   const [warranties, setWarranties] = useState<GarantiaType[]>([]);
-  const [creditos, setCreditos] = useState<CreditoRegistro[]>([]);
-  const [isLoadingCreditos, setIsLoadingCreditos] = useState(true);
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
 
   // Warranty Dialog States
@@ -121,9 +117,51 @@ export default function DashboardPageMain() {
   const [estadoRegistFinishW, setEstadoFinishW] = useState("");
   const [conclusion, setConclusion] = useState("");
   const [accionesRealizadas, setAccionesRealizadas] = useState("");
-
   // Update timeline warranty dialog states
   const queryClient = useQueryClient();
+
+  // --- Pago previo a aceptación de crédito ---
+  const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
+
+  // estado controlado del dialog
+  const [observacionesPay, setObservacionesPay] = useState("");
+  const [proveedorSelected, setProveedorSelected] = useState<
+    string | undefined
+  >(undefined);
+  const [metodoPagoSel, setMetodoPagoSel] = useState<MetodoPagoMainPOS | "">(
+    ""
+  );
+  const [cuentaBancariaSelected, setCuentaBancariaSelected] =
+    useState<string>("");
+  const [cajaSelected, setCajaSelected] = useState<string | null>(null);
+
+  // Queries para cargar listas
+  const proveedoresQ = useApiQuery<Array<{ id: number; nombre: string }>>(
+    ["proveedores"],
+    "/proveedor",
+    undefined,
+    { staleTime: 5 * 60_000, refetchOnWindowFocus: false }
+  );
+
+  const cuentasQ = useApiQuery<Array<{ id: number; nombre: string }>>(
+    ["cuentas-bancarias", "simple-select"],
+    "cuentas-bancarias/get-simple-select",
+    undefined,
+    { staleTime: 5 * 60_000, refetchOnWindowFocus: false }
+  );
+
+  // Cajas abiertas por sucursal
+  const cajasQ = useApiQuery<CajaConSaldo[]>(
+    ["cajas-disponibles", sucursalId],
+    `/caja/cajas-disponibles/${sucursalId}`,
+    undefined,
+    { enabled: !!sucursalId, staleTime: 30_000, refetchOnWindowFocus: false }
+  );
+
+  // Sanitizados
+  const proveedores = proveedoresQ.data ?? [];
+  const cuentasBancarias = cuentasQ.data ?? [];
+  const cajasDisponibles = cajasQ.data ?? [];
 
   const getInfo = async () => {
     try {
@@ -198,23 +236,6 @@ export default function DashboardPageMain() {
     }
   };
 
-  const getCredits = async () => {
-    setIsLoadingCreditos(true);
-    try {
-      const response = await axios.get(
-        `${API_URL}/cuotas/get-credits-without-paying`
-      );
-      if (response.status === 200) {
-        setCreditos(response.data);
-        setIsLoadingCreditos(false);
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al cargar datos");
-      setIsLoadingCreditos(false);
-    }
-  };
-
   const getReparacionesRegis = async () => {
     try {
       const response = await axios.get(
@@ -241,20 +262,26 @@ export default function DashboardPageMain() {
     }
   );
 
+  const { data: creditsRecords } = useApiQuery<SimpleCredit[]>(
+    CREDIT_QK,
+    "credito/simple-credit-dashboard",
+    undefined,
+    { refetchOnMount: "always", staleTime: 0 }
+  );
+
   const { mutateAsync: acceptCreditAuth } = useApiMutation<
     any,
     PayloadAcceptCredito
   >("post", "credito-authorization/create-credito-from-auth", undefined, {
-    // dispara refetch de todas las listas de autorizaciones (cualquier filtro)
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["credit-authorizations"],
-        exact: false,
-      });
+    onSuccess: () => {
+      handleInvalidateQkRefresh();
     },
-    // si quieres estrictamente la lista de PENDIENTES:
-    // onSettled: () => queryClient.invalidateQueries({ queryKey: AUTH_KEY })
   });
+
+  const handleInvalidateQkRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: AUTH_KEY });
+    queryClient.invalidateQueries({ queryKey: CREDIT_QK });
+  };
 
   useEffect(() => {
     if (sucursalId) {
@@ -266,7 +293,6 @@ export default function DashboardPageMain() {
     getSolicitudes();
     getSolicitudesTransferencia();
     getWarranties();
-    getCredits();
     getReparacionesRegis();
   }, []);
 
@@ -441,19 +467,41 @@ export default function DashboardPageMain() {
   };
 
   const handleAcceptCredit = async () => {
+    if (!selectedAuth) return;
+
+    const metodoPOS = mapMetodoToPOS(metodoPagoSel);
+
     const payload: PayloadAcceptCredito = {
       adminId: userID,
-      comentario: "Comentario",
-      metodoPago: MetodoPagoMainPOS.EFECTIVO,
-      authCreditoId: selectedAuth?.id ?? 0,
-      cuentaBancariaId: 1,
+      comentario: observacionesPay || "Aprobación desde dashboard",
+      metodoPago: metodoPOS,
+      authCreditoId: selectedAuth.id,
+      cuentaBancariaId:
+        metodoPOS === MetodoPagoMainPOS.TRANSFERENCIA ||
+        metodoPOS === MetodoPagoMainPOS.TARJETA ||
+        metodoPOS === MetodoPagoMainPOS.CHEQUE
+          ? cuentaBancariaSelected
+            ? Number(cuentaBancariaSelected)
+            : null
+          : null,
+      cajaId:
+        metodoPOS === MetodoPagoMainPOS.EFECTIVO
+          ? cajaSelected
+            ? Number(cajaSelected)
+            : null
+          : null,
     };
+    console.log("El payload creado es: ", payload);
+
     try {
       await toast.promise(acceptCreditAuth(payload), {
         success: "Crédito aceptado y registrado correctamente",
         loading: "Registrando crédito...",
         error: (error) => getApiErrorMessageAxios(error),
       });
+
+      setOpenPaymentDialog(false); // <- cierra el form de pago
+      setSelectedAuth(null);
     } catch (error) {
       console.log(error);
     }
@@ -463,15 +511,12 @@ export default function DashboardPageMain() {
     ? authorizations.data
     : [];
 
+  const credits = Array.isArray(creditsRecords) ? creditsRecords : [];
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedAuth, setSelectedAuth] = useState<NormalizedSolicitud | null>(
     null
   );
-
-  const handleReview = (auth: NormalizedSolicitud) => {
-    setSelectedAuth(auth);
-    setDialogOpen(true);
-  };
 
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const toggleCard = (id: number) => {
@@ -522,9 +567,6 @@ export default function DashboardPageMain() {
       console.log("cache después:", queryClient.getQueryData(AUTH_KEY));
     }
   );
-
-  console.log("Los registros de autorizaciones son: ", authorizationsData);
-
   // helpers para el copy (opcional arriba del JSX)
   const nombreClienteSel = selectedAuth
     ? `${selectedAuth.cliente.nombre}${
@@ -557,8 +599,45 @@ export default function DashboardPageMain() {
       }`
     : "";
 
+  function mapMetodoToPOS(m: MetodoPagoMainPOS | ""): MetodoPagoMainPOS {
+    switch (m) {
+      case "EFECTIVO":
+      case "CONTADO":
+        return MetodoPagoMainPOS.EFECTIVO;
+      case "TRANSFERENCIA":
+        return MetodoPagoMainPOS.TRANSFERENCIA;
+      case "TARJETA":
+        return MetodoPagoMainPOS.TARJETA;
+      case "CHEQUE":
+        return MetodoPagoMainPOS.CHEQUE;
+      default:
+        return MetodoPagoMainPOS.EFECTIVO;
+    }
+  }
+
+  // Extrae el monto de enganche (0 si no hay)
+  function getMontoEnganche(auth: NormalizedSolicitud | null): number {
+    if (!auth) return 0;
+    const eng = auth.schedule.cuotas.find((c) => c.etiqueta === "ENGANCHE");
+    return Number(eng?.monto ?? 0);
+  }
+
+  const handleReview = (auth: NormalizedSolicitud) => {
+    setSelectedAuth(auth);
+
+    // reset del form de pago (se usará luego)
+    setObservacionesPay("");
+    setProveedorSelected(undefined);
+    setMetodoPagoSel("");
+    setCuentaBancariaSelected("");
+    setCajaSelected(null);
+
+    // 1) primero confirmación
+    setDialogOpen(true);
+  };
+
   return (
-    <motion.div {...DesvanecerHaciaArriba} className="container p-4 space-y-4">
+    <motion.div {...DesvanecerHaciaArriba} className="container mx-auto">
       <h1 className="text-2xl font-bold">Dashboard de Administrador</h1>
 
       {/* Resumen de ventas */}
@@ -571,6 +650,47 @@ export default function DashboardPageMain() {
       <Authorizations
         authorizationsData={authorizationsData}
         onReview={handleReview}
+      />
+
+      {/* DIALOG DE PAGO PARA RECEPCION DE CRÉDITO */}
+      {/* 1) Diálogo de método de pago (siempre previo) */}
+      <PurchasePaymentFormDialog
+        open={openPaymentDialog}
+        onOpenChange={setOpenPaymentDialog}
+        title={
+          getMontoEnganche(selectedAuth) > 0
+            ? "Recepcionar enganche y asignar canal"
+            : "Asignar canal de cobro para la venta a crédito"
+        }
+        description={
+          getMontoEnganche(selectedAuth) > 0
+            ? "Selecciona el método y canal donde se recibirá el enganche."
+            : "Aunque no haya enganche, asigna el canal (caja o banco) que se ligará a la venta generada."
+        }
+        proveedores={proveedores}
+        cuentasBancarias={cuentasBancarias}
+        cajasDisponibles={cajasDisponibles}
+        montoRecepcion={getMontoEnganche(selectedAuth)}
+        formatMoney={formattMonedaGT}
+        // controlados
+        observaciones={observacionesPay}
+        setObservaciones={setObservacionesPay}
+        proveedorSelected={proveedorSelected}
+        setProveedorSelected={setProveedorSelected}
+        metodoPago={metodoPagoSel}
+        setMetodoPago={(v) =>
+          setMetodoPagoSel(v as unknown as MetodoPagoMainPOS)
+        }
+        cuentaBancariaSelected={cuentaBancariaSelected}
+        setCuentaBancariaSelected={setCuentaBancariaSelected}
+        cajaSelected={cajaSelected}
+        setCajaSelected={setCajaSelected}
+        // proveedor no aplica en este flujo
+        requireProveedor={false}
+        showProveedor={false}
+        // AHORA FINALIZA AQUÍ:
+        onContinue={handleAcceptCredit}
+        continueLabel="Recepcionar y crear crédito" // <- nuevo copy
       />
 
       {/* ÚNICO diálogo global */}
@@ -593,11 +713,11 @@ export default function DashboardPageMain() {
           variant: "destructive",
         }}
         confirmButton={{
-          label: "Aprobar y registrar crédito",
+          label: "Confirmar y recepcionar crédito", // <- nuevo copy
           onClick: () => {
-            if (!selectedAuth) return;
-            handleAcceptCredit();
+            // cerrar confirmación y abrir el form de pago
             setDialogOpen(false);
+            setOpenPaymentDialog(true);
           },
         }}
       >
@@ -611,13 +731,7 @@ export default function DashboardPageMain() {
 
       <TableAlertStocks />
       {/* MOSTRAR LOS CRÉDITOS ACTIVOS */}
-      <CreditCardList
-        creditos={creditos}
-        isLoadingCreditos={isLoadingCreditos}
-        formattMonedaGT={formattMonedaGT}
-        formatearFechaSimple={formatearFechaSimple}
-        getCredits={getCredits}
-      />
+      <CreditCardList credits={credits} />
       {/* MOSTRAR LAS REPARACIONES ACTIVAS */}
       <RepairCardList
         reparaciones={reparaciones}

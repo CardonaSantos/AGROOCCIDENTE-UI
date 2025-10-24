@@ -202,7 +202,6 @@ function MapCuotasCreditoCompra({
 
   // selección del picker
   const [picked, setPicked] = useState<PickedItem[]>([]);
-  const [wasTotal, setWasTotal] = useState(false); // si el usuario eligió "recibir todo"
 
   // pago
   const [payloadPayment, setPayloadPayment] = useState<PagoCxPPayload>({
@@ -221,11 +220,9 @@ function MapCuotasCreditoCompra({
     string | undefined
   >(undefined);
 
-  const {
-    data: products = [],
-    isFetching: loadingProducts,
-    refetch: refetchProducts,
-  } = useApiQuery<DetalleNormalizado[]>(
+  const { data: products = [], refetch: refetchProducts } = useApiQuery<
+    DetalleNormalizado[]
+  >(
     ["detalles-recepcion", compraId],
     `compras-pagos-creditos/get-detalles-productos-recepcion/${compraId}`,
     undefined,
@@ -292,7 +289,6 @@ function MapCuotasCreditoCompra({
   const handleOpenPayFlow = (cuota: UICuota) => {
     setCuotaSeleccionada(cuota);
     setPicked([]);
-    setWasTotal(false);
 
     if (isTodoRecibido) {
       setPayloadPayment((prev) => ({
@@ -314,9 +310,8 @@ function MapCuotasCreditoCompra({
     }
   };
 
-  const handlePickerConfirm = (items: PickedItem[], wasTotalLocal: boolean) => {
+  const handlePickerConfirm = (items: PickedItem[]) => {
     setPicked(items);
-    setWasTotal(wasTotalLocal);
     // abrir pago con defaults
     if (cuotaSeleccionada) {
       setPayloadPayment((prev) => ({
@@ -560,9 +555,7 @@ function MapCuotasCreditoCompra({
         normalizados={products}
         picked={picked}
         setPicked={setPicked}
-        onConfirm={(items, wasTotalLocal) =>
-          handlePickerConfirm(items, wasTotalLocal)
-        }
+        onConfirm={(items) => handlePickerConfirm(items)}
       />
 
       {/* Dialog de pago (igual que hoy) */}

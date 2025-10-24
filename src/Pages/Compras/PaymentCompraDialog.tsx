@@ -18,7 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { formattMonedaGT } from "@/utils/formattMoneda";
-import { CajaConSaldo } from "./compra-detalle";
+import { CajaConSaldo } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
 type MetodoPago =
   | "EFECTIVO"
   | "TRANSFERENCIA"

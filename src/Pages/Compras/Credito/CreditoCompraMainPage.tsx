@@ -156,11 +156,6 @@ export default function CreditoCompraMainPage({
         recepciones
       );
 
-      const isPorRecepcion = form.modo === "POR_RECEPCION";
-      const cuentaId = Number.isFinite(Number(cuentaBancariaSelected))
-        ? Number(cuentaBancariaSelected)
-        : undefined;
-
       const engancheMonto =
         form.planCuotaModo === "PRIMERA_MAYOR" && cuotas.length > 0
           ? cuotas[0].monto
@@ -176,10 +171,6 @@ export default function CreditoCompraMainPage({
         Number.isFinite(Number(cuentaBancariaSelected))
           ? Number(cuentaBancariaSelected)
           : undefined;
-
-      const metodoPagoEnganche = form.registrarPagoEngancheAhora
-        ? "CONTADO"
-        : undefined;
 
       const payload: CrearCreditoCompraPayload = {
         compraId,

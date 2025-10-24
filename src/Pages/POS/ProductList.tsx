@@ -35,7 +35,6 @@ interface ProductListProps {
 export default function ProductList({
   productos,
   onAddToCart,
-  onImageClick,
 }: ProductListProps) {
   const [searchTerm, setSearchTerm] = useState<string>("");
 

@@ -84,6 +84,7 @@ import CreateProductPage from "./Pages/producto/createProductoMain";
 import CategoriasMainPage from "./Pages/Categorias/CategoriasMainPage";
 import HistorialVentasMain from "./Pages/HistorialVentas/HistorialVentas";
 import CreditoMainPageManage from "./Pages/creditos/credito-main-page";
+import CreditoDetails from "./Pages/creditos/components/credito-details";
 
 function App() {
   const { checkAuth } = useAuthStore();
@@ -520,6 +521,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <CreditoMainPageManage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/credito-details/:id"
+              element={
+                <ProtectedRoute>
+                  <CreditoDetails />
                 </ProtectedRoute>
               }
             />

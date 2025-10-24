@@ -185,12 +185,10 @@ export default function PuntoVenta() {
   const [openImage, setOpenImage] = useState(false);
   const [imagesProduct, setImagesProduct] = useState<string[]>([]);
   const [isDisableButton, setIsDisableButton] = useState(false);
-
   const [selectedCustomerID, setSelectedCustomerID] = useState<Customer | null>(
     null
   );
   const [activeTab, setActiveTab] = useState("existing");
-
   // Datos del cliente ad-hoc (venta rápida)
   const [nombre, setNombre] = useState<string>("");
   const [apellidos, setApellidos] = useState<string>("");
@@ -545,16 +543,14 @@ export default function PuntoVenta() {
   const handleCreateCreditRequest = async (payload: any) => {
     try {
       //validar cliente, metodo de pago, monto, etc.
-      console.log(
-        "El payload recibiendo en funcion handle padre, es: ",
-        payload
-      );
 
       toast.promise(createCreditRequest(payload), {
         success: "Crédito enviado para autorización, esperando respuesta...",
         loading: "Enviando solicitud de aprovación de crédito",
         error: (error) => getApiErrorMessageAxios(error),
       });
+
+      console.log("PAYLOAD GENERADO POR CREDITO REQ: ", payload);
     } catch (error) {
       toast.error(getApiErrorMessageAxios(error));
     } finally {
@@ -688,7 +684,7 @@ export default function PuntoVenta() {
         className="
   grid grid-cols-1 gap-4 items-start
   md:[grid-template-columns:minmax(0,1fr)_clamp(360px,40vw,420px)]
-  xl:[grid-template-columns:minmax(0,1fr)_clamp(380px,32vw,440px)]
+  xl:[grid-template-columns:minmax(0,1fr)_clamp(380px,32vw,440px)] 
 "
       >
         {/* Lista de Productos (se  mantiene) */}

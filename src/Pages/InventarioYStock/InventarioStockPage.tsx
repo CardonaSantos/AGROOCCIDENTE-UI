@@ -3,8 +3,6 @@ import { motion } from "framer-motion";
 import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
 import { Categorias, ProductCreate } from "./interfaces.interface";
 import { useStore } from "@/components/Context/ContextSucursal";
-import { createOneCategory, deleteOneCategory, updateCategory } from "./api";
-import { toast } from "sonner";
 import { SimpleProvider } from "@/Types/Proveedor/SimpleProveedor";
 import Inventario from "./Inventario";
 import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
@@ -14,7 +12,6 @@ import { QueryTable } from "./interfaces/querytable";
 function InventarioStockPage() {
   const recibidoPorId = useStore((s) => s.userId) ?? 0;
   const sucursalId = useStore((s) => s.sucursalId) ?? 0;
-
   //CATEGORIAS
   const [openCategory, setOpenCategory] = useState<boolean>(false);
   const [productCreate, setProductCreate] = useState<ProductCreate>({
@@ -29,10 +26,8 @@ function InventarioStockPage() {
     stockMinimo: null,
     imagenes: [],
   });
-
   //DATA PARA INVENTARIO
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
-
   const [searchQuery, setSearchQuery] = useState<QueryTable>({
     categorias: [],
     codigoProducto: "",
@@ -42,6 +37,13 @@ function InventarioStockPage() {
     precio: "",
     tipoPresentacion: [],
   });
+
+  const handleSelectCat = (ids: number[]) => {
+    setSearchQuery((prev) => ({
+      ...prev,
+      categorias: ids,
+    }));
+  };
 
   const {
     data: productsInventario = {
@@ -80,7 +82,7 @@ function InventarioStockPage() {
 
   const { data: cats = [], refetch: reFetchCats } = useApiQuery<Categorias[]>(
     ["categorias"],
-    "/categoria/",
+    "/categoria",
     {
       // params: {}
     },
@@ -102,54 +104,6 @@ function InventarioStockPage() {
     }
   );
 
-  const createCategory = async (nombreCategorya: string) => {
-    if (!nombreCategorya.trim()) {
-      toast.info("Una categoría no puede estar vacía");
-      return;
-    }
-
-    await toast.promise(createOneCategory(nombreCategorya), {
-      loading: "Creando categoría…",
-      success: "Categoría creada con éxito",
-      error: "Error al crear categoría",
-    });
-    reloadInventaryData();
-    setOpenCategory(false);
-  };
-
-  const deleteCategory = async (categoryID: number) => {
-    if (!categoryID) {
-      toast.info("No hay una categoría seleccionada");
-      return;
-    }
-
-    await toast.promise(deleteOneCategory(categoryID), {
-      loading: "Eliminando categoría...",
-      success: "Categoría eliminada",
-      error: "Error al eliminar categoría",
-    });
-    reloadInventaryData();
-    // await loadInventoryData();
-  };
-
-  const updateOneCategory = async (
-    nombreCategory: string,
-    categoryID: number
-  ) => {
-    if (!nombreCategory && !categoryID) {
-      toast.info("Datos insuficientes");
-      return;
-    }
-
-    await toast.promise(updateCategory(nombreCategory, categoryID), {
-      loading: "Actualizando categoría...",
-      success: "Categoría actualizada",
-      error: "Error al actualizar categoría",
-    });
-    reloadInventaryData();
-    // setOpenCategory(false);
-  };
-
   const reloadInventaryData = async () => {
     await reFetchInventario();
     await reFetchCats();
@@ -164,6 +118,10 @@ function InventarioStockPage() {
   return (
     <motion.div {...DesvanecerHaciaArriba} className="w-full px-4">
       <Inventario
+        //filtrado-->
+        cats={cats}
+        handleSelectCat={handleSelectCat}
+        //
         setSearchQuery={setSearchQuery}
         categorias={cats}
         proveedores={provs}
@@ -172,9 +130,6 @@ function InventarioStockPage() {
         setOpenCategory={setOpenCategory}
         loadInventoryData={reloadInventaryData}
         //createCategory
-        createCategory={createCategory}
-        deleteCategory={deleteCategory}
-        updateOneCategory={updateOneCategory}
         //Para creacion de producto y limpieza al terminar de crear
         productCreate={productCreate}
         setProductCreate={setProductCreate}

@@ -5,10 +5,12 @@ export interface PayloadAcceptCredito {
 
   metodoPago?: MetodoPagoMainPOS;
 
-  cuentaBancariaId?: number;
+  cuentaBancariaId: number | null;
 
-  cajaId?: number;
+  cajaId: number | null;
 
   comentario?: string;
   authCreditoId: number;
+
+  referenciaPago?: string | null; // opcional
 }
