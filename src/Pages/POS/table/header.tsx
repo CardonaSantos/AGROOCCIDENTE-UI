@@ -15,6 +15,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SortingState } from "@tanstack/react-table";
 import React from "react";
 import { PageHeader } from "@/utils/components/PageHeaderPos";
+import { Label } from "@/components/ui/label";
+import { ReusableSelect } from "@/utils/components/ReactSelectComponent/ReusableSelect";
+import { TipoPresentacion } from "@/Pages/newCreateProduct/interfaces/DomainProdPressTypes";
+import { CategoriaWithCount } from "@/Pages/Categorias/CategoriasMainPage";
+import { Search } from "lucide-react";
 
 enum RolPrecio {
   PUBLICO = "PUBLICO",
@@ -60,6 +65,8 @@ type ProductoPOS = {
 };
 
 interface Props {
+  categorias: CategoriaWithCount[];
+  setQueryOptions: React.Dispatch<React.SetStateAction<NewQueryDTO>>;
   searchValue: string;
   handleImageClick: (images: string[]) => void;
   addToCart: (product: ProductoPOS) => void;
@@ -83,6 +90,7 @@ interface Props {
   /** opcional: si quieres forzar una altura máxima concreta (px) */
   maxDesktopHeightPx?: number;
   maxMobileHeightPx?: number;
+  tiposPresentacion: TipoPresentacion[];
 }
 
 /** Barra de paginación compacta (usada arriba y abajo) */
@@ -195,7 +203,7 @@ function PaginationBar({
 export default function TablePOS({
   data,
   handleSearchItemsInput,
-  queryOptions,
+  // queryOptions,
   addToCart,
   handleImageClick,
   isLoadingProducts,
@@ -211,6 +219,10 @@ export default function TablePOS({
   maxMobileHeightPx,
   getRemainingFor,
   searchValue,
+  tiposPresentacion,
+  queryOptions,
+  setQueryOptions,
+  categorias,
 }: Props) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "nombre", desc: false },
@@ -291,17 +303,113 @@ export default function TablePOS({
     </tbody>
   );
 
+  const selectedTiposEmpaque = React.useMemo(
+    () =>
+      tiposPresentacion.filter((tp) =>
+        queryOptions.tipoEmpaque.includes(tp.id)
+      ),
+    [tiposPresentacion, queryOptions.tipoEmpaque]
+  );
+
+  const selectedCategorias = React.useMemo(
+    () => categorias.filter((cat) => queryOptions.cats.includes(cat.id)),
+    [categorias, queryOptions.cats]
+  );
+
+  const handleTipoEmpaqueChange = React.useCallback(
+    (arr: TipoPresentacion[]) => {
+      setQueryOptions((prev) => ({
+        ...prev,
+        tipoEmpaque: arr.map((t) => t.id),
+      }));
+    },
+    [setQueryOptions]
+  );
+
+  const handleSelectCategoria = React.useCallback(
+    (arr: CategoriaWithCount[]) => {
+      setQueryOptions((prev) => ({
+        ...prev,
+        cats: arr.map((cat) => cat.id),
+      }));
+    },
+    [setQueryOptions]
+  );
+
   return (
     <div className="w-full">
       {/* Search */}
       <PageHeader title="POS" fallbackBackTo="/" sticky={false} />
-      <div className="mb-3">
-        <Input
-          placeholder="Buscar por nombre o código…"
-          value={searchValue}
-          onChange={handleSearchItemsInput}
-          className="h-7"
-        />
+
+      <div className="mb-3 grid grid-cols-1 sm:grid-cols-[minmax(220px,1fr)_minmax(260px,1fr)] gap-3 items-end">
+        <div className="relative">
+          {/* Icono izquierdo */}
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+
+          {/* Input con espacio para icono izq y botón der */}
+          <Input
+            id="q"
+            type="search"
+            placeholder="Buscar por nombre o código…"
+            value={searchValue}
+            onChange={handleSearchItemsInput}
+            className="h-8 pl-8 pr-24" // 👈 pl para icono, pr para botón
+          />
+        </div>
+
+        <div className="grid gap-1">
+          <Label className="text-xs">Por tipo de presentación</Label>
+          <ReusableSelect<TipoPresentacion>
+            isClearable
+            isMulti
+            items={tiposPresentacion}
+            getLabel={(t) => `${t.nombre} (relacionados:${t.productos})`}
+            getValue={(t) => Number(t.id)}
+            value={selectedTiposEmpaque}
+            onChange={handleTipoEmpaqueChange}
+            placeholder="Presentaciones"
+            selectProps={{
+              isSearchable: true,
+              menuPortalTarget: document.body, // 👈 fuera del stacking del table
+              menuPosition: "fixed", // 👈 estable en contenedores con overflow
+              menuShouldScrollIntoView: false, // opcional
+              styles: {
+                menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                valueContainer: (b) => ({
+                  ...b,
+                  padding: "0 5px",
+                }),
+              },
+            }}
+          />
+        </div>
+
+        <div className="grid gap-1">
+          <Label className="text-xs">Por categorías</Label>
+          <ReusableSelect<CategoriaWithCount>
+            isClearable
+            isMulti
+            items={categorias}
+            getLabel={(t) => `${t.nombre} (relacionados:${t.productosCount})`}
+            getValue={(t) => Number(t.id)}
+            value={selectedCategorias}
+            onChange={handleSelectCategoria}
+            placeholder="Categorías"
+            selectProps={{
+              isSearchable: true,
+              menuPortalTarget: document.body, // 👈 fuera del stacking del table
+              menuPosition: "fixed", // 👈 estable en contenedores con overflow
+              menuShouldScrollIntoView: false, // opcional
+              styles: {
+                menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                valueContainer: (b) => ({
+                  ...b,
+                  padding: "0 5px",
+                }),
+              },
+            }}
+          />
+        </div>
       </div>
 
       {/* ===== DESKTOP ===== */}
@@ -459,10 +567,10 @@ export default function TablePOS({
           <AnimatePresence initial={false}>
             {data.map((p) => {
               const precios = p.precios ?? [];
-              const stockTotal = (p.stocks ?? []).reduce(
-                (a, s) => a + s.cantidad,
-                0
-              );
+              // const stockTotal = (p.stocks ?? []).reduce(
+              //   (a, s) => a + s.cantidad,
+              //   0
+              // );
               const remaining = getRemainingFor(p); // 👈 usar el cálculo que viene del padre
 
               return (

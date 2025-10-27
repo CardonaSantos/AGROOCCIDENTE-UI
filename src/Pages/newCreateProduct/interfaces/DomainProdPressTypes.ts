@@ -26,6 +26,7 @@ export interface TipoPresentacion {
   activo: boolean;
   creadoEn?: string;
   actualizadoEn?: string;
+  productos: number;
 }
 
 // ===== Imágenes en UI =====

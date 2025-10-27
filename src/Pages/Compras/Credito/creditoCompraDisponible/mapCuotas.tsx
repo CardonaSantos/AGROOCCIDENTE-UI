@@ -187,7 +187,7 @@ function MapCuotasCreditoCompra({
   cajasDisponibles,
   cuentasBancarias = [],
   proveedores = [],
-  normalizados,
+  // normalizados,
   compraId,
 }: PropsCuotas) {
   const qc = useQueryClient();
@@ -279,12 +279,6 @@ function MapCuotasCreditoCompra({
     ? `Monto inválido. Máximo permitido: ${formattMonedaGT(saldoCuota)}.`
     : null;
 
-  // ¿todo recepcionado?
-  const isTodoRecibido = useMemo(
-    () => normalizados.every((n) => getPendiente(n) === 0),
-    [normalizados]
-  );
-
   // --- handlers
   const allReceived = (rows: DetalleNormalizado[] = []) =>
     rows.every((n) => getPendiente(n) === 0);
@@ -317,7 +311,7 @@ function MapCuotasCreditoCompra({
     }
   };
 
-  const handlePickerConfirm = (items: PickedItem[], wasTotal: boolean) => {
+  const handlePickerConfirm = (items: PickedItem[]) => {
     setPicked(items);
     // abrir pago con defaults
     if (cuotaSeleccionada) {
@@ -565,7 +559,7 @@ function MapCuotasCreditoCompra({
         normalizados={products}
         picked={picked}
         setPicked={setPicked}
-        onConfirm={(items, wasTotal) => handlePickerConfirm(items, wasTotal)}
+        onConfirm={(items) => handlePickerConfirm(items)}
       />
 
       {/* Dialog de pago (igual que hoy) */}

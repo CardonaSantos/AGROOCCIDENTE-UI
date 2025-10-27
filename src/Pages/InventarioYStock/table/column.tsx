@@ -517,7 +517,6 @@ export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
     size: 48, // mantiene la columna estrecha
     cell: (info) => {
       const stop = (e: React.MouseEvent) => e.stopPropagation();
-      const isProduct = info.row.original.type === "PRODUCTO";
       const productoId = info.row.original.productoId;
       return (
         <div className="flex justify-end">

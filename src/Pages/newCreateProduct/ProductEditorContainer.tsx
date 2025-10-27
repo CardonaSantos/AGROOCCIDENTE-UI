@@ -24,7 +24,6 @@ import { PageHeader } from "@/utils/components/PageHeaderPos";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { buildFormData, debugFormData } from "./builder";
-// (Temporal) mientras definimos el DTO real de presentación del backend
 
 // Estado inicial
 const initialProduct: ProductCreateDTO = {
@@ -35,8 +34,8 @@ const initialProduct: ProductCreateDTO = {
     stockMinimo: 0,
     precioCostoActual: 0,
     categorias: [],
-    tipoPresentacionId: null, // ✅ nuevo
-    tipoPresentacion: null, // ✅ nuevo (para label)
+    tipoPresentacionId: null,
+    tipoPresentacion: null,
   },
   description: "",
   images: [],
@@ -67,7 +66,7 @@ export default function ProductEditorContainer({
 
   const categories = catsData ?? [];
   const packagingTypes = packData?.data ?? [];
-  // 2) Carga detalle condicional
+  //  Carga detalle condicional
   const detailKey = mode === "product" ? ["product", id] : ["presentation", id];
   const detailUrl =
     mode === "product" ? `products/${id}` : `presentations/${id}`;
@@ -75,7 +74,7 @@ export default function ProductEditorContainer({
     ProductDetailDTO | PresentationDetailDTO
   >(detailKey, detailUrl, undefined, { enabled: isEditing });
 
-  // 3) Estado del formulario
+  //  Estado del formulario
   const [formState, setFormState] = useState<ProductCreateDTO>(initialProduct);
   useEffect(() => {
     if (!detailData) return;
@@ -131,8 +130,6 @@ export default function ProductEditorContainer({
       console.log("el form data es para actualizar o crear es: ", formData);
     } catch {}
   };
-
-  console.log("El form de mi create prod es: ", formState);
 
   return (
     <div className="space-y-6">

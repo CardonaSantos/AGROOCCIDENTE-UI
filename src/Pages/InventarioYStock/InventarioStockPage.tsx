@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
-import { Categorias, ProductCreate } from "./interfaces.interface";
+import { ProductCreate } from "./interfaces.interface";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { SimpleProvider } from "@/Types/Proveedor/SimpleProveedor";
 import Inventario from "./Inventario";
@@ -12,6 +12,8 @@ import {
   CategoriaWithCount,
   CATS_LIST_QK,
 } from "../Categorias/CategoriasMainPage";
+import { PaginatedResponse } from "../tipos-presentaciones/Interfaces/tiposPresentaciones.interfaces";
+import { TipoPresentacion } from "../newCreateProduct/interfaces/DomainProdPressTypes";
 
 function InventarioStockPage() {
   const recibidoPorId = useStore((s) => s.userId) ?? 0;
@@ -39,13 +41,20 @@ function InventarioStockPage() {
     productoNombre: "",
     sucursalId: sucursalId,
     precio: "",
-    tipoPresentacion: [],
+    tiposPresentacion: [],
   });
 
   const handleSelectCat = (ids: number[]) => {
     setSearchQuery((prev) => ({
       ...prev,
       categorias: ids,
+    }));
+  };
+
+  const handleSelecTiposEmpaque = (ids: number[]) => {
+    setSearchQuery((prev) => ({
+      ...prev,
+      tiposPresentacion: ids,
     }));
   };
 
@@ -99,13 +108,16 @@ function InventarioStockPage() {
   >(
     ["proveedores"],
     "/proveedor/simple-proveedor",
-    {
-      // params: {}
-    },
+    {},
     {
       initialData: [],
     }
   );
+
+  const { data: tiposPresentacionesResponse } = useApiQuery<
+    PaginatedResponse<TipoPresentacion>
+  >(["empaques"], "tipo-presentacion");
+  const tiposPresentacion = tiposPresentacionesResponse?.data ?? [];
 
   const reloadInventaryData = async () => {
     await reFetchInventario();
@@ -122,6 +134,8 @@ function InventarioStockPage() {
   return (
     <motion.div {...DesvanecerHaciaArriba} className="w-full px-4">
       <Inventario
+        handleSelecTiposEmpaque={handleSelecTiposEmpaque}
+        tiposPresentacion={tiposPresentacion}
         //filtrado-->
         handleSelectCat={handleSelectCat}
         //

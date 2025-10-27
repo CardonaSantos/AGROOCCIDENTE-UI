@@ -3,7 +3,7 @@ export interface QueryTable {
   productoNombre: string;
   codigoProducto: string;
   fechaVencimiento: string;
-  tipoPresentacion?: string[];
+  tiposPresentacion: number[];
   precio?: string;
   categorias: number[];
 }

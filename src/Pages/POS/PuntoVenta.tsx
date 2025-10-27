@@ -53,6 +53,12 @@ import { keepPreviousData } from "@tanstack/react-query";
 import { MetodoPagoMainPOS } from "./interfaces/methodPayment";
 import CreditoForm from "./credito-props-components/credito-form-component";
 import { FormCreditoState } from "./credito-props-components/credito-venta.interfaces";
+import { PaginatedResponse } from "../tipos-presentaciones/Interfaces/tiposPresentaciones.interfaces";
+import { TipoPresentacion } from "../newCreateProduct/interfaces/DomainProdPressTypes";
+import {
+  CategoriaWithCount,
+  CATS_LIST_QK,
+} from "../Categorias/CategoriasMainPage";
 
 // =================== Dayjs ===================
 dayjs.extend(localizedFormat);
@@ -290,7 +296,7 @@ export default function PuntoVenta() {
     codigoProveedor: "",
     nombreItem: "",
     priceRange: "",
-    tipoEmpaque: "",
+    tipoEmpaque: [],
     sucursalId,
     limit,
     page,
@@ -388,6 +394,23 @@ export default function PuntoVenta() {
     "post",
     "credito-authorization/create-authorization"
   );
+
+  const { data: tiposPresentacionesResponse } = useApiQuery<
+    PaginatedResponse<TipoPresentacion>
+  >(["empaques"], "tipo-presentacion");
+
+  const { data: cats } = useApiQuery<CategoriaWithCount[]>(
+    CATS_LIST_QK,
+    "/categoria/all-cats-with-counts",
+    undefined,
+    {
+      staleTime: 0,
+      refetchOnMount: "always",
+    }
+  );
+  const categorias = Array.isArray(cats) ? cats : [];
+  const tiposPresentacion = tiposPresentacionesResponse?.data ?? [];
+
   // =================== Efectos de datos ===================
   // PRODUCTOS SEGUROS
   const productos = Array.isArray(productsResponse.data)
@@ -699,6 +722,8 @@ export default function PuntoVenta() {
   console.log("el resultado del server es: ", productsResponse);
   console.log("el cliente seleccionado es: ", selectedCustomerID);
   console.log("el creditoForm es: ", creditoForm);
+  console.log("El query es: ", queryOptions);
+  console.log("los tipos de presentacion son: ", tiposPresentacion);
 
   return (
     <div className="container">
@@ -712,6 +737,8 @@ export default function PuntoVenta() {
         {/* Lista de Productos (se  mantiene) */}
         <div className="min-w-0">
           <TablePOS
+            categorias={categorias}
+            tiposPresentacion={tiposPresentacion}
             searchValue={search}
             defaultMapToCartProduct={defaultMapToCartProduct}
             addToCart={addToCart}
@@ -719,6 +746,7 @@ export default function PuntoVenta() {
             isLoadingProducts={isLoadingProducts}
             handleSearchItemsInput={handleSearchItemsInput}
             queryOptions={queryOptions}
+            setQueryOptions={setQueryOptions}
             data={productos}
             //NUEVO
             // 👇 NUEVO: props de paginación

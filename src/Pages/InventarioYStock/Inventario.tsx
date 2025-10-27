@@ -6,7 +6,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/es";
 import utc from "dayjs/plugin/utc";
 import localizedFormat from "dayjs/plugin/localizedFormat";
-import { Categorias, Category, ProductCreate } from "./interfaces.interface";
+import { ProductCreate } from "./interfaces.interface";
 import { motion } from "framer-motion";
 import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
 import { PageHeader } from "@/utils/components/PageHeaderPos";
@@ -17,12 +17,14 @@ import { Package2, RotateCcw, Tag, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import FiltersSection from "./filters/filters-sections";
 import { CategoriaWithCount } from "../Categorias/CategoriasMainPage";
+import { TipoPresentacion } from "../newCreateProduct/interfaces/DomainProdPressTypes";
 
 dayjs.extend(utc);
 dayjs.extend(localizedFormat);
 dayjs.locale("es");
 
 interface InventarioProps {
+  handleSelecTiposEmpaque: (ids: number[]) => void;
   categorias: CategoriaWithCount[];
   proveedores: SimpleProvider[];
   openCategory: boolean;
@@ -52,6 +54,7 @@ interface InventarioProps {
   isloadingInventario: boolean;
 
   handleSelectCat: (ids: number[]) => void;
+  tiposPresentacion: TipoPresentacion[];
 }
 
 export default function Inventario({
@@ -64,8 +67,9 @@ export default function Inventario({
   setPagination,
   pagination,
   isloadingInventario,
-
+  tiposPresentacion,
   handleSelectCat,
+  handleSelecTiposEmpaque,
 }: InventarioProps) {
   console.log("Las categorias son: ", categorias);
   console.log("proveedores: ", proveedores);
@@ -81,46 +85,55 @@ export default function Inventario({
         fallbackBackTo="/"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] items-end my-3 gap-3">
-        {/* === Input con icono === */}
-        <div className="relative w-full sm:max-w-sm">
-          {/* Botón de limpiar */}
-          <button
-            type="button"
-            onClick={() =>
-              setSearchQuery((previa) => ({
-                ...previa,
-                codigoProducto: "",
-                productoNombre: "",
-              }))
-            }
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-red-600"
-          >
-            <X className="h-4 w-4" />
-          </button>
+      <div className="mb-3 grid gap-3 lg:grid-cols-[1fr_auto] items-start">
+        {/* Controles (input + selects) */}
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] items-end">
+          {/* Buscar */}
+          <div className="min-w-0 grid gap-1">
+            <label className="text-xs">Buscar</label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  setSearchQuery((prev) => ({
+                    ...prev,
+                    codigoProducto: "",
+                    productoNombre: "",
+                  }))
+                }
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-red-600"
+                aria-label="Limpiar búsqueda"
+              >
+                <X className="h-4 w-4" />
+              </button>
 
-          {/* Input controlado */}
-          <Input
-            type="text"
-            placeholder="Buscar por nombre o código de producto"
-            className="pl-9 h-9 text-sm"
-            value={searchQuery.productoNombre} // <-- controlado
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-              setSearchQuery((prev) => ({
-                ...prev,
-                productoNombre: e.target.value,
-              }));
-            }}
+              <Input
+                type="search"
+                placeholder="Buscar por nombre o código de producto"
+                className="pl-8 h-9 text-sm"
+                value={searchQuery.productoNombre ?? ""}
+                onChange={(e) =>
+                  setSearchQuery((prev) => ({
+                    ...prev,
+                    productoNombre: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          {/* Inserta los dos selects aquí (como fragmento) */}
+          <FiltersSection
+            handleSelecTiposEmpaque={handleSelecTiposEmpaque}
+            tiposPresentacion={tiposPresentacion}
+            searchQuery={searchQuery}
+            cats={categorias}
+            handleSelectCat={handleSelectCat}
           />
         </div>
 
-        <FiltersSection
-          searchQuery={searchQuery}
-          cats={categorias}
-          handleSelectCat={handleSelectCat}
-        />
-        {/* === Botones === */}
-        <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2">
+        {/* Acciones (derecha en desktop, abajo en mobile) */}
+        <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2">
           <Button
             onClick={loadInventoryData}
             disabled={isloadingInventario}

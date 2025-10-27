@@ -22,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { TZGT } from "@/Pages/Utils/Utils"; // ej. "America/Guatemala"
 import { Calendar, Percent, Receipt, Timer, Wallet } from "lucide-react";
 import { toNumber } from "./helpers/helpers1";

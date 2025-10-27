@@ -62,16 +62,19 @@ import CreditCardList from "../credit-records-dashboard/credit-card-list";
 import { AUTH_KEY, CREDIT_QK } from "./query";
 import CxpCreditCardList from "../creditos-compras/CxpCreditCardList";
 import { useCxpCreditosActivos } from "../creditos-compras/utils/useCxpActivos";
-
-// import { useSocketCtx, useSocketEvent } from "@/Web/realtime/SocketProvider";
-// import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 const API_URL = import.meta.env.VITE_API_URL;
 // Otras utilidades
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 dayjs.locale("es");
-
+interface RejectDto {
+  authId: number | undefined;
+  adminId: number;
+  sucursalId: number | null;
+  motivoRechazo: string;
+}
 // arriba del componente
 const AUTH_FILTERS = { estado: "PENDIENTE" } as const;
 
@@ -136,6 +139,8 @@ export default function DashboardPageMain() {
   const [cuentaBancariaSelected, setCuentaBancariaSelected] =
     useState<string>("");
   const [cajaSelected, setCajaSelected] = useState<string | null>(null);
+  const [openReject, setOpenReject] = useState<boolean>(false);
+  const [motivoRechazo, setMotivoRechazo] = useState<string>("");
 
   // Queries para cargar listas
   const proveedoresQ = useApiQuery<Array<{ id: number; nombre: string }>>(
@@ -279,6 +284,39 @@ export default function DashboardPageMain() {
       handleInvalidateQkRefresh();
     },
   });
+
+  const { mutateAsync: rejectCredito, isPending: isPendingReject } =
+    useApiMutation<any, RejectDto>(
+      "patch",
+      "credito-authorization/reject-credito-from-auth",
+      undefined,
+      {
+        onSuccess: () => {
+          handleInvalidateQkRefresh();
+          setOpenReject(false);
+          setMotivoRechazo("");
+        },
+      }
+    );
+
+  const handleRejectCredit = async () => {
+    const dto = {
+      authId: selectedAuth?.id,
+      adminId: userID,
+      sucursalId: sucursalId,
+      motivoRechazo: motivoRechazo,
+    };
+
+    if (!dto.adminId || !dto.authId || !dto.sucursalId) {
+      toast.info("Propiedades insuficientes, recargue la pagina");
+    }
+
+    toast.promise(rejectCredito(dto), {
+      loading: "Rechazando crédito",
+      success: "Registro denegado",
+      error: (error) => getApiErrorMessageAxios(error),
+    });
+  };
 
   const handleInvalidateQkRefresh = () => {
     queryClient.invalidateQueries({ queryKey: AUTH_KEY });
@@ -638,7 +676,6 @@ export default function DashboardPageMain() {
     setDialogOpen(true);
   };
   const { items, isLoading } = useCxpCreditosActivos();
-
   return (
     <motion.div {...DesvanecerHaciaArriba} className="container mx-auto">
       <h1 className="text-2xl font-bold">Dashboard de Administrador</h1>
@@ -724,11 +761,14 @@ export default function DashboardPageMain() {
         }
         cancelButton={{
           label: "No aprobar",
-          onClick: () => setDialogOpen(false),
+          onClick: () => {
+            setDialogOpen(false);
+            setOpenReject(true);
+          },
           variant: "destructive",
         }}
         confirmButton={{
-          label: "Confirmar y recepcionar crédito", // <- nuevo copy
+          label: "Confirmar crédito", // <- nuevo copy
           onClick: () => {
             // cerrar confirmación y abrir el form de pago
             setDialogOpen(false);
@@ -743,6 +783,38 @@ export default function DashboardPageMain() {
           Cerrar diálogo
         </Button>
       </AdvancedDialog>
+
+      <AdvancedDialog
+        type="warning"
+        onOpenChange={setOpenReject}
+        open={openReject}
+        title="Rechazar autorización de crédito"
+        description="Se rechazará este crédito y no se generará un registro del mismo."
+        confirmButton={{
+          label: "Si, rechazar",
+          loading: isPendingReject,
+          loadingText: "Rechazando...",
+          onClick: handleRejectCredit,
+          disabled: isPendingReject,
+        }}
+        cancelButton={{
+          disabled: isPendingReject,
+          label: "Cancelar",
+          onClick: () => {
+            setDialogOpen(true);
+            setOpenReject(false);
+          },
+        }}
+        children={
+          <div className="">
+            <Textarea
+              value={motivoRechazo}
+              onChange={(e) => setMotivoRechazo(e.target.value)}
+              placeholder="Motivo del rechazo"
+            />
+          </div>
+        }
+      />
 
       {/* MOSTRAR LOS CRÉDITOS ACTIVOS */}
       <CreditCardList credits={credits} />

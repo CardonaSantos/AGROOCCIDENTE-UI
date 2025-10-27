@@ -1,6 +1,6 @@
 export interface NewQueryDTO {
   nombreItem: string;
-  tipoEmpaque: string;
+  tipoEmpaque: number[];
   codigoItem: string;
   codigoProveedor: string;
   cats: number[];
