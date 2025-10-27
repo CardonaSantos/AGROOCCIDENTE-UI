@@ -23,8 +23,20 @@ import {
   EllipsisVertical,
   Eye,
   CircleAlert,
+  SquarePen,
+  PowerOff,
+  Copy,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Carousel,
   CarouselContent,
@@ -50,6 +62,16 @@ import { esTextSortingFn, numericStringSortingFn } from "../sortingFns";
 import { ddmmyyyyToTime, numFromStr, sumBy } from "../tableFormatters";
 import { formattMoneda as fmt } from "@/Pages/Utils/Utils";
 import productPlaceHolder from "@/assets/PRODUCTPLACEHOLDER.png";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 const columnHelper = createColumnHelper<ProductoInventarioResponse>();
 type ImgItem = { url: string; id?: string };
 const getImages = (p: any): { cover: string; items: ImgItem[] } => {
@@ -84,9 +106,6 @@ const cmpVencProximas = (aStr?: string | null, bStr?: string | null) => {
   if (ca !== cb) return ca - cb;
 
   // Dentro de cada categoría:
-  // - futuros: asc (más próximo primero)
-  // - vencidos: asc (más antiguo primero) — cámbialo a desc si prefieres “recién vencidos” arriba
-  // - vacíos: iguales
   if (a === null && b === null) return 0;
   return (a ?? 0) - (b ?? 0);
 };
@@ -107,7 +126,8 @@ export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
       const p = info.row.original as any;
       const { cover, items } = getImages(p);
       const totalImgs = Math.max(items.length || 0, 1);
-
+      const tp = (p as any).tipoPresentacion;
+      const tpLabel = typeof tp === "string" ? tp : tp?.nombre ?? ""; // soporta string u objeto
       return (
         <div className="min-w-[180px] max-w-[260px]">
           <div className="flex items-start gap-2">
@@ -181,10 +201,10 @@ export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
                 <span className="text-[10px] text-muted-foreground truncate">
                   COD: {p.codigoProducto}
                 </span>
-                {p.tipoPresentacion ? (
+                {tpLabel ? (
                   <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
                     <Package className="w-3 h-3 mr-1" />
-                    {p.tipoPresentacion}
+                    {tpLabel}
                   </Badge>
                 ) : null}
               </div>
@@ -489,26 +509,104 @@ export const columnsInventario: ColumnDef<ProductoInventarioResponse, any>[] = [
   }),
 
   // ACCIONES (siempre al final)
+  // ACCIONES (siempre al final)
   columnHelper.display({
     id: "acciones",
     header: () => <span className="sr-only">Acciones</span>,
-    cell: () => (
-      <div className="flex justify-end">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="p-1.5 rounded-md hover:bg-muted transition"
-                aria-label="acciones"
-              >
-                <EllipsisVertical className="w-5 h-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Más acciones</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-    ),
     enableSorting: false,
+    size: 48, // mantiene la columna estrecha
+    cell: (info) => {
+      const stop = (e: React.MouseEvent) => e.stopPropagation();
+      const isProduct = info.row.original.type === "PRODUCTO";
+      const productoId = info.row.original.productoId;
+      return (
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label="Más acciones"
+                      onClick={stop}
+                      onMouseDown={stop}
+                    >
+                      <EllipsisVertical className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Más acciones</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link
+                  to={`/editar-producto/${productoId}`}
+                  className="flex items-center gap-2"
+                  onClick={stop}
+                >
+                  <SquarePen className="w-4 h-4" />
+                  Editar producto
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                className="flex items-center gap-2"
+                onClick={() => {
+                  navigator.clipboard
+                    ?.writeText(String(info.row.original.id))
+                    .catch(() => {});
+                }}
+              >
+                <Copy className="w-4 h-4" />
+                Copiar ID
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-700 flex items-center gap-2"
+                    onSelect={(e) => e.preventDefault()} // evita que el dropdown se "trague" el click
+                  >
+                    <PowerOff className="w-4 h-4" />
+                    Desactivar producto
+                  </DropdownMenuItem>
+                </DialogTrigger>
+
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Desactivar producto</DialogTitle>
+                    <DialogDescription>
+                      Esta acción desactivará “{info.row.original.nombre}”.
+                      Podrás reactivarlo más tarde.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancelar</Button>
+                    </DialogClose>
+                    <Button
+                      variant="destructive"
+                      // onClick={() =>
+                      //   info.table.options.meta?.onDisableProduct?.(info.row.original)
+                      // }
+                    >
+                      Confirmar
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      );
+    },
   }),
 ];

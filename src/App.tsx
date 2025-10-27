@@ -15,7 +15,6 @@ import { ProtectedRoute } from "./components/Auth/ProtectedRoute";
 import NotFoundPage from "./Pages/NotFount/NotFoundPage";
 import AgregarProveedor from "./Pages/Provider/AgregarProveedor";
 import CreateSucursal from "./Pages/Sucursal/CreateSucursal";
-import ProductEditForm from "./Pages/Edit/EditProduct";
 import Sucursales from "./Pages/Sucursal/Sucursales";
 import TransferenciaProductos from "./Pages/Transferencia/TransferenciaProductos";
 import TransferenciaProductosHistorial from "./Pages/Transferencia/TransferenciaHistorial";
@@ -80,11 +79,12 @@ import CostosVentaHistoricoPage from "./Pages/CajaAdministrativo/_costo-ventas-h
 import GastoOperativoHistoricoPage from "./Pages/CajaAdministrativo/_gastos-operativos-historicos/GastoOperativoHistoricoPage";
 import FlujoEfectivoPage from "./Pages/CajaAdministrativo/_flujoEfectivo/FlujoEfectivoPage";
 import CuentasBancariasPage from "./Pages/cuentas-bancarias/CuentasBancariasPage";
-import CreateProductPage from "./Pages/producto/createProductoMain";
 import CategoriasMainPage from "./Pages/Categorias/CategoriasMainPage";
 import HistorialVentasMain from "./Pages/HistorialVentas/HistorialVentas";
 import CreditoMainPageManage from "./Pages/creditos/credito-main-page";
 import CreditoDetails from "./Pages/creditos/components/credito-details";
+import ProductEditorContainer from "./Pages/newCreateProduct/ProductEditorContainer";
+import TiposPresentaciones from "./Pages/tipos-presentaciones/tipos-presentaciones-main-page";
 
 function App() {
   const { checkAuth } = useAuthStore();
@@ -202,6 +202,15 @@ function App() {
             />
 
             <Route
+              path="/tipos-presentaciones"
+              element={
+                <ProtectRouteAdmin>
+                  <TiposPresentaciones />
+                </ProtectRouteAdmin>
+              }
+            />
+
+            <Route
               path="/reportes"
               element={
                 <ProtectRouteAdmin>
@@ -238,19 +247,26 @@ function App() {
             />
 
             <Route
-              path="/editar-producto/:id"
-              element={
-                <ProtectRouteAdmin>
-                  <ProductEditForm />
-                </ProtectRouteAdmin>
-              }
-            />
-
-            <Route
               path="/crear-producto"
               element={
                 <ProtectRouteAdmin>
-                  <CreateProductPage />
+                  <ProductEditorContainer mode="product" />
+                </ProtectRouteAdmin>
+              }
+            />
+            <Route
+              path="/editar-producto/:productId"
+              element={
+                <ProtectRouteAdmin>
+                  <ProductEditorContainer mode="product" />
+                </ProtectRouteAdmin>
+              }
+            />
+            <Route
+              path="/editar-presentacion/:presentationId"
+              element={
+                <ProtectRouteAdmin>
+                  <ProductEditorContainer mode="presentation" />
                 </ProtectRouteAdmin>
               }
             />

@@ -286,11 +286,19 @@ function MapCuotasCreditoCompra({
   );
 
   // --- handlers
-  const handleOpenPayFlow = (cuota: UICuota) => {
+  const allReceived = (rows: DetalleNormalizado[] = []) =>
+    rows.every((n) => getPendiente(n) === 0);
+
+  // ⚠️ vuelve async
+  const handleOpenPayFlow = async (cuota: UICuota) => {
     setCuotaSeleccionada(cuota);
     setPicked([]);
 
-    if (isTodoRecibido) {
+    // 1) Trae estado fresco del servidor ANTES de decidir
+    const { data: fresh = [] } = await refetchProducts();
+
+    if (allReceived(fresh)) {
+      // Nada pendiente → ir directo al pago
       setPayloadPayment((prev) => ({
         ...prev,
         documentoId,
@@ -304,13 +312,12 @@ function MapCuotasCreditoCompra({
       setCajaSelected(null);
       setOpenPay(true);
     } else {
-      // primero seleccionar recepción
+      // Aún queda pendiente → abrir picker
       setOpenPicker(true);
-      queueMicrotask(() => refetchProducts());
     }
   };
 
-  const handlePickerConfirm = (items: PickedItem[]) => {
+  const handlePickerConfirm = (items: PickedItem[], wasTotal: boolean) => {
     setPicked(items);
     // abrir pago con defaults
     if (cuotaSeleccionada) {
@@ -330,6 +337,9 @@ function MapCuotasCreditoCompra({
       setOpenPicker(false);
       setOpenPay(true);
     }
+
+    // Opcional UX: si wasTotal, al cerrar este flujo podrías desactivar el botón
+    // “Pagar cuota + Recepción” y dejar solo “Pagar cuota”.
   };
 
   const handleRegistPayment = async () => {
@@ -555,7 +565,7 @@ function MapCuotasCreditoCompra({
         normalizados={products}
         picked={picked}
         setPicked={setPicked}
-        onConfirm={(items) => handlePickerConfirm(items)}
+        onConfirm={(items, wasTotal) => handlePickerConfirm(items, wasTotal)}
       />
 
       {/* Dialog de pago (igual que hoy) */}
@@ -618,16 +628,6 @@ function MapCuotasCreditoCompra({
             <div className="text-[11px] text-muted-foreground">
               Saldo de la cuota: {formattMonedaGT(saldoCuota)}
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="fechaPago">Fecha de pago</Label>
-            <Input
-              id="fechaPago"
-              type="date"
-              value={payloadPayment.fechaPago}
-              onChange={(e) => handleChangeEvent("fechaPago", e)}
-            />
           </div>
 
           <div className="space-y-2">

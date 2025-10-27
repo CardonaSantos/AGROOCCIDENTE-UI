@@ -1,32 +1,29 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
 import { SimpleProvider } from "@/Types/Proveedor/SimpleProveedor";
-
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import utc from "dayjs/plugin/utc";
 import localizedFormat from "dayjs/plugin/localizedFormat";
-
 import { Categorias, Category, ProductCreate } from "./interfaces.interface";
 import { motion } from "framer-motion";
-
 import DesvanecerHaciaArriba from "@/Crm/Motion/DashboardAnimations";
 import { PageHeader } from "@/utils/components/PageHeaderPos";
 import { QueryTable } from "./interfaces/querytable";
 import TableInventario from "./table/table";
 import { PaginatedInventarioResponse } from "./interfaces/InventaryInterfaces";
-import { RotateCcw, Tag, X } from "lucide-react";
+import { Package2, RotateCcw, Tag, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import FiltersSection from "./filters/filters-sections";
+import { CategoriaWithCount } from "../Categorias/CategoriasMainPage";
 
 dayjs.extend(utc);
 dayjs.extend(localizedFormat);
 dayjs.locale("es");
 
 interface InventarioProps {
-  categorias: Category[];
+  categorias: CategoriaWithCount[];
   proveedores: SimpleProvider[];
   openCategory: boolean;
   setOpenCategory: React.Dispatch<React.SetStateAction<boolean>>;
@@ -55,7 +52,6 @@ interface InventarioProps {
   isloadingInventario: boolean;
 
   handleSelectCat: (ids: number[]) => void;
-  cats: Categorias[];
 }
 
 export default function Inventario({
@@ -70,9 +66,7 @@ export default function Inventario({
   isloadingInventario,
 
   handleSelectCat,
-}: //croper images
-//precios del producto
-InventarioProps) {
+}: InventarioProps) {
   console.log("Las categorias son: ", categorias);
   console.log("proveedores: ", proveedores);
   console.log("el query es: ", searchQuery);
@@ -147,6 +141,16 @@ InventarioProps) {
               title="Etiquetas o filtros"
             >
               <Tag className="h-4 w-4" />
+            </Button>
+          </Link>
+
+          <Link to={"/tipos-presentaciones"}>
+            <Button
+              variant="outline"
+              className="inline-flex items-center justify-center h-9 w-9 p-0"
+              title="Tipos de presentaciones"
+            >
+              <Package2 className="h-4 w-4" />
             </Button>
           </Link>
         </div>

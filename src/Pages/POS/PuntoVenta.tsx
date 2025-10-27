@@ -281,6 +281,8 @@ export default function PuntoVenta() {
 
   const [limit, setLimit] = useState<number>(5);
   const [page, setPage] = useState<number>(1);
+  const [search, setSearch] = useState<string>("");
+  const debouncedSearch = useDebounce(search, 400);
 
   const [queryOptions, setQueryOptions] = useState<NewQueryDTO>({
     cats: [],
@@ -305,24 +307,35 @@ export default function PuntoVenta() {
   }, [sucursalId, limit, page]);
 
   // =================== Queries via wrapper ===================
-  const debouncedNombre = useDebounce(queryOptions.nombreItem, 400);
+  type NewQueryPOS = NewQueryDTO & { q?: string };
 
   // 3) Memo de los filtros que viajan a la API (NO mutar aquí)
-  const apiParams = React.useMemo(() => {
-    const nombre = debouncedNombre?.trim();
-    const p: Partial<NewQueryDTO> = { ...queryOptions };
+  const apiParams = React.useMemo<NewQueryPOS>(() => {
+    const p: Partial<NewQueryPOS> = {
+      sucursalId,
+      limit,
+      page,
+      q: debouncedSearch || undefined, // 👈 CANÓNICO
+    };
 
-    if (!nombre) delete p.nombreItem;
-    else p.nombreItem = nombre;
+    // Solo añade filtros ortogonales si existen
+    if (queryOptions.cats?.length) p.cats = queryOptions.cats;
+    if (queryOptions.codigoProveedor)
+      p.codigoProveedor = queryOptions.codigoProveedor;
+    if (queryOptions.tipoEmpaque) p.tipoEmpaque = queryOptions.tipoEmpaque;
+    if (queryOptions.priceRange) p.priceRange = queryOptions.priceRange;
 
-    if (!p.codigoItem) delete p.codigoItem;
-    if (!p.codigoProveedor) delete p.codigoProveedor;
-    if (!p.tipoEmpaque) delete p.tipoEmpaque;
-    if (!p.priceRange) delete p.priceRange;
-    if (!p.cats?.length) delete p.cats;
-
-    return p as NewQueryDTO;
-  }, [queryOptions, debouncedNombre]);
+    return p as NewQueryPOS;
+  }, [
+    debouncedSearch,
+    sucursalId,
+    limit,
+    page,
+    queryOptions.cats,
+    queryOptions.codigoProveedor,
+    queryOptions.tipoEmpaque,
+    queryOptions.priceRange,
+  ]);
 
   // Productos para POS (nuevo contrato del servidor)
   // 4) Usa SIEMPRE el memo en key y params
@@ -332,9 +345,9 @@ export default function PuntoVenta() {
       meta: {
         limit: 10,
         page: 1,
-        totalCount: 1,
+        totalCount: 0,
         totalPages: 1,
-        totals: { presentaciones: 1, productos: 1 },
+        totals: { presentaciones: 0, productos: 0 },
       },
     },
     refetch: refetchProducts,
@@ -342,13 +355,10 @@ export default function PuntoVenta() {
     isError: isErrorProducts,
     error: errorProducts,
   } = useApiQuery<ProductosResponse>(
-    ["products-pos-response", apiParams], //  key cambia con apiParams
+    ["products-pos-response", apiParams],
     "products/get-products-presentations-for-pos",
     { params: apiParams },
-    {
-      refetchOnWindowFocus: false,
-      placeholderData: keepPreviousData,
-    }
+    { refetchOnWindowFocus: false, placeholderData: keepPreviousData }
   );
 
   // Clientes
@@ -414,11 +424,8 @@ export default function PuntoVenta() {
   // =================== Lógica de Carrito ===================
   const handleSearchItemsInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
-    setQueryOptions((prev) => ({
-      ...prev,
-      nombreItem: v,
-      page: 1,
-    }));
+    setSearch(v);
+    setPage(1);
   };
 
   const makeUid = (s: SourceType, id: number) => `${s}-${id}`;
@@ -672,6 +679,21 @@ export default function PuntoVenta() {
 
   const isCreditoVenta = paymentMethod === MetodoPagoMainPOS.CREDITO;
 
+  // helper: uid consistente con la tabla
+
+  const getRemainingForRow = React.useCallback(
+    (p: ProductoData) => {
+      const source = (p.__source as SourceType) ?? "producto";
+      const uid = makeUid(source, p.id);
+      const totalStock = (p.stocks ?? []).reduce((a, s) => a + s.cantidad, 0);
+      const reserved = cart.find((i) => i.uid === uid)?.quantity ?? 0;
+      // futuro: si tienes stock en tiempo real por WS, úsalo aquí:
+      // const live = liveStockByUid[uid] ?? totalStock;
+      return Math.max(0, totalStock - reserved);
+    },
+    [cart]
+  );
+
   console.log("Los registro de productos son: ", productos);
   console.log("El carrito es: ", cart);
   console.log("el resultado del server es: ", productsResponse);
@@ -690,6 +712,7 @@ export default function PuntoVenta() {
         {/* Lista de Productos (se  mantiene) */}
         <div className="min-w-0">
           <TablePOS
+            searchValue={search}
             defaultMapToCartProduct={defaultMapToCartProduct}
             addToCart={addToCart}
             handleImageClick={handleImageClick}
@@ -705,6 +728,8 @@ export default function PuntoVenta() {
             totalCount={meta.totalCount}
             onPageChange={handlePageChange}
             onLimitChange={handleLimitChange}
+            //
+            getRemainingFor={getRemainingForRow}
           />
         </div>
 

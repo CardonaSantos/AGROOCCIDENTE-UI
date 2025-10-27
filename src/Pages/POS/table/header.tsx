@@ -60,6 +60,7 @@ type ProductoPOS = {
 };
 
 interface Props {
+  searchValue: string;
   handleImageClick: (images: string[]) => void;
   addToCart: (product: ProductoPOS) => void;
   data: ProductoData[];
@@ -68,6 +69,8 @@ interface Props {
   handleSearchItemsInput: (e: React.ChangeEvent<HTMLInputElement>) => void;
   defaultMapToCartProduct(p: ProductoData): ProductoPOS;
   mapToCartProduct?: (p: ProductoData) => ProductoPOS;
+
+  getRemainingFor: (p: ProductoData) => number; // 👈 NUEVO
 
   // server-side pagination props
   page: number;
@@ -206,6 +209,8 @@ export default function TablePOS({
   totalPages,
   maxDesktopHeightPx,
   maxMobileHeightPx,
+  getRemainingFor,
+  searchValue,
 }: Props) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "nombre", desc: false },
@@ -225,6 +230,7 @@ export default function TablePOS({
         addToCart(mapper(p));
       },
       onPreviewImages: handleImageClick,
+      getRemainingFor, // 👈 NUEVO
     },
   });
 
@@ -292,7 +298,7 @@ export default function TablePOS({
       <div className="mb-3">
         <Input
           placeholder="Buscar por nombre o código…"
-          value={queryOptions.nombreItem}
+          value={searchValue}
           onChange={handleSearchItemsInput}
           className="h-7"
         />
@@ -457,6 +463,8 @@ export default function TablePOS({
                 (a, s) => a + s.cantidad,
                 0
               );
+              const remaining = getRemainingFor(p); // 👈 usar el cálculo que viene del padre
+
               return (
                 <motion.div
                   key={`${p.__source ?? "producto"}-${p.id}`}
@@ -480,9 +488,11 @@ export default function TablePOS({
                           : addToCart(defaultMapToCartProduct(p))
                       }
                       className="rounded-lg px-3 py-2 bg-primary text-primary-foreground text-xs disabled:opacity-60"
-                      disabled={stockTotal <= 0}
+                      disabled={remaining <= 0}
                       title={
-                        stockTotal <= 0 ? "Sin stock" : "Agregar al carrito"
+                        remaining <= 0
+                          ? "Sin stock"
+                          : `Agregar (disp. ${remaining})`
                       }
                     >
                       + Añadir
@@ -504,7 +514,7 @@ export default function TablePOS({
                   </div>
 
                   <div className="mt-2 text-xs">
-                    <span className="font-medium">Stock:</span> {stockTotal}
+                    <span className="font-medium">Stock:</span> {remaining}
                   </div>
                 </motion.div>
               );

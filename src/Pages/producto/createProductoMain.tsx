@@ -40,11 +40,8 @@ import {
 import AddPresentaciones from "./_components/addPresentaciones";
 import { toast } from "sonner";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
-
-// NUEVO: unificar cropper y preview
 import ProductImagesCropper from "@/utils/components/Image/ProductImagesCropper";
 import { CroppedGrid } from "@/utils/components/Image/croppedGrid";
-
 interface Categorias {
   id: number;
   nombre: string;
@@ -78,7 +75,7 @@ function CreateProductPage() {
       creadoPorId: userID,
       stockMinimo: null,
       imagenes: [],
-      presentaciones: [], // <-- fuente de verdad
+      presentaciones: [],
     });
 
   const [preciosProducto, setPreciosProducto] = useState<
@@ -86,7 +83,6 @@ function CreateProductPage() {
   >([]);
   const [openCreate, setOpenCreate] = useState<boolean>(false);
 
-  // —— NUEVO: manejo de imágenes del PRODUCTO con ProductImagesCropper —— //
   const [rawProductFiles, setRawProductFiles] = useState<File[]>([]);
   const [croppedProductImages, setCroppedProductImages] = useState<File[]>([]);
   const [openProductCropper, setOpenProductCropper] = useState(false);
@@ -97,9 +93,6 @@ function CreateProductPage() {
     isError: isErrorCategorias = true,
     error: errorCategorias,
   } = useApiQuery<Categorias[]>(["categorias"], "/categoria", undefined, {});
-
-  console.log("El producto creando es: ", productCreate);
-  console.log("La presentacion creando es: ", productCreate.presentaciones);
 
   if (isErrorCategorias) {
     return (
@@ -147,7 +140,7 @@ function CreateProductPage() {
       creadoPorId: userID,
       stockMinimo: null,
       imagenes: [],
-      presentaciones: [], // ← aquí se limpian las presentaciones
+      presentaciones: [],
     });
     setPreciosProducto([]);
     setRawProductFiles([]);
@@ -164,7 +157,6 @@ function CreateProductPage() {
       costoReferencialPresentacion: String(
         p.costoReferencialPresentacion
       ).trim(),
-      // NUEVO
       descripcion: (p.descripcion ?? "").trim() || null,
       stockMinimo: typeof p.stockMinimo === "number" ? p.stockMinimo : null,
       preciosPresentacion: (p.precios ?? []).map((pp) => ({

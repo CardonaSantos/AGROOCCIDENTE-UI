@@ -1,3 +1,5 @@
+import { TipoPresentacion } from "@/Pages/tipos-presentaciones/Interfaces/tiposPresentaciones.interfaces";
+
 export interface PrecioProductoInventario {
   precio: string;
   orden: number;
@@ -39,7 +41,9 @@ export interface Presentacion {
   esDefault?: boolean; // si true, forzará a ser la default
   precios: PreciosPresentacion[]; //precios con formato igual al de precio
   //nuevo
-  tipoPresentacion: TipoEmpaque;
+  tipoPresentacionId: number | null;
+  tipoPresentacion?: TipoPresentacion | null;
+
   costoReferencialPresentacion: string;
   descripcion: string;
   stockMinimo: number;

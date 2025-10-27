@@ -33,20 +33,22 @@ export function SummaryCreditoCompra({ preview }: { preview: PlanPreview }) {
         </div>
         <div className="max-h-64 overflow-y-auto divide-y">
           {preview.cuotas.map((c, idx) => {
-            const isEnganche = idx === 0; // porque la cuota #1 es el enganche si existe
+            const isEnganche = c.isEnganche === true; // ✅ la única fuente de verdad
+
             return (
               <div
                 key={c.id ?? c.numero}
                 className="grid grid-cols-12 py-2 text-sm items-center"
               >
-                <div className="col-span-2 flex items-center gap-2">
-                  <span>{c.numero}</span>
-                  {isEnganche && (
-                    <span className="text-[10px] px-2 py-[2px] rounded bg-muted">
+                <td className="w-24">
+                  {isEnganche ? (
+                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-muted">
                       Enganche
                     </span>
+                  ) : (
+                    idx + 1
                   )}
-                </div>
+                </td>
                 <div className="col-span-5">
                   {dayjs(c.fechaISO).tz(TZGT).format("dddd DD/MM/YYYY")}
                 </div>

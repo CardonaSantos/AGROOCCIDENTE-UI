@@ -60,6 +60,8 @@ import PurchasePaymentFormDialog, {
 import { SimpleCredit } from "../credit-authorizations/interfaces/credit-records";
 import CreditCardList from "../credit-records-dashboard/credit-card-list";
 import { AUTH_KEY, CREDIT_QK } from "./query";
+import CxpCreditCardList from "../creditos-compras/CxpCreditCardList";
+import { useCxpCreditosActivos } from "../creditos-compras/utils/useCxpActivos";
 
 // import { useSocketCtx, useSocketEvent } from "@/Web/realtime/SocketProvider";
 // import { Button } from "@/components/ui/button";
@@ -635,6 +637,7 @@ export default function DashboardPageMain() {
     // 1) primero confirmación
     setDialogOpen(true);
   };
+  const { items, isLoading } = useCxpCreditosActivos();
 
   return (
     <motion.div {...DesvanecerHaciaArriba} className="container mx-auto">
@@ -647,9 +650,21 @@ export default function DashboardPageMain() {
         ventasDia={ventasDia}
         formattMonedaGT={formattMonedaGT}
       />
+
       <Authorizations
         authorizationsData={authorizationsData}
         onReview={handleReview}
+      />
+
+      <TableAlertStocks />
+
+      <CxpCreditCardList
+        credits={items}
+        loading={isLoading}
+        onRegistrarPago={() => {
+          // TODO: abre modal/route para registrar pago a proveedor
+          // e.g. navigate(`/cxp/registrar-pago/${docId}`)
+        }}
       />
 
       {/* DIALOG DE PAGO PARA RECEPCION DE CRÉDITO */}
@@ -729,7 +744,6 @@ export default function DashboardPageMain() {
         </Button>
       </AdvancedDialog>
 
-      <TableAlertStocks />
       {/* MOSTRAR LOS CRÉDITOS ACTIVOS */}
       <CreditCardList credits={credits} />
       {/* MOSTRAR LAS REPARACIONES ACTIVAS */}

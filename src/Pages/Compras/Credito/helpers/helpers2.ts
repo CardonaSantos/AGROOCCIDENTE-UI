@@ -57,10 +57,10 @@ export function buildPlanPreview(args: {
       fechaISO: dayjs(fechaEmisionISO).toDate().toISOString(),
       monto: e,
       id,
+      isEnganche: true, // 👈 aquí
     });
     numero++;
   }
-
   // (2) Cuotas financiadas sobre P = M - e
   const P = round2(M - e);
   const restantes = Math.max(0, n);
@@ -88,7 +88,9 @@ export function buildPlanPreview(args: {
       const isLast = k === restantes - 1;
       const monto = isLast ? round2(P - acum) : round2(base);
       const id = `${dayjs(fecha).format("YYYYMMDD")}-${numero}`;
-      cuotas.push({ numero, fechaISO: fecha, monto, id });
+      // cuotas.push({ numero, fechaISO: fecha, monto, id });
+      cuotas.push({ numero, fechaISO: fecha, monto, id, isEnganche: false });
+
       numero++;
       acum = round2(acum + monto);
     }
@@ -120,7 +122,9 @@ export function buildPlanPreview(args: {
       const principalK = k < restantes - 1 ? principal : round2(saldo); // ajuste final
       const monto = round2(principalK + interesK);
       const id = `${dayjs(fecha).format("YYYYMMDD")}-${numero}`;
-      cuotas.push({ numero, fechaISO: fecha, monto, id });
+      // cuotas.push({ numero, fechaISO: fecha, monto, id });
+      cuotas.push({ numero, fechaISO: fecha, monto, id, isEnganche: false });
+
       numero++;
       interesTotal = round2(interesTotal + interesK);
       saldo = round2(saldo - principalK);
@@ -150,7 +154,9 @@ export function buildPlanPreview(args: {
     if (k === restantes - 1) principalK = round2(saldo); // ajuste final
     const monto = round2(principalK + interesK);
     const id = `${dayjs(fecha).format("YYYYMMDD")}-${numero}`;
-    cuotas.push({ numero, fechaISO: fecha, monto, id });
+    // cuotas.push({ numero, fechaISO: fecha, monto, id });}
+    cuotas.push({ numero, fechaISO: fecha, monto, id, isEnganche: false });
+
     numero++;
     interesTotal = round2(interesTotal + interesK);
     saldo = round2(saldo - principalK);

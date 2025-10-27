@@ -234,14 +234,7 @@ export function GenerateCredito({
             }}
           />
         </div>
-        <div className="space-y-2">
-          <Label>Días de crédito (Net X)</Label>
-          <Input
-            inputMode="numeric"
-            value={form.diasCredito}
-            onChange={onNumber("diasCredito")}
-          />
-        </div>
+
         <div className="space-y-2">
           <Label>Días entre pagos</Label>
           <Input
@@ -279,15 +272,12 @@ export function GenerateCredito({
                 <SelectItem value={InteresTipo.SIMPLE}>
                   Simple (sobre saldo)
                 </SelectItem>
-                <SelectItem value={InteresTipo.COMPUESTO}>
-                  Compuesto (francés)
-                </SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>Interés por periodo</Label>
+          <Label>Interés</Label>
           <div className="flex items-center gap-2">
             <Percent className="h-4 w-4 text-muted-foreground" />
             <Input
@@ -334,20 +324,6 @@ export function GenerateCredito({
           <div className="space-y-2 md:col-span-2">
             <Label>Enganche / primera mayor</Label>
             <div className="grid grid-cols-3 gap-2">
-              <Select
-                value={form.enganche?.tipo ?? "Q"}
-                onValueChange={(v: "Q" | "%") =>
-                  onEngancheChange(v, form.enganche?.valor ?? 0)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Q">Quetzales</SelectItem>
-                  <SelectItem value="%">Porcentaje</SelectItem>
-                </SelectContent>
-              </Select>
               <Input
                 inputMode="decimal"
                 value={String(form.enganche?.valor ?? 0)}
@@ -358,22 +334,7 @@ export function GenerateCredito({
                   )
                 }
               />
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={form.registrarPagoEngancheAhora}
-                  onCheckedChange={(chk) =>
-                    setForm((p) => ({ ...p, registrarPagoEngancheAhora: chk }))
-                  }
-                />
-                <span className="text-sm">
-                  Registrar pago del enganche ahora
-                </span>
-              </div>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Si habilitas el registro automático del pago, el backend creará el
-              pago aplicado a la cuota #1.
-            </p>
           </div>
         )}
       </CardContent>

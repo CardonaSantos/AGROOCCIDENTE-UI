@@ -1,4 +1,5 @@
-import { SimpleCreditResponse } from "../credit-authorizations/interfaces/credit-records";
+// src/features/cxp/components/CxpCreditCardList.tsx
+// -------------------------------------------------
 import {
   Card,
   CardContent,
@@ -6,20 +7,43 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import CreditCardSimple from "./credit-card-simple";
 import { ListChecks } from "lucide-react";
+import CxpCreditCardSimple from "./CxpCreditCardSimple";
+import { UICxpCard } from "./interfaces/credito-cuota";
 
-interface ListCreditsProps {
-  // OJO: SimpleCreditResponse ya es SimpleCredit[]
-  credits: SimpleCreditResponse;
+interface Props {
+  credits: UICxpCard[];
+  loading?: boolean;
+  onRegistrarPago?: (documentoId: number) => void;
 }
 
-function CreditCardList({ credits }: ListCreditsProps) {
+export default function CxpCreditCardList({
+  credits,
+  loading,
+  onRegistrarPago,
+}: Props) {
   const total = Array.isArray(credits) ? credits.length : 0;
+
+  if (loading) {
+    return (
+      <Card className="my-4">
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <ListChecks className="size-4" />
+            Registros de créditos activos
+          </CardTitle>
+          <CardDescription>Cargando…</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="h-20 bg-muted/50 rounded-md animate-pulse" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!Array.isArray(credits) || total === 0) {
     return (
-      <Card>
+      <Card className="my-4">
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
             <ListChecks className="size-4" />
@@ -41,7 +65,7 @@ function CreditCardList({ credits }: ListCreditsProps) {
           <div>
             <CardTitle className="text-base flex items-center gap-2">
               <ListChecks className="size-4" />
-              Registros de créditos activos
+              Registros de créditos compras activos
             </CardTitle>
             <CardDescription>
               {total} registro{total > 1 ? "s" : ""}
@@ -50,12 +74,11 @@ function CreditCardList({ credits }: ListCreditsProps) {
         </div>
       </CardHeader>
 
-      {/* Contenedor scrollable, responsivo */}
       <CardContent className="max-h-80 overflow-y-auto pr-1">
         <ul className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {credits.map((c) => (
             <li key={c.id}>
-              <CreditCardSimple credit={c} />
+              <CxpCreditCardSimple cxp={c} onRegistrarPago={onRegistrarPago} />
             </li>
           ))}
         </ul>
@@ -63,5 +86,3 @@ function CreditCardList({ credits }: ListCreditsProps) {
     </Card>
   );
 }
-
-export default CreditCardList;

@@ -16,12 +16,7 @@ import {
   RecepcionValorada,
 } from "./interfaces/types";
 import { GenerateCredito } from "./GenerateCredito";
-import {
-  cuotasForSubmit,
-  ensureId,
-  getMontoBase,
-  previewFrom,
-} from "./helpers/helpersplan";
+import { cuotasForSubmit, ensureId, getMontoBase } from "./helpers/helpersplan";
 import { CuotasManualEditor } from "./CuotasManualEditor";
 import { useStore } from "@/components/Context/ContextSucursal";
 import PurchasePaymentFormDialog, {
@@ -34,6 +29,7 @@ import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
 import { UICreditoCompra } from "./creditoCompraDisponible/interfaces/interfaces";
 import MapCreditoCompraMain from "./creditoCompraDisponible/MapCreditoCompraMain";
 import { DetalleNormalizado } from "../table-select-recepcion/detalleNormalizado";
+import { buildPlanPreview } from "./helpers/helpers2";
 type MetodoPago =
   | "EFECTIVO"
   | "TRANSFERENCIA"
@@ -96,12 +92,12 @@ export default function CreditoCompraMainPage({
     fechaEmisionISO: dayjs().tz(TZGT).startOf("day").toDate().toISOString(),
     diasCredito: 0,
     diasEntrePagos: 15,
-    cantidadCuotas: 4,
+    cantidadCuotas: 2,
     interesTipo: InteresTipo.NONE,
     interes: 0,
     planCuotaModo: PlanCuotaModo.IGUALES,
     enganche: null,
-    registrarPagoEngancheAhora: false,
+    registrarPagoEngancheAhora: true,
     cuentaBancariaId: 0,
     observaciones: "",
     cuotas: [],
@@ -134,7 +130,21 @@ export default function CreditoCompraMainPage({
   }, [form, compraTotal, recepciones]);
 
   const preview = useMemo(
-    () => previewFrom(form, compraTotal, recepciones),
+    () =>
+      buildPlanPreview({
+        montoTotal: getMontoBase(form, compraTotal, recepciones),
+        fechaEmisionISO: form.fechaEmisionISO,
+        diasCredito: form.diasCredito,
+        diasEntrePagos: form.diasEntrePagos,
+        n: form.cantidadCuotas,
+        interesTipo: form.interesTipo,
+        interes: form.interes,
+        planCuotaModo: form.planCuotaModo,
+        enganche:
+          form.planCuotaModo === PlanCuotaModo.PRIMERA_MAYOR
+            ? form.enganche
+            : null,
+      }),
     [form, compraTotal, recepciones]
   );
 

@@ -25,6 +25,7 @@ export type PlanCuotaFila = {
   fechaISO: string;
   monto: number;
   id: string;
+  isEnganche?: boolean; // 👈 nuevo
 };
 export type PlanPreview = {
   cuotas: PlanCuotaFila[];

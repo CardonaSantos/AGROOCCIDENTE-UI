@@ -14,6 +14,7 @@ declare module "@tanstack/table-core" {
   interface TableMeta<TData extends unknown> {
     onAddToCart?: (p: ProductoData) => void;
     onPreviewImages?: (images: string[]) => void;
+    getRemainingFor?: (p: ProductoData) => number; // 👈 NUEVO
   }
 }
 
@@ -237,11 +238,11 @@ export const columnsTablePos: ColumnDef<ProductoData, any>[] = [
 
     cell: (info) => {
       const p = info.row.original;
-      const stockTotal = (p.stocks ?? []).reduce(
-        (acc, s) => acc + s.cantidad,
-        0
-      );
-      const disabled = stockTotal <= 0;
+      const remaining =
+        info.table.options.meta?.getRemainingFor?.(p) ??
+        (p.stocks ?? []).reduce((acc, s) => acc + s.cantidad, 0);
+
+      const disabled = remaining <= 0;
 
       return (
         <div className="flex items-center gap-2">
@@ -249,8 +250,8 @@ export const columnsTablePos: ColumnDef<ProductoData, any>[] = [
             size="sm"
             disabled={disabled}
             onClick={() => info.table.options.meta?.onAddToCart?.(p)}
-            className="h-8 w-9 p-0 bg-violet-600 hover:bg-violet-700" // ancho fijo y compacto
-            title={disabled ? "Sin stock" : "Agregar al carrito"}
+            className="h-8 w-9 p-0 bg-violet-600 hover:bg-violet-700"
+            title={disabled ? "Sin stock" : `Agregar (disp. ${remaining})`}
           >
             <ShoppingBasket className="h-4 w-4" />
           </Button>

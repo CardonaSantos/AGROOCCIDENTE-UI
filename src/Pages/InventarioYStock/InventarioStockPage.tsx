@@ -8,6 +8,10 @@ import Inventario from "./Inventario";
 import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
 import { PaginatedInventarioResponse } from "./interfaces/InventaryInterfaces";
 import { QueryTable } from "./interfaces/querytable";
+import {
+  CategoriaWithCount,
+  CATS_LIST_QK,
+} from "../Categorias/CategoriasMainPage";
 
 function InventarioStockPage() {
   const recibidoPorId = useStore((s) => s.userId) ?? 0;
@@ -80,14 +84,13 @@ function InventarioStockPage() {
     }
   );
 
-  const { data: cats = [], refetch: reFetchCats } = useApiQuery<Categorias[]>(
-    ["categorias"],
-    "/categoria",
+  const { data: cats } = useApiQuery<CategoriaWithCount[]>(
+    CATS_LIST_QK,
+    "/categoria/all-cats-with-counts",
+    undefined,
     {
-      // params: {}
-    },
-    {
-      initialData: [],
+      staleTime: 0,
+      refetchOnMount: "always",
     }
   );
 
@@ -106,24 +109,24 @@ function InventarioStockPage() {
 
   const reloadInventaryData = async () => {
     await reFetchInventario();
-    await reFetchCats();
     await reFetchProvs();
   };
+  const categoriasSecure = Array.isArray(cats) ? cats : [];
 
   //si cambia el filtro, regresa a primera pagina
   useEffect(() => {
     setPagination((p) => ({ ...p, pageIndex: 0 }));
   }, [JSON.stringify(searchQuery)]);
+  console.log("los productos inventario son: ", productsInventario);
 
   return (
     <motion.div {...DesvanecerHaciaArriba} className="w-full px-4">
       <Inventario
         //filtrado-->
-        cats={cats}
         handleSelectCat={handleSelectCat}
         //
         setSearchQuery={setSearchQuery}
-        categorias={cats}
+        categorias={categoriasSecure}
         proveedores={provs}
         // PROPS PARA ABRIR EL MODAL
         openCategory={openCategory}

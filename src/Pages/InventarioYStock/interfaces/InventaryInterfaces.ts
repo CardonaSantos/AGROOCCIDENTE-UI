@@ -20,6 +20,8 @@ export interface ProductoInventarioResponse {
   precios: PrecioProductoNormalized[];
   stocks: StocksProducto[];
   stocksBySucursal: StocksBySucursal;
+  type: "PRODUCTO" | "PRESENTACION";
+  productoId: number;
 }
 
 export interface ImagesProduct {
