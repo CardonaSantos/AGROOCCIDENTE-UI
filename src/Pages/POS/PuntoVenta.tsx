@@ -364,7 +364,11 @@ export default function PuntoVenta() {
     ["products-pos-response", apiParams],
     "products/get-products-presentations-for-pos",
     { params: apiParams },
-    { refetchOnWindowFocus: false, placeholderData: keepPreviousData }
+    {
+      refetchOnWindowFocus: true,
+      placeholderData: keepPreviousData,
+      staleTime: 0,
+    }
   );
 
   // Clientes

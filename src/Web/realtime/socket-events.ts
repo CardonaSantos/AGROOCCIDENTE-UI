@@ -33,12 +33,7 @@ export type WsEventMap = {
     comentario?: string;
     vendedorId: number;
   };
-  "transferencia:solicitud": {
-    id: number;
-    monto: number;
-    deSucursal: number;
-    aSucursal: number;
-  };
+  "transferencia:solicitud": {};
   "credit:authorization.created": NormalizedSolicitud;
 };
 

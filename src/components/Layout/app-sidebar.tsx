@@ -3,10 +3,9 @@ import {
   ShieldCheck,
   // Ticket,
   Wallet,
-  ClipboardPen,
+
   // FileText,
   CreditCard,
-  WrenchIcon,
   ChevronDown,
   // FileSpreadsheet,
   Target,
@@ -59,8 +58,6 @@ import {
   AlertCircle,
   Clock,
   Building,
-  NotepadText,
-  FileStack,
   History,
 } from "lucide-react";
 import { useStore } from "../Context/ContextSucursal";
@@ -79,55 +76,21 @@ import {
 import { useMemo } from "react";
 
 const menuVendedor = [
-  // === Inicio ===
   { icon: Home, label: "Inicio", href: "/" },
-
-  // === Ventas ===
   { icon: ShoppingCart, label: "Punto de Venta", href: "/punto-venta" },
   { icon: Clock, label: "Historial de Ventas", href: "/historial/ventas" },
-  {
-    icon: ClipboardPen,
-    label: "Gestión de Ventas",
-    submenu: [
-      {
-        icon: ClipboardPen,
-        label: "Ventas Eliminadas",
-        href: "/historial/ventas-eliminaciones",
-      },
-    ],
-  },
 
-  // === Inventario ===
   {
     icon: Package,
     label: "Inventario y Stock",
     submenu: [
-      { icon: Boxes, label: "Inventario", href: "/inventario" },
-      {
-        icon: NotepadText,
-        label: "Historial de Precios",
-        href: "/historial-cambios-precio",
-      },
-      {
-        icon: FileStack,
-        label: "Stock Eliminado",
-        href: "/stock-eliminaciones",
-      },
+      { icon: Boxes, label: "Inventario General", href: "/inventario-stock" },
     ],
   },
-
-  // === Clientes ===
   { icon: Users, label: "Clientes", href: "/clientes-manage" },
-
-  // === Créditos ===
   { icon: CreditCard, label: "Créditos", href: "/creditos" },
 
-  // === Garantías y Reparaciones ===
-  { icon: ShieldCheck, label: "Garantías", href: "/garantia/manage" },
-  { icon: WrenchIcon, label: "Reparaciones", href: "/reparaciones" },
-
-  // === Otros ===
-  { icon: AlertCircle, label: "Vencimientos", href: "/vencimientos" },
+  { icon: Wallet, label: "Caja", href: "/registro-caja" },
 ];
 
 const menuItemsAdmin = [

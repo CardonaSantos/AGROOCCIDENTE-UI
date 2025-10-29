@@ -5,15 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  ShoppingCart,
-  History,
-  Package,
-  DollarSign,
-  Trash2,
-  Users,
-  Calendar,
-} from "lucide-react";
+import { ShoppingCart, History, Package, Users, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
 export default function DashboardEmpleado() {
   const menuItems = [
@@ -33,26 +25,9 @@ export default function DashboardEmpleado() {
       title: "Inventario",
       description: "Gestionar productos en stock",
       icon: Package,
-      route: "/inventario",
+      route: "/inventario-stock",
     },
-    {
-      title: "Historial de Cambios de Precio",
-      description: "Ver cambios en precios",
-      icon: DollarSign,
-      route: "/historial-cambios-precio",
-    },
-    {
-      title: "Stock Eliminaciones",
-      description: "Ver productos eliminados del stock",
-      icon: Trash2,
-      route: "/stock-eliminaciones",
-    },
-    {
-      title: "Ventas Eliminaciones",
-      description: "Ver ventas eliminadas",
-      icon: Trash2,
-      route: "/historial/ventas-eliminaciones",
-    },
+
     {
       title: "Clientes",
       description: "Gestionar información de clientes",

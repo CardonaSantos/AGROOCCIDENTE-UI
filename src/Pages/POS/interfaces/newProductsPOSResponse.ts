@@ -11,6 +11,7 @@ export interface ProductoData {
   precioCosto: string;
   precios: Precio[];
   stocks: Stock[];
+  globalStocks: Stock[];
   stocksBySucursal: StockBySucursal[];
   images: Image[]; // vacío, pero tipado para futuro uso
   __source: string;

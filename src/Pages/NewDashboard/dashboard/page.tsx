@@ -72,7 +72,6 @@ import CxpCreditCardList from "../creditos-compras/CxpCreditCardList";
 import { useCxpCreditosActivos } from "../creditos-compras/utils/useCxpActivos";
 import { Textarea } from "@/components/ui/textarea";
 import { ListResp, upsertIntoList } from "../helpers/UpserSocketEvent";
-import { createDebounced } from "@/Web/realtime/helpers/upsersocketevent";
 
 const API_URL = import.meta.env.VITE_API_URL;
 // Otras utilidades
@@ -88,19 +87,22 @@ interface RejectDto {
 // arriba del componente
 
 export default function DashboardPageMain() {
-  const formatearFecha = (fecha: string) => {
-    const nueva_fecha = dayjs(fecha).format("DD MMMM YYYY, hh:mm A");
-    return nueva_fecha;
-  };
+  //  Store / Params / Utiles
+  const sucursalId = useStore((s) => s.sucursalId) ?? 0;
+  const userID = useStore((s) => s.userId) ?? 0;
 
-  const sucursalId = useStore((state) => state.sucursalId) ?? 0;
-  const userID = useStore((state) => state.userId) ?? 0;
+  const formatearFecha = (fecha: string) =>
+    dayjs(fecha).format("DD MMMM YYYY, hh:mm A");
 
+  //  Query Client
+  const queryClient = useQueryClient();
+
+  // Estado local (UI / datos)
+
+  // Métricas / listas dashboard
   const [ventasMes, setVentasMes] = useState(0);
   const [ventasSemana, setVentasSemana] = useState(0);
-  const [ventasDia, setVentasDia] = useState<DailyMoney>({
-    totalDeHoy: 0,
-  });
+  const [ventasDia, setVentasDia] = useState<DailyMoney>({ totalDeHoy: 0 });
   const [ventasSemanalChart, setVentasSemanalChart] = useState<
     VentasSemanalChart[]
   >([]);
@@ -108,11 +110,10 @@ export default function DashboardPageMain() {
   const [transaccionesRecientes, setTransaccionesRecientes] = useState<
     VentaReciente[]
   >([]);
-
   const [warranties, setWarranties] = useState<GarantiaType[]>([]);
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
 
-  // Warranty Dialog States
+  // Dialogs / selection states
   const [openUpdateWarranty, setOpenUpdateWarranty] = useState(false);
   const [selectWarrantyUpdate, setSelectWarrantyUpdate] =
     useState<GarantiaType | null>(null);
@@ -121,18 +122,14 @@ export default function DashboardPageMain() {
   const [estado, setEstado] = useState<EstadoGarantia | null>(null);
   const [productoIdW, setProductoIdW] = useState<number>(0);
   const [warrantyId, setWarrantyId] = useState<number>(0);
-  // Finish Warranty Dialog States
+
   const [openFinishWarranty, setOpenFinishWarranty] = useState(false);
   const [estadoRegistFinishW, setEstadoFinishW] = useState("");
   const [conclusion, setConclusion] = useState("");
   const [accionesRealizadas, setAccionesRealizadas] = useState("");
-  // Update timeline warranty dialog states
-  const queryClient = useQueryClient();
 
-  // --- Pago previo a aceptación de crédito ---
+  // Pago previo a aceptación de crédito
   const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
-
-  // estado controlado del dialog
   const [observacionesPay, setObservacionesPay] = useState("");
   const [proveedorSelected, setProveedorSelected] = useState<
     string | undefined
@@ -143,10 +140,63 @@ export default function DashboardPageMain() {
   const [cuentaBancariaSelected, setCuentaBancariaSelected] =
     useState<string>("");
   const [cajaSelected, setCajaSelected] = useState<string | null>(null);
+
+  // Rechazo de crédito
   const [openReject, setOpenReject] = useState<boolean>(false);
   const [motivoRechazo, setMotivoRechazo] = useState<string>("");
 
-  // Queries para cargar listas
+  // Autorizaciones (UI)
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedAuth, setSelectedAuth] = useState<NormalizedSolicitud | null>(
+    null
+  );
+
+  // Expansión en tarjetas
+  const [expandedCard, setExpandedCard] = useState<number | null>(null);
+  const toggleCard = (id: number) =>
+    setExpandedCard(expandedCard === id ? null : id);
+
+  // Timeline dialog
+  const [openTimeLine, setOpenTimeLine] = useState(false);
+
+  // ---------------------------------------------
+  // 4) Colores y helpers puros
+  // ---------------------------------------------
+  const estadoColor: Record<EstadoGarantia, string> = {
+    [EstadoGarantia.RECIBIDO]: "bg-blue-500",
+    [EstadoGarantia.DIAGNOSTICO]: "bg-yellow-500",
+    [EstadoGarantia.EN_REPARACION]: "bg-orange-500",
+    [EstadoGarantia.ESPERANDO_PIEZAS]: "bg-indigo-500",
+    [EstadoGarantia.REPARADO]: "bg-green-500",
+    [EstadoGarantia.REEMPLAZADO]: "bg-teal-500",
+    [EstadoGarantia.RECHAZADO_CLIENTE]: "bg-red-500",
+    [EstadoGarantia.CANCELADO]: "bg-gray-700",
+    [EstadoGarantia.CERRADO]: "bg-gray-500",
+  };
+
+  function mapMetodoToPOS(m: MetodoPagoMainPOS | ""): MetodoPagoMainPOS {
+    switch (m) {
+      case "EFECTIVO":
+      case "CONTADO":
+        return MetodoPagoMainPOS.EFECTIVO;
+      case "TRANSFERENCIA":
+        return MetodoPagoMainPOS.TRANSFERENCIA;
+      case "TARJETA":
+        return MetodoPagoMainPOS.TARJETA;
+      case "CHEQUE":
+        return MetodoPagoMainPOS.CHEQUE;
+      default:
+        return MetodoPagoMainPOS.EFECTIVO;
+    }
+  }
+
+  function getMontoEnganche(auth: NormalizedSolicitud | null): number {
+    if (!auth) return 0;
+    const eng = auth.schedule.cuotas.find((c) => c.etiqueta === "ENGANCHE");
+    return Number(eng?.monto ?? 0);
+  }
+
+  // Queries remotas (useApiQuery)
   const proveedoresQ = useApiQuery<Array<{ id: number; nombre: string }>>(
     ["proveedores"],
     "/proveedor",
@@ -161,7 +211,6 @@ export default function DashboardPageMain() {
     { staleTime: 5 * 60_000, refetchOnWindowFocus: false }
   );
 
-  // Cajas abiertas por sucursal
   const cajasQ = useApiQuery<CajaConSaldo[]>(
     ["cajas-disponibles", sucursalId],
     `/caja/cajas-disponibles/${sucursalId}`,
@@ -169,11 +218,104 @@ export default function DashboardPageMain() {
     { enabled: !!sucursalId, staleTime: 30_000, refetchOnWindowFocus: false }
   );
 
-  // Sanitizados
+  const { data: authorizations } = useApiQuery<CreditAuthorizationListResponse>(
+    AUTH_QK(AUTH_FILTERS),
+    "credito-authorization",
+    { params: AUTH_FILTERS },
+    { refetchOnMount: "always", staleTime: 0 }
+  );
+
+  const { data: creditsRecords } = useApiQuery<SimpleCredit[]>(
+    CREDIT_QK,
+    "credito/simple-credit-dashboard",
+    undefined,
+    { refetchOnMount: "always", staleTime: 0 }
+  );
+
+  const { data: priceRequests } = useApiQuery<Solicitud[]>(
+    PRICE_REQUESTS_QK(sucursalId),
+    "price-request",
+    undefined,
+    { enabled: !!sucursalId, staleTime: 15_000, refetchOnWindowFocus: false }
+  );
+
+  const { data: transferRequests } = useApiQuery<SolicitudTransferencia[]>(
+    TRANSFER_REQUESTS_QK(sucursalId),
+    "solicitud-transferencia-producto",
+    undefined,
+    { enabled: !!sucursalId, staleTime: 15_000, refetchOnWindowFocus: false }
+  );
+
+  // Mutations (useApiMutation)
+  const { mutateAsync: acceptCreditAuth } = useApiMutation<
+    any,
+    PayloadAcceptCredito
+  >("post", "credito-authorization/create-credito-from-auth", undefined, {
+    onSuccess: () => handleInvalidateQkRefresh(),
+  });
+
+  const { mutateAsync: rejectCredito, isPending: isPendingReject } =
+    useApiMutation<any, RejectDto>(
+      "patch",
+      "credito-authorization/reject-credito-from-auth",
+      undefined,
+      {
+        onSuccess: () => {
+          handleInvalidateQkRefresh();
+          setOpenReject(false);
+          setMotivoRechazo("");
+        },
+      }
+    );
+
+  // Data sanitizada / derivada
   const proveedores = proveedoresQ.data ?? [];
   const cuentasBancarias = cuentasQ.data ?? [];
   const cajasDisponibles = cajasQ.data ?? [];
 
+  const solicitudes = Array.isArray(priceRequests) ? priceRequests : [];
+  const solicitudesTransferencia = Array.isArray(transferRequests)
+    ? transferRequests
+    : [];
+
+  const authorizationsData = Array.isArray(authorizations?.data)
+    ? authorizations.data
+    : [];
+  const credits = Array.isArray(creditsRecords) ? creditsRecords : [];
+
+  // Copys derivados para UI
+  const nombreClienteSel = selectedAuth
+    ? `${selectedAuth.cliente.nombre}${
+        selectedAuth.cliente.apellidos
+          ? " " + selectedAuth.cliente.apellidos
+          : ""
+      }`
+    : "…";
+
+  const montoSel = selectedAuth
+    ? formattMonedaGT(selectedAuth.economico.totalPropuesto)
+    : "…";
+
+  const resumenPlan = selectedAuth
+    ? `Plan: ${selectedAuth.economico.cuotasTotalesPropuestas} cuota${
+        selectedAuth.economico.cuotasTotalesPropuestas === 1 ? "" : "s"
+      } • Interés: ${selectedAuth.economico.interesTipo} ${
+        selectedAuth.economico.interesPorcentaje
+      }% • Primera cuota: ${
+        selectedAuth.fechas.primeraCuotaISO
+          ? new Date(selectedAuth.fechas.primeraCuotaISO).toLocaleDateString(
+              "es-GT",
+              {
+                year: "numeric",
+                month: "short",
+                day: "2-digit",
+              }
+            )
+          : "N/A"
+      }`
+    : "";
+
+  // Helpers de API (axios) usados por efectos
   const getInfo = async () => {
     try {
       const [
@@ -193,6 +335,7 @@ export default function DashboardPageMain() {
         axios.get(`${API_URL}/analytics/get-productos-mas-vendidos/`),
         axios.get(`${API_URL}/analytics/get-ventas-recientes/`),
       ]);
+
       setVentasMes(ventasMesRes.data);
       setVentasSemana(ventasSemanaRes.data);
       setVentasDia(ventasDiaRes.data);
@@ -209,6 +352,7 @@ export default function DashboardPageMain() {
     try {
       const response = await axios.get(`${API_URL}/price-request`);
       if (response.status === 200) {
+        // manejar si es necesario
       }
     } catch (error) {
       console.error(error);
@@ -222,6 +366,7 @@ export default function DashboardPageMain() {
         `${API_URL}/solicitud-transferencia-producto`
       );
       if (response.status === 200) {
+        // manejar si es necesario
       }
     } catch (error) {
       console.error(error);
@@ -231,13 +376,11 @@ export default function DashboardPageMain() {
 
   const getWarranties = async () => {
     try {
-      //no cerrados
       const response = await axios.get(
         `${API_URL}/warranty/get-regists-warranties`
       );
       if (response.status === 200) {
         setWarranties(response.data);
-        console.log("Nuevas garantías:", response.data); // Aquí sí tienes el valor correcto
       }
     } catch (error) {
       console.error(error);
@@ -259,94 +402,9 @@ export default function DashboardPageMain() {
     }
   };
 
-  //credit authorizations
-  const { data: authorizations } = useApiQuery<CreditAuthorizationListResponse>(
-    AUTH_QK(AUTH_FILTERS),
-    "credito-authorization",
-    { params: AUTH_FILTERS },
-    { refetchOnMount: "always", staleTime: 0 }
-  );
-
-  const { data: creditsRecords } = useApiQuery<SimpleCredit[]>(
-    CREDIT_QK,
-    "credito/simple-credit-dashboard",
-    undefined,
-    { refetchOnMount: "always", staleTime: 0 }
-  );
-
-  const { mutateAsync: acceptCreditAuth } = useApiMutation<
-    any,
-    PayloadAcceptCredito
-  >("post", "credito-authorization/create-credito-from-auth", undefined, {
-    onSuccess: () => {
-      handleInvalidateQkRefresh();
-    },
-  });
-
-  const { mutateAsync: rejectCredito, isPending: isPendingReject } =
-    useApiMutation<any, RejectDto>(
-      "patch",
-      "credito-authorization/reject-credito-from-auth",
-      undefined,
-      {
-        onSuccess: () => {
-          handleInvalidateQkRefresh();
-          setOpenReject(false);
-          setMotivoRechazo("");
-        },
-      }
-    );
-
-  // ✅ Solicitudes de precio
-  const { data: priceRequests } = useApiQuery<Solicitud[]>(
-    PRICE_REQUESTS_QK(sucursalId),
-    "price-request",
-    undefined,
-    { enabled: !!sucursalId, staleTime: 15_000, refetchOnWindowFocus: false }
-  );
-
-  // ✅ Solicitudes de transferencia
-  const { data: transferRequests } = useApiQuery<SolicitudTransferencia[]>(
-    TRANSFER_REQUESTS_QK(sucursalId),
-    "solicitud-transferencia-producto",
-    undefined,
-    { enabled: !!sucursalId, staleTime: 15_000, refetchOnWindowFocus: false }
-  );
-
-  // Sanitizados para los componentes
-  const solicitudes = Array.isArray(priceRequests) ? priceRequests : [];
-  const solicitudesTransferencia = Array.isArray(transferRequests)
-    ? transferRequests
-    : [];
-
-  const handleRejectCredit = async () => {
-    const dto = {
-      authId: selectedAuth?.id,
-      adminId: userID,
-      sucursalId: sucursalId,
-      motivoRechazo: motivoRechazo,
-    };
-
-    if (!dto.adminId || !dto.authId || !dto.sucursalId) {
-      toast.info("Propiedades insuficientes, recargue la pagina");
-    }
-
-    toast.promise(rejectCredito(dto), {
-      loading: "Rechazando crédito",
-      success: "Registro denegado",
-      error: (error) => getApiErrorMessageAxios(error),
-    });
-  };
-
-  const handleInvalidateQkRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: AUTH_KEY });
-    queryClient.invalidateQueries({ queryKey: CREDIT_QK });
-  };
-
+  // Efectos (useEffect)
   useEffect(() => {
-    if (sucursalId) {
-      getInfo();
-    }
+    if (sucursalId) getInfo();
   }, [sucursalId]);
 
   useEffect(() => {
@@ -355,6 +413,61 @@ export default function DashboardPageMain() {
     getWarranties();
     getReparacionesRegis();
   }, []);
+
+  // Eventos socket
+  useSocketEvent("recibirSolicitud", (s: Solicitud) => {
+    // if (s) invalidatePriceReqDebounced();
+    console.log("La data del recibir solicitud precio es: ", s);
+
+    queryClient.invalidateQueries({ queryKey: PRICE_REQUESTS_QK(sucursalId) });
+  });
+
+  useSocketEvent("recibirSolicitudTransferencia", (s: any) => {
+    console.log("La solicitud de transferencia es: ", s);
+
+    // if (s) invalidatePriceReqDebounced();
+    queryClient.invalidateQueries({
+      queryKey: TRANSFER_REQUESTS_QK(sucursalId),
+    });
+  });
+
+  // Autorización de crédito creada (actualiza listas si matchea)
+  useSocketEvent(
+    "credit:authorization.created",
+    (payload: NormalizedSolicitud) => {
+      queryClient.setQueriesData<ListResp<NormalizedSolicitud>>(
+        { queryKey: [AUTH_BASE_KEY] },
+        (prev?: ListResp<NormalizedSolicitud>) =>
+          upsertIntoList(prev, payload, { prepend: true })
+      );
+    }
+  );
+
+  // Handlers (acciones de UI)
+  const handleInvalidateQkRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: AUTH_KEY });
+    queryClient.invalidateQueries({ queryKey: CREDIT_QK });
+  };
+
+  const handleRejectCredit = async () => {
+    const dto = {
+      authId: selectedAuth?.id,
+      adminId: userID,
+      sucursalId,
+      motivoRechazo,
+    };
+
+    if (!dto.adminId || !dto.authId || !dto.sucursalId) {
+      toast.info("Propiedades insuficientes, recargue la pagina");
+      return;
+    }
+
+    toast.promise(rejectCredito(dto), {
+      loading: "Rechazando crédito",
+      success: "Registro denegado",
+      error: (error) => getApiErrorMessageAxios(error),
+    });
+  };
 
   const handleAceptRequest = async (idSolicitud: number) => {
     try {
@@ -371,6 +484,7 @@ export default function DashboardPageMain() {
       });
     }
   };
+
   const handleRejectRequest = async (idSolicitud: number) => {
     try {
       await axios.patch(
@@ -438,7 +552,7 @@ export default function DashboardPageMain() {
         setOpenUpdateWarranty(false);
         getWarranties();
       }
-    } catch (error) {
+    } catch {
       toast.error("Error al actualizar el registro");
     }
   };
@@ -457,8 +571,8 @@ export default function DashboardPageMain() {
       usuarioId: userID,
       estado: estadoRegistFinishW,
       productoId: productoIdW,
-      conclusion: conclusion,
-      accionesRealizadas: accionesRealizadas,
+      conclusion,
+      accionesRealizadas,
     };
     try {
       const response = await axios.post(
@@ -476,7 +590,6 @@ export default function DashboardPageMain() {
     }
   };
 
-  // DashboardPageMain.tsx
   const handleCreateNewTimeLine = async (dto: TimeLineDto) => {
     try {
       await toast.promise(createNewTimeLine(dto), {
@@ -490,11 +603,20 @@ export default function DashboardPageMain() {
     }
   };
 
+  const handleReview = (auth: NormalizedSolicitud) => {
+    setSelectedAuth(auth);
+    setObservacionesPay("");
+    setProveedorSelected(undefined);
+    setMetodoPagoSel("");
+    setCuentaBancariaSelected("");
+    setCajaSelected(null);
+    setDialogOpen(true);
+  };
+
   const handleAcceptCredit = async () => {
     if (!selectedAuth) return;
 
     const metodoPOS = mapMetodoToPOS(metodoPagoSel);
-
     const payload: PayloadAcceptCredito = {
       adminId: userID,
       comentario: observacionesPay || "Aprobación desde dashboard",
@@ -515,7 +637,6 @@ export default function DashboardPageMain() {
             : null
           : null,
     };
-    console.log("El payload creado es: ", payload);
 
     try {
       await toast.promise(acceptCreditAuth(payload), {
@@ -523,145 +644,16 @@ export default function DashboardPageMain() {
         loading: "Registrando crédito...",
         error: (error) => getApiErrorMessageAxios(error),
       });
-
-      setOpenPaymentDialog(false); // <- cierra el form de pago
+      setOpenPaymentDialog(false);
       setSelectedAuth(null);
     } catch (error) {
       console.log(error);
     }
   };
 
-  // invalidación debounced (opcional pero recomendado)
-  const invalidatePriceReqDebounced = createDebounced(() => {
-    queryClient.invalidateQueries({ queryKey: PRICE_REQUESTS_QK(sucursalId) });
-  }, 800);
-
-  // ▶ Evento: nueva solicitud de precio
-  useSocketEvent("recibirSolicitud", (s: Solicitud) => {
-    // 1) reflejo instantáneo en la UI
-    // queryClient.setQueryData<Solicitud[]>(
-    //   PRICE_REQUESTS_QK(sucursalId), // 👈 MISMA QK del fetch
-    //   (prev) => upsertArrayById(prev, s, { prepend: true })
-    // );
-    // 2) (opcional) reconciliar contra backend
-    if (s) {
-      invalidatePriceReqDebounced();
-    }
-  });
-
-  const authorizationsData = Array.isArray(authorizations?.data)
-    ? authorizations.data
-    : [];
-
-  const credits = Array.isArray(creditsRecords) ? creditsRecords : [];
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedAuth, setSelectedAuth] = useState<NormalizedSolicitud | null>(
-    null
-  );
-
-  const [expandedCard, setExpandedCard] = useState<number | null>(null);
-  const toggleCard = (id: number) => {
-    setExpandedCard(expandedCard === id ? null : id);
-  };
-
-  const estadoColor: Record<EstadoGarantia, string> = {
-    [EstadoGarantia.RECIBIDO]: "bg-blue-500",
-    [EstadoGarantia.DIAGNOSTICO]: "bg-yellow-500",
-    [EstadoGarantia.EN_REPARACION]: "bg-orange-500",
-    [EstadoGarantia.ESPERANDO_PIEZAS]: "bg-indigo-500",
-    [EstadoGarantia.REPARADO]: "bg-green-500",
-    [EstadoGarantia.REEMPLAZADO]: "bg-teal-500",
-    [EstadoGarantia.RECHAZADO_CLIENTE]: "bg-red-500",
-    [EstadoGarantia.CANCELADO]: "bg-gray-700",
-    [EstadoGarantia.CERRADO]: "bg-gray-500",
-  };
-
-  const [openTimeLine, setOpenTimeLine] = useState(false);
-
-  //AUTORIZACION CREADA
-  useSocketEvent(
-    "credit:authorization.created",
-    (payload: NormalizedSolicitud) => {
-      queryClient.setQueriesData<ListResp<NormalizedSolicitud>>(
-        { queryKey: [AUTH_BASE_KEY] }, // predicado por prefijo
-        (prev?: ListResp<NormalizedSolicitud>) => {
-          // solo actualiza si el payload MATCHEA los filtros activos
-          return upsertIntoList(prev, payload, { prepend: true });
-        }
-      );
-    }
-  );
-
-  // helpers para el copy (opcional arriba del JSX)
-  const nombreClienteSel = selectedAuth
-    ? `${selectedAuth.cliente.nombre}${
-        selectedAuth.cliente.apellidos
-          ? " " + selectedAuth.cliente.apellidos
-          : ""
-      }`
-    : "…";
-
-  const montoSel = selectedAuth
-    ? formattMonedaGT(selectedAuth.economico.totalPropuesto)
-    : "…";
-
-  const resumenPlan = selectedAuth
-    ? `Plan: ${selectedAuth.economico.cuotasTotalesPropuestas} cuota${
-        selectedAuth.economico.cuotasTotalesPropuestas === 1 ? "" : "s"
-      } • Interés: ${selectedAuth.economico.interesTipo} ${
-        selectedAuth.economico.interesPorcentaje
-      }% • Primera cuota: ${
-        selectedAuth.fechas.primeraCuotaISO
-          ? new Date(selectedAuth.fechas.primeraCuotaISO).toLocaleDateString(
-              "es-GT",
-              {
-                year: "numeric",
-                month: "short",
-                day: "2-digit",
-              }
-            )
-          : "N/A"
-      }`
-    : "";
-
-  function mapMetodoToPOS(m: MetodoPagoMainPOS | ""): MetodoPagoMainPOS {
-    switch (m) {
-      case "EFECTIVO":
-      case "CONTADO":
-        return MetodoPagoMainPOS.EFECTIVO;
-      case "TRANSFERENCIA":
-        return MetodoPagoMainPOS.TRANSFERENCIA;
-      case "TARJETA":
-        return MetodoPagoMainPOS.TARJETA;
-      case "CHEQUE":
-        return MetodoPagoMainPOS.CHEQUE;
-      default:
-        return MetodoPagoMainPOS.EFECTIVO;
-    }
-  }
-
-  // Extrae el monto de enganche (0 si no hay)
-  function getMontoEnganche(auth: NormalizedSolicitud | null): number {
-    if (!auth) return 0;
-    const eng = auth.schedule.cuotas.find((c) => c.etiqueta === "ENGANCHE");
-    return Number(eng?.monto ?? 0);
-  }
-
-  const handleReview = (auth: NormalizedSolicitud) => {
-    setSelectedAuth(auth);
-
-    // reset del form de pago (se usará luego)
-    setObservacionesPay("");
-    setProveedorSelected(undefined);
-    setMetodoPagoSel("");
-    setCuentaBancariaSelected("");
-    setCajaSelected(null);
-
-    // 1) primero confirmación
-    setDialogOpen(true);
-  };
+  // Hook de CXPs (queda al final para mantener jerarquía de dependencias)
   const { items, isLoading } = useCxpCreditosActivos();
+
   return (
     <motion.div {...DesvanecerHaciaArriba} className="container mx-auto">
       <h1 className="text-2xl font-semibold">Dashboard Administrador</h1>

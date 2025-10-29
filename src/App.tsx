@@ -407,7 +407,7 @@ function App() {
             />
 
             <Route
-              path="/registros-cajas"
+              path="/movimientos-financieros"
               element={
                 <ProtectRouteAdmin>
                   <CajaRegistros />

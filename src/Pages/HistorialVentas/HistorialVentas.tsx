@@ -1,19 +1,13 @@
 // pages/ventas/HistorialVentasMain.tsx
-import { useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { es } from "date-fns/locale";
@@ -34,6 +28,10 @@ import {
 } from "@/hooks/genericoCall/genericoCallHook";
 import { PageHeader } from "@/utils/components/PageHeaderPos";
 import VentaDetalleDialog from "../POS/VentaDetalleDialog";
+import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
+import { ventasHistorialKeys } from "./Keys/query";
+import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
 
 registerLocale("es", es);
 
@@ -56,6 +54,10 @@ type QueryVentasUI = {
   montoMax?: number;
   tipoComprobante?: TipoComprobante[];
   cats?: number[];
+  //flags de filtrado ventas mias o global
+  isVendedor: boolean;
+  usuarioId: number;
+  metodoPago?: string[];
 };
 
 const defaultMeta: PaginationMeta = {
@@ -113,8 +115,10 @@ function MultiChecks({
 }
 
 export default function HistorialVentasMain() {
+  const queryClient = useQueryClient();
   const sucursalId = useStore((s) => s.sucursalId) ?? 0;
   const userId = useStore((s) => s.userId) ?? 0;
+  const rol = useStore((s) => s.userRol) ?? "";
 
   // ---------- Estado de filtros ----------
   const [texto, setTexto] = useState<string>("");
@@ -138,38 +142,63 @@ export default function HistorialVentasMain() {
     motivo: string;
     adminPassword: string;
   }>({ venta: null, motivo: "", adminPassword: "" });
-
+  const textoDeferred = useDeferredValue(texto);
   // Construimos objeto de query params compatibles con backend
-  const queryParams: QueryVentasUI = {
-    page,
-    limit,
-    sortBy,
-    sortDir,
-    sucursalId,
-    texto: texto || undefined,
-    fechaDesde: fechaDesde ? dayjs(fechaDesde).format("YYYY-MM-DD") : undefined,
-    fechaHasta: fechaHasta ? dayjs(fechaHasta).format("YYYY-MM-DD") : undefined,
-    montoMin: montoMin ? Number(montoMin) : undefined,
-    montoMax: montoMax ? Number(montoMax) : undefined,
-
-    tipoComprobante: comprobantes.length
-      ? (comprobantes as TipoComprobante[])
-      : undefined,
-  };
+  const queryParams: QueryVentasUI = useMemo(
+    () => ({
+      page,
+      limit,
+      sortBy,
+      sortDir,
+      sucursalId,
+      texto: textoDeferred || undefined,
+      fechaDesde: fechaDesde
+        ? dayjs(fechaDesde).format("YYYY-MM-DD")
+        : undefined,
+      fechaHasta: fechaHasta
+        ? dayjs(fechaHasta).format("YYYY-MM-DD")
+        : undefined,
+      montoMin: montoMin ? Number(montoMin) : undefined,
+      montoMax: montoMax ? Number(montoMax) : undefined,
+      isVendedor: rol !== "ADMIN",
+      usuarioId: userId,
+      tipoComprobante: comprobantes.length
+        ? (comprobantes as TipoComprobante[])
+        : undefined,
+      metodoPago: metodosPago.length ? metodosPago : undefined, // <--- AQUÍ
+    }),
+    [
+      page,
+      limit,
+      sortBy,
+      sortDir,
+      sucursalId,
+      textoDeferred,
+      fechaDesde,
+      fechaHasta,
+      montoMin,
+      montoMax,
+      rol,
+      userId,
+      comprobantes,
+      metodosPago,
+    ]
+  );
 
   // ---------- Fetch con tu wrapper ----------
   const {
     data: ventasPage,
-    isLoading,
+    isFetching, // 👈 usar este para spinners
     isError,
   } = useApiQuery<VentasApiResponse>(
-    ["ventas-sucursal", sucursalId, queryParams],
+    ventasHistorialKeys.listSucursal(sucursalId, queryParams),
     `/venta/find-my-sucursal-sales/${sucursalId}`,
     { params: queryParams },
     {
       enabled: Number.isFinite(sucursalId) && sucursalId > 0,
+      placeholderData: keepPreviousData, // 👈 clave
       staleTime: 30_000,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: false, // 👈 evita “brincos”
     }
   );
 
@@ -194,12 +223,9 @@ export default function HistorialVentasMain() {
     }
   >("post", "/sale-deleted", undefined, {
     onSuccess: () => {
-      toast.success("Venta eliminada exitosamente");
       setIsOpenDelete(false);
       setVentaEliminar({ venta: null, motivo: "", adminPassword: "" });
-    },
-    onError: () => {
-      toast.error("Ocurrió un error al eliminar la venta");
+      queryClient.invalidateQueries({ queryKey: ventasHistorialKeys.all });
     },
   });
 
@@ -231,7 +257,7 @@ export default function HistorialVentasMain() {
     setIsOpenDelete(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     const v = ventaEliminar.venta!;
     if (!ventaEliminar.adminPassword) {
       toast.info("Ingrese la contraseña de administrador");
@@ -259,18 +285,16 @@ export default function HistorialVentasMain() {
       sucursalId,
       adminPassword: ventaEliminar.adminPassword,
     };
-    deleteMutation.mutate(payload);
+    console.log("El payload de eliminacion es: ", payload);
+
+    toast.promise(deleteMutation.mutateAsync(payload), {
+      loading: "Eliminando registro...",
+      success: "Venta eliminada",
+      error: (error) => getApiErrorMessageAxios(error),
+    });
   };
 
   // ---------- UI ----------
-  if (isLoading) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Cargando ventas...
-      </div>
-    );
-  }
-
   if (isError) {
     return (
       <div className="p-6 text-center text-destructive">
@@ -306,7 +330,7 @@ export default function HistorialVentasMain() {
                 value={texto}
                 onChange={(e) => {
                   setTexto(e.target.value);
-                  setPage(1);
+                  // setPage(1);
                 }}
                 placeholder="Buscar cliente, referencia, código, etc."
               />
@@ -380,7 +404,7 @@ export default function HistorialVentasMain() {
             <MultiChecks
               label="Método de pago"
               options={[
-                { value: "CONTADO", label: "Contado" },
+                { value: "EFECTIVO", label: "Contado" },
                 { value: "TARJETA", label: "Tarjeta" },
                 { value: "TRANSFERENCIA", label: "Transferencia" },
                 { value: "CREDITO", label: "Crédito" },
@@ -461,7 +485,7 @@ export default function HistorialVentasMain() {
       {/* Tabla */}
       <TableVentas
         pageData={ventasPage}
-        isLoading={isLoading}
+        isLoading={isFetching}
         onSortChange={onSortChange}
         onViewVenta={handleViewVenta}
         onDeleteVenta={handleAskDelete}
@@ -470,7 +494,6 @@ export default function HistorialVentasMain() {
       <VentaDetalleDialog
         open={isOpenDetalle}
         onOpenChange={setIsOpenDetalle}
-        // ¡OJO! Actualiza el tipo del prop `venta` en tu dialog a `VentaResumen | null`
         venta={ventaSeleccionada as any}
         onDeleteClick={handleAskDelete}
       />
@@ -519,17 +542,29 @@ export default function HistorialVentasMain() {
       </div>
 
       {/* Dialog Eliminar */}
-      <Dialog open={isOpenDelete} onOpenChange={setIsOpenDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-center">
-              ¿Eliminar esta venta?
-            </DialogTitle>
-            <DialogDescription className="text-center">
-              Esta acción afectará las ganancias de la sucursal.
-            </DialogDescription>
-          </DialogHeader>
-
+      <AdvancedDialog
+        type="warning"
+        open={isOpenDelete}
+        onOpenChange={setIsOpenDelete}
+        title="Eliminación de venta"
+        description="Se procederá a eliminar esta venta y los registros ligados a ella."
+        question="¿Estás seguro de ello?"
+        confirmButton={{
+          label: "Si, continuar y eliminar",
+          onClick: handleConfirmDelete,
+          loading: deleteMutation.isPending,
+          loadingText: "Eliminando registro...",
+          disabled: deleteMutation.isPending,
+        }}
+        cancelButton={{
+          label: "Cancelar",
+          onClick: () => {
+            setIsOpenDelete(false);
+          },
+          disabled: deleteMutation.isPending,
+          loadingText: "Cancelando...",
+        }}
+        children={
           <div className="space-y-2">
             <Textarea
               placeholder="Motivo de la eliminación"
@@ -553,33 +588,8 @@ export default function HistorialVentasMain() {
               }
             />
           </div>
-
-          <div className="flex gap-2">
-            <Button
-              variant="destructive"
-              className="w-full"
-              onClick={() => setIsOpenDelete(false)}
-              disabled={deleteMutation.isPending}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="w-full"
-              onClick={handleConfirmDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? (
-                <span className="inline-flex items-center">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Eliminando…
-                </span>
-              ) : (
-                "Sí, eliminar"
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        }
+      />
     </div>
   );
 }
