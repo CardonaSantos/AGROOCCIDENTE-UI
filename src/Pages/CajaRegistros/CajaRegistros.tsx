@@ -69,10 +69,6 @@ function CajaRegistros() {
       const dt = await getRegistrosCajas({
         page,
         limit,
-        // sucursalId:
-        //   typeof sucursalIdFromStore === "number" && sucursalIdFromStore >= 1
-        //     ? sucursalIdFromStore
-        //     : undefined,
       });
       setPageData(dt);
       setRegistLenght((prev) => ({
@@ -92,10 +88,6 @@ function CajaRegistros() {
       const dt = await getRegistrosMovimientos({
         page,
         limit,
-        // sucursalId:
-        //   typeof sucursalIdFromStore === "number" && sucursalIdFromStore >= 1
-        //     ? sucursalIdFromStore
-        //     : undefined,
       });
       setPageDataMovimientos(dt);
       setRegistLenght((prev) => ({

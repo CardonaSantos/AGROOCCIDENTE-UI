@@ -19,6 +19,8 @@ import {
   CreditCard,
   Hash,
   PackageSearch,
+  Delete,
+  FileText,
 } from "lucide-react";
 import { formattMonedaGT } from "@/utils/formattMoneda";
 // ⬇️ Ajusta esta ruta si tu archivo de interfaces está en otro lugar
@@ -26,6 +28,7 @@ import {
   VentaResumen,
   VentaItem,
 } from "../HistorialVentas/interfaces/VentasHistorialResponse";
+import { Link } from "react-router-dom";
 
 type Props = {
   open: boolean;
@@ -218,7 +221,7 @@ export default function VentaDetalleDialog({
         </div>
 
         {/* Footer */}
-        <div className="mt-4 flex flex-col-reverse sm:flex-row gap-2">
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <Button
             variant="outline"
             className="w-full sm:w-auto"
@@ -226,13 +229,29 @@ export default function VentaDetalleDialog({
           >
             Cerrar
           </Button>
+
+          <Link
+            to={`/venta/generar-factura/${venta?.id}`}
+            className="w-full sm:w-auto"
+          >
+            <Button
+              variant="default"
+              className="w-full bg-green-500 hover:bg-green-600 gap-2"
+              onClick={() => onOpenChange(false)}
+            >
+              Comprobante
+              <FileText className="w-5 h-auto" />
+            </Button>
+          </Link>
+
           {venta && onDeleteClick ? (
             <Button
               variant="destructive"
-              className="w-full sm:w-auto ml-auto"
+              className="w-full sm:w-auto ml-auto gap-2"
               onClick={() => onDeleteClick(venta)}
             >
               Eliminar venta
+              <Delete className="w-5 h-auto" />
             </Button>
           ) : null}
         </div>

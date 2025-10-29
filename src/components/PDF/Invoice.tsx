@@ -10,7 +10,7 @@ import localizedFormat from "dayjs/plugin/localizedFormat";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { User } from "lucide-react";
 
-import logo from "@/assets/NOVAPOSPNG.png";
+import logo from "@/assets/AGROOCCIDENTE-LOGO-PNG.png";
 import type { VentaHistorialPDF } from "@/Types/PDF/VentaHistorialPDF";
 import { formatearMoneda } from "@/Pages/Requisicion/PDF/Pdf";
 import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
@@ -127,6 +127,40 @@ export default function Invoice() {
         fallbackBackTo="/"
         sticky={false}
       />
+      {/* Botón flotante fijo */}
+      {pdfUrl && (
+        <a
+          href={pdfUrl}
+          download={`Comprobante_${venta.id}.pdf`}
+          className="
+      fixed bottom-4 right-4
+      z-50
+      bg-amber-500 hover:bg-amber-600
+      text-white font-semibold
+      px-4 py-2 rounded-full
+      shadow-lg shadow-amber-300/50
+      transition-all duration-200
+      flex items-center gap-2
+      active:scale-95
+    "
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+            stroke="currentColor"
+            className="w-5 h-5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 10.5L12 15m0 0l4.5-4.5M12 15V3"
+            />
+          </svg>
+          Descargar
+        </a>
+      )}
 
       {/* Área que se rasteriza al PDF */}
       <div
@@ -151,7 +185,7 @@ export default function Invoice() {
             <div className="flex items-center gap-3">
               <img
                 src={logo}
-                className="w-16 h-16 object-contain"
+                className="w-[6rem] h-[6rem]"
                 alt="Logo"
                 crossOrigin="anonymous"
               />

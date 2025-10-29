@@ -18,6 +18,7 @@ export enum CategoriaMovimiento {
   GASTO_OPERATIVO = "GASTO_OPERATIVO",
   COSTO_VENTA = "COSTO_VENTA",
   DEPOSITO_PROVEEDOR = "DEPOSITO_PROVEEDOR",
+  INGRESO = "INGRESO",
 }
 
 export enum EstadoCaja {

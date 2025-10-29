@@ -38,7 +38,7 @@ import { TimeLineDto } from "../components/API/interfaces.interfaces";
 import { createNewTimeLine } from "../components/API/api";
 import { EstadoGarantia, GarantiaType } from "../types/newGarantyTypes";
 import { formattMonedaGT } from "@/utils/formattMoneda";
-import { useSocketCtx, useSocketEvent } from "@/Web/realtime/SocketProvider"; // ✅ nuevo
+import { useSocketEvent } from "@/Web/realtime/SocketProvider"; // ✅ nuevo
 import {
   useApiMutation,
   useApiQuery,
@@ -59,10 +59,20 @@ import PurchasePaymentFormDialog, {
 } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
 import { SimpleCredit } from "../credit-authorizations/interfaces/credit-records";
 import CreditCardList from "../credit-records-dashboard/credit-card-list";
-import { AUTH_KEY, CREDIT_QK } from "./query";
+import {
+  AUTH_BASE_KEY,
+  AUTH_FILTERS,
+  AUTH_KEY,
+  AUTH_QK,
+  CREDIT_QK,
+  PRICE_REQUESTS_QK,
+  TRANSFER_REQUESTS_QK,
+} from "./query";
 import CxpCreditCardList from "../creditos-compras/CxpCreditCardList";
 import { useCxpCreditosActivos } from "../creditos-compras/utils/useCxpActivos";
 import { Textarea } from "@/components/ui/textarea";
+import { ListResp, upsertIntoList } from "../helpers/UpserSocketEvent";
+import { createDebounced } from "@/Web/realtime/helpers/upsersocketevent";
 
 const API_URL = import.meta.env.VITE_API_URL;
 // Otras utilidades
@@ -76,17 +86,14 @@ interface RejectDto {
   motivoRechazo: string;
 }
 // arriba del componente
-const AUTH_FILTERS = { estado: "PENDIENTE" } as const;
 
 export default function DashboardPageMain() {
-  const { socket } = useSocketCtx(); // ✅
-
   const formatearFecha = (fecha: string) => {
     const nueva_fecha = dayjs(fecha).format("DD MMMM YYYY, hh:mm A");
     return nueva_fecha;
   };
 
-  const sucursalId = useStore((state) => state.sucursalId);
+  const sucursalId = useStore((state) => state.sucursalId) ?? 0;
   const userID = useStore((state) => state.userId) ?? 0;
 
   const [ventasMes, setVentasMes] = useState(0);
@@ -101,10 +108,7 @@ export default function DashboardPageMain() {
   const [transaccionesRecientes, setTransaccionesRecientes] = useState<
     VentaReciente[]
   >([]);
-  const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
-  const [solicitudesTransferencia, setSolicitudesTransferencia] = useState<
-    SolicitudTransferencia[]
-  >([]);
+
   const [warranties, setWarranties] = useState<GarantiaType[]>([]);
   const [reparaciones, setReparaciones] = useState<Reparacion[]>([]);
 
@@ -205,7 +209,6 @@ export default function DashboardPageMain() {
     try {
       const response = await axios.get(`${API_URL}/price-request`);
       if (response.status === 200) {
-        setSolicitudes(response.data);
       }
     } catch (error) {
       console.error(error);
@@ -219,7 +222,6 @@ export default function DashboardPageMain() {
         `${API_URL}/solicitud-transferencia-producto`
       );
       if (response.status === 200) {
-        setSolicitudesTransferencia(response.data);
       }
     } catch (error) {
       console.error(error);
@@ -259,14 +261,10 @@ export default function DashboardPageMain() {
 
   //credit authorizations
   const { data: authorizations } = useApiQuery<CreditAuthorizationListResponse>(
-    AUTH_KEY, // 👈 usa la key con filtros
+    AUTH_QK(AUTH_FILTERS),
     "credito-authorization",
     { params: AUTH_FILTERS },
-    {
-      // asegura refetch inmediato al montar o remount
-      refetchOnMount: "always",
-      staleTime: 0,
-    }
+    { refetchOnMount: "always", staleTime: 0 }
   );
 
   const { data: creditsRecords } = useApiQuery<SimpleCredit[]>(
@@ -298,6 +296,28 @@ export default function DashboardPageMain() {
         },
       }
     );
+
+  // ✅ Solicitudes de precio
+  const { data: priceRequests } = useApiQuery<Solicitud[]>(
+    PRICE_REQUESTS_QK(sucursalId),
+    "price-request",
+    undefined,
+    { enabled: !!sucursalId, staleTime: 15_000, refetchOnWindowFocus: false }
+  );
+
+  // ✅ Solicitudes de transferencia
+  const { data: transferRequests } = useApiQuery<SolicitudTransferencia[]>(
+    TRANSFER_REQUESTS_QK(sucursalId),
+    "solicitud-transferencia-producto",
+    undefined,
+    { enabled: !!sucursalId, staleTime: 15_000, refetchOnWindowFocus: false }
+  );
+
+  // Sanitizados para los componentes
+  const solicitudes = Array.isArray(priceRequests) ? priceRequests : [];
+  const solicitudesTransferencia = Array.isArray(transferRequests)
+    ? transferRequests
+    : [];
 
   const handleRejectCredit = async () => {
     const dto = {
@@ -336,72 +356,34 @@ export default function DashboardPageMain() {
     getReparacionesRegis();
   }, []);
 
-  //reemplazazr esto por lo de abajo
-  useEffect(() => {
-    if (socket) {
-      const handleSolicitud = (solicitudNueva: Solicitud) => {
-        setSolicitudes((prevSolicitudes) => [
-          ...prevSolicitudes,
-          solicitudNueva,
-        ]);
-      };
-      const handleSolicitudTransferencia = (
-        solicitudNueva: SolicitudTransferencia
-      ) => {
-        setSolicitudesTransferencia((prevSolicitudes) => [
-          ...prevSolicitudes,
-          solicitudNueva,
-        ]);
-      };
-
-      socket.on("recibirSolicitud", handleSolicitud);
-      socket.on("recibirSolicitudTransferencia", handleSolicitudTransferencia);
-
-      return () => {
-        socket.off("recibirSolicitud", handleSolicitud);
-        socket.off(
-          "recibirSolicitudTransferencia",
-          handleSolicitudTransferencia
-        );
-      };
-    }
-  }, [socket]);
-
-  //   useSocketEvent("recibirSolicitud", (s: Solicitud) => {
-  //   setSolicitudes(prev => [s, ...prev]);
-  // });
-
-  // useSocketEvent("recibirSolicitudTransferencia", (s: SolicitudTransferencia) => {
-  //   setSolicitudesTransferencia(prev => [s, ...prev]);
-  // });
-
   const handleAceptRequest = async (idSolicitud: number) => {
     try {
-      const response = await axios.patch(
+      await axios.patch(
         `${API_URL}/price-request/acept-request-price/${idSolicitud}/${userID}`
       );
-      if (response.status === 200) {
-        toast.success("Petición aceptada, precio concedido");
-        getSolicitudes();
-      }
+      toast.success("Petición aceptada, precio concedido");
     } catch (error) {
       console.error(error);
       toast.error("Error");
+    } finally {
+      queryClient.invalidateQueries({
+        queryKey: PRICE_REQUESTS_QK(sucursalId),
+      });
     }
   };
-
   const handleRejectRequest = async (idSolicitud: number) => {
     try {
-      const response = await axios.patch(
+      await axios.patch(
         `${API_URL}/price-request/reject-request-price/${idSolicitud}/${userID}`
       );
-      if (response.status === 200) {
-        toast.warning("Petición rechazada");
-        getSolicitudes();
-      }
+      toast.warning("Petición rechazada");
     } catch (error) {
       console.error(error);
       toast.error("Error");
+    } finally {
+      queryClient.invalidateQueries({
+        queryKey: PRICE_REQUESTS_QK(sucursalId),
+      });
     }
   };
 
@@ -415,6 +397,7 @@ export default function DashboardPageMain() {
       });
       toast.success("Tranferencia completada");
       getSolicitudesTransferencia();
+      queryClient.invalidateQueries({ queryKey: TRANSFER_REQUESTS_QK() });
     } catch (error) {
       console.error("Error al aceptar la transferencia:", error);
       toast.error("Error");
@@ -431,6 +414,7 @@ export default function DashboardPageMain() {
       if (response.status === 200) {
         toast.warning("Solicitud de transferencia rechazada");
         getSolicitudesTransferencia();
+        queryClient.invalidateQueries({ queryKey: TRANSFER_REQUESTS_QK() });
       }
     } catch (error) {
       console.error("Error al aceptar la transferencia:", error);
@@ -547,6 +531,24 @@ export default function DashboardPageMain() {
     }
   };
 
+  // invalidación debounced (opcional pero recomendado)
+  const invalidatePriceReqDebounced = createDebounced(() => {
+    queryClient.invalidateQueries({ queryKey: PRICE_REQUESTS_QK(sucursalId) });
+  }, 800);
+
+  // ▶ Evento: nueva solicitud de precio
+  useSocketEvent("recibirSolicitud", (s: Solicitud) => {
+    // 1) reflejo instantáneo en la UI
+    // queryClient.setQueryData<Solicitud[]>(
+    //   PRICE_REQUESTS_QK(sucursalId), // 👈 MISMA QK del fetch
+    //   (prev) => upsertArrayById(prev, s, { prepend: true })
+    // );
+    // 2) (opcional) reconciliar contra backend
+    if (s) {
+      invalidatePriceReqDebounced();
+    }
+  });
+
   const authorizationsData = Array.isArray(authorizations?.data)
     ? authorizations.data
     : [];
@@ -577,36 +579,20 @@ export default function DashboardPageMain() {
 
   const [openTimeLine, setOpenTimeLine] = useState(false);
 
+  //AUTORIZACION CREADA
   useSocketEvent(
     "credit:authorization.created",
     (payload: NormalizedSolicitud) => {
-      console.log("[socket] credit:authorization.created", payload);
-      console.log("cache antes:", queryClient.getQueryData(AUTH_KEY));
-      queryClient.setQueryData<CreditAuthorizationListResponse>(
-        AUTH_KEY,
-        (prev) => {
-          if (!prev) return prev;
-
-          const exists = prev.data.some((x) => x.id === payload.id);
-          const nextData = exists
-            ? prev.data.map((x) => (x.id === payload.id ? payload : x))
-            : [payload, ...prev.data];
-          const total = exists ? prev.meta.total : prev.meta.total + 1;
-
-          return {
-            ...prev,
-            data: nextData,
-            meta: {
-              ...prev.meta,
-              total,
-              pages: Math.ceil(total / prev.meta.limit),
-            },
-          };
+      queryClient.setQueriesData<ListResp<NormalizedSolicitud>>(
+        { queryKey: [AUTH_BASE_KEY] }, // predicado por prefijo
+        (prev?: ListResp<NormalizedSolicitud>) => {
+          // solo actualiza si el payload MATCHEA los filtros activos
+          return upsertIntoList(prev, payload, { prepend: true });
         }
       );
-      console.log("cache después:", queryClient.getQueryData(AUTH_KEY));
     }
   );
+
   // helpers para el copy (opcional arriba del JSX)
   const nombreClienteSel = selectedAuth
     ? `${selectedAuth.cliente.nombre}${
@@ -678,7 +664,7 @@ export default function DashboardPageMain() {
   const { items, isLoading } = useCxpCreditosActivos();
   return (
     <motion.div {...DesvanecerHaciaArriba} className="container mx-auto">
-      <h1 className="text-2xl font-bold">Dashboard de Administrador</h1>
+      <h1 className="text-2xl font-semibold">Dashboard Administrador</h1>
 
       {/* Resumen de ventas */}
       <OverviewCards

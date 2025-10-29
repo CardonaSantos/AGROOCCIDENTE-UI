@@ -1,27 +1,9 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 //================================================================>
-import { useState, useEffect } from "react";
-import {
-  X,
-  Bell,
-  User,
-  LogOut,
-  AtSign,
-  CalendarClock,
-  Info,
-  AlertTriangle,
-  Clock,
-  ArrowRightLeft,
-  DollarSign,
-} from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { useEffect } from "react";
+import { User, LogOut, AtSign } from "lucide-react";
+
 import { Link, Outlet } from "react-router-dom";
 import { ModeToggle } from "../mode-toggle";
 
@@ -35,51 +17,34 @@ import { Button } from "../ui/button";
 import { UserToken } from "@/Types/UserToken/UserToken";
 import { jwtDecode } from "jwt-decode";
 import { useStore } from "../Context/ContextSucursal";
-import axios from "axios";
 import { Sucursal } from "@/Types/Sucursal/Sucursal_Info";
 import { toast } from "sonner";
-import { Card, CardContent } from "../ui/card";
-
 import dayjs from "dayjs";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { Avatar, AvatarFallback } from "../ui/avatar";
-import { Badge } from "../ui/badge";
-import logo from "@/assets/NOVAPOSPNG.png";
+import logo from "@/assets/AGROOCCIDENTE-LOGO-PNG.png";
+import { useNotificationsRealtime } from "@/Web/realtime/notifications/usenot";
+import {
+  useApiMutation,
+  useApiQuery,
+} from "@/hooks/genericoCall/genericoCallHook";
+import { UiNotificacionDTO } from "@/Web/realtime/notifications/notifications.type";
+import { useQueryClient } from "@tanstack/react-query";
+import NotificationsSheet from "./NotificationsComponents/NotificationsSheet";
+import { NOTIFICATIONS_QK } from "./NotificationsComponents/Qk";
+import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
 
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
 dayjs.locale("es");
 
-const formatearFecha = (fecha: string) => {
-  let nueva_fecha = dayjs(fecha).format("DD MMMM YYYY, hh:mm A");
-  return nueva_fecha;
-};
-
-const API_URL = import.meta.env.VITE_API_URL;
-
 interface LayoutProps {
   children?: React.ReactNode;
 }
 
-enum TipoNotificacion {
-  SOLICITUD_PRECIO = "SOLICITUD_PRECIO",
-  TRANSFERENCIA = "TRANSFERENCIA",
-  VENCIMIENTO = "VENCIMIENTO",
-  STOCK_BAJO = "STOCK_BAJO",
-  OTRO = "OTRO",
-}
-
-interface Notificacion {
-  id: number;
-  mensaje: string;
-  remitenteId: number;
-  tipoNotificacion: TipoNotificacion;
-  referenciaId: number | null;
-  fechaCreacion: string;
-}
-
 export default function Layout2({ children }: LayoutProps) {
+  const queryClient = useQueryClient();
   // Store POS (Zustand) setters
   const setUserNombre = useStore((state) => state.setUserNombre);
   const setUserCorreo = useStore((state) => state.setUserCorreo);
@@ -92,11 +57,9 @@ export default function Layout2({ children }: LayoutProps) {
   const posNombre = useStore((state) => state.userNombre);
   const posCorreo = useStore((state) => state.userCorreo);
   const sucursalId = useStore((state) => state.sucursalId);
-  const userID = useStore((state) => state.userId);
+  const userID = useStore((state) => state.userId) ?? 0;
 
   // Local state
-  const [sucursalInfo, setSucursalInfo] = useState<Sucursal>();
-  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
 
   // Decodificar y setear datos del POS al iniciar
   useEffect(() => {
@@ -121,56 +84,54 @@ export default function Layout2({ children }: LayoutProps) {
     setUserId,
     setSucursalId,
   ]);
+  const { data: sucursalInfo } = useApiQuery<Sucursal>(
+    ["sucursal-info", sucursalId],
+    `sucursales/get-info-sucursal/${sucursalId}`,
+    undefined,
+    { enabled: !!sucursalId }
+  );
 
-  // Obtener info de sucursal cuando cambie sucursalId
-  useEffect(() => {
-    if (!sucursalId) return;
-    axios
-      .get<Sucursal>(`${API_URL}/sucursales/get-info-sucursal/${sucursalId}`)
-      .then((res) => setSucursalInfo(res.data))
-      .catch((err) => console.error("Error fetching sucursal info:", err));
-  }, [sucursalId]);
+  const { data: notifications, isLoading: isLoadingNotis } = useApiQuery<
+    UiNotificacionDTO[]
+  >(
+    NOTIFICATIONS_QK(userID),
+    `notification/get-my-notifications/${userID}`,
+    undefined,
+    { staleTime: 0, enabled: !!userID }
+  );
 
-  const getNotificaciones = async () => {
-    if (!userID) return;
-    try {
-      const { data } = await axios.get<Notificacion[]>(
-        `${API_URL}/notification/get-my-notifications/${userID}`
-      );
-      setNotificaciones(data);
-    } catch (err) {
-      console.error("Error loading notificaciones:", err);
-      toast.error("Error al conseguir notificaciones");
-    }
-  };
+  const secureNotifications = Array.isArray(notifications) ? notifications : [];
 
-  // Cargar notificaciones cuando cambie userID
-  useEffect(() => {
-    getNotificaciones();
-  }, [userID]);
-
-  // Eliminar notificación
   const deleteNoti = async (id: number) => {
     try {
-      await axios.delete(
-        `${API_URL}/notification/delete-my-notification/${id}/${userID}`
+      const { mutateAsync: deleteNotification } = useApiMutation(
+        "delete",
+        `notification/delete-noti-one-user/${userID}/${id}`
       );
+
+      toast.promise(deleteNotification(id), {
+        loading: "Eliminando notifiación...",
+        success: "Notificación Eliminada",
+        error: (error) => getApiErrorMessageAxios(error),
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICATIONS_QK(userID),
+      });
       toast.success("Notificación eliminada");
-      getNotificaciones();
     } catch (err) {
       console.error("Error deleting notificacion:", err);
       toast.error("Error al eliminar notificación");
+      throw err;
     }
   };
 
-  // Logout POS
   const handleLogout = () => {
     localStorage.removeItem("authTokenPos");
     toast.info("Sesión cerrada");
     window.location.reload();
   };
 
-  // util para iniciales
   function getInitials(name?: string | null) {
     if (!name) return "??";
     const words = name.trim().split(/\s+/).filter(Boolean);
@@ -181,135 +142,39 @@ export default function Layout2({ children }: LayoutProps) {
     return initials || "??";
   }
 
+  useNotificationsRealtime({
+    showToast: true,
+    onNew: () => {},
+  });
+
   return (
     <div className="flex min-h-screen">
       <SidebarProvider>
         <AppSidebar />
         <div className="flex flex-col w-full">
-          <header className="sticky top-0 z-10 h-16 w-full bg-background border-b shadow-sm flex items-center justify-between px-4">
+          <header className="sticky top-0 z-10 h-12 w-full bg-background border-b shadow-sm flex items-center justify-between px-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-8 w-8 -ml-1" />
               <Link to="/">
                 <img
                   src={logo}
                   alt="Logo"
-                  className="h-8 w-8 md:h-10 md:w-10"
+                  className="h-10 w-10 sm:h-16 sm:w-16"
                 />
               </Link>
-              <p className="text-sm font-semibold text-foreground">
-                {sucursalInfo?.nombre || ""}
-              </p>
+              <p className="text-sm ">{sucursalInfo?.nombre || ""}</p>
             </div>
 
             <div className="flex items-center space-x-2">
               <ModeToggle />
-              <Dialog>
-                <DialogTrigger asChild>
-                  <div className="relative">
-                    <Button variant="outline" size="icon">
-                      <Bell className="h-6 w-6" />
-                    </Button>
-                    {notificaciones.length > 0 && (
-                      <span className="absolute top-0 right-0 inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-primary-foreground bg-rose-500 rounded-full">
-                        {notificaciones.length}
-                      </span>
-                    )}
-                  </div>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle className="text-center text-2xl font-bold">
-                      Notificaciones
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="py-4 overflow-y-auto max-h-96">
-                    {notificaciones.length > 0 ? (
-                      notificaciones.map((not) => {
-                        // Determine icon and color based on notification type
-                        let icon;
-                        let bgColor;
-                        let borderColor;
 
-                        switch (not.tipoNotificacion) {
-                          case TipoNotificacion.SOLICITUD_PRECIO:
-                            icon = <DollarSign className="h-5 w-5" />;
-                            bgColor = "bg-amber-50 dark:bg-amber-950/30";
-                            borderColor = "border-l-amber-500";
-                            break;
-                          case TipoNotificacion.TRANSFERENCIA:
-                            icon = <ArrowRightLeft className="h-5 w-5" />;
-                            bgColor = "bg-emerald-50 dark:bg-emerald-950/30";
-                            borderColor = "border-l-emerald-500";
-                            break;
-                          case TipoNotificacion.VENCIMIENTO:
-                            icon = <Clock className="h-5 w-5" />;
-                            bgColor = "bg-rose-50 dark:bg-rose-950/30";
-                            borderColor = "border-l-rose-500";
-                            break;
-                          case TipoNotificacion.STOCK_BAJO:
-                            icon = <AlertTriangle className="h-5 w-5" />;
-                            bgColor = "bg-orange-50 dark:bg-orange-950/30";
-                            borderColor = "border-l-orange-500";
-                            break;
-                          default:
-                            icon = <Info className="h-5 w-5" />;
-                            bgColor = "bg-sky-50 dark:bg-sky-950/30";
-                            borderColor = "border-l-sky-500";
-                            break;
-                        }
+              <NotificationsSheet
+                notifications={secureNotifications}
+                isLoading={isLoadingNotis}
+                onDelete={deleteNoti}
+                countBadge={secureNotifications.length}
+              />
 
-                        return (
-                          <Card
-                            key={not.id}
-                            className={`m-2 shadow-sm transition-all hover:shadow-md ${bgColor} border-l-4 ${borderColor}`}
-                          >
-                            <CardContent className="p-3">
-                              <div className="flex items-start gap-3">
-                                <div className="mt-1 text-foreground/80">
-                                  {icon}
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <Badge
-                                      variant="outline"
-                                      className="mb-1 font-medium"
-                                    >
-                                      {not.tipoNotificacion.replace(/_/g, " ")}
-                                    </Badge>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-7 w-7"
-                                      onClick={() => deleteNoti(not.id)}
-                                      aria-label="Eliminar notificación"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                  <p className="text-sm font-medium break-words">
-                                    {not.mensaje}
-                                  </p>
-                                  <div className="flex items-center mt-2 text-xs text-muted-foreground">
-                                    <CalendarClock className="h-3.5 w-3.5 mr-1" />
-                                    {formatearFecha(not.fechaCreacion)}
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <Bell className="h-12 w-12 text-muted-foreground/50 mb-3" />
-                        <p className="text-muted-foreground">
-                          No hay notificaciones.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </DialogContent>
-              </Dialog>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -345,7 +210,7 @@ export default function Layout2({ children }: LayoutProps) {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto px-2 md:px-3 lg:px-0 py-2 lg:py-3">
+          <main className="flex-1 overflow-y-auto px-2 md:px-3 lg:px-0 py-2 lg:py-1">
             {children || <Outlet />}
           </main>
 

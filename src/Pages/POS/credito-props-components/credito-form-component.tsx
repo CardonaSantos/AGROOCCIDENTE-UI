@@ -745,7 +745,7 @@ export default function CreditoForm({
                   onOpenChange={setOpenCreateRequest}
                   open={openCreateRequest}
                   confirmButton={{
-                    label: "Sí, continuar y enviar petición de autorización",
+                    label: "Enviar solicitud",
                     disabled: isPendingCreditRequest,
                     loading: isPendingCreditRequest,
                     loadingText: "Enviando petición...",

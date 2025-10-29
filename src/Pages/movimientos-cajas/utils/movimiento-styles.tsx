@@ -67,6 +67,8 @@ export const getCategoriaStyles = (
       return "text-orange-700 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-300";
     case CategoriaMovimiento.DEPOSITO_PROVEEDOR:
       return "text-purple-700 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300";
+    case CategoriaMovimiento.INGRESO:
+      return "text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-300";
     default:
       return "text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-400";
   }

@@ -8,15 +8,7 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import {
-  Eye,
-  FileSpreadsheet,
-  FileText,
-  Trash2,
-  Package,
-  Calendar,
-  Clock,
-} from "lucide-react";
+import { Eye, FileText, Trash2, Package, Calendar, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -209,7 +201,7 @@ export const columnsVentas: ColumnDef<VentaResumen, any>[] = [
               <FileText className="h-4 w-4" />
             </Button>
           </Link>
-
+          {/* 
           <Link to={`/garantía/generar-garantía/${v.id}`}>
             <Button
               variant="outline"
@@ -218,7 +210,7 @@ export const columnsVentas: ColumnDef<VentaResumen, any>[] = [
             >
               <FileSpreadsheet className="h-4 w-4" />
             </Button>
-          </Link>
+          </Link> */}
 
           <Button
             variant="outline"

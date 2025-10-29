@@ -38,13 +38,13 @@ export function PriceRequestCard({
           Estado: <strong>{soli.estado}</strong>
         </p>
         <p className="text-sm mt-1">
-          Producto: <strong>{soli.producto.nombre}</strong> -{" "}
+          Producto: <strong>{soli.producto?.nombre}</strong> -{" "}
           {soli.producto.descripcion}
         </p>
         <p className="text-sm">
-          Solicitado por: <strong>{soli.solicitadoPor.nombre}</strong>(
+          Solicitado por: <strong>{soli.solicitadoPor?.nombre}</strong>(
           {soli.solicitadoPor.rol}) de{" "}
-          <strong>{soli.solicitadoPor.sucursal.nombre}</strong>
+          <strong>{soli.solicitadoPor.sucursal?.nombre}</strong>
         </p>
         <p className="text-sm">
           Precio solicitado:{" "}
