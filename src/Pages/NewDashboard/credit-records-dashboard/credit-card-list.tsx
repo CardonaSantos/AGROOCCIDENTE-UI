@@ -41,7 +41,7 @@ function CreditCardList({ credits }: ListCreditsProps) {
           <div>
             <CardTitle className="text-base flex items-center gap-2">
               <ListChecks className="size-4" />
-              Registros de créditos activos
+              Registros de ventas a créditos activos
             </CardTitle>
             <CardDescription>
               {total} registro{total > 1 ? "s" : ""}

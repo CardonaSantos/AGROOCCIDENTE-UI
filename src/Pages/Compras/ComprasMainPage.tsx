@@ -34,9 +34,8 @@ export function ComprasMainPage() {
       { params: queryParams }, // 🔎 server ya soporta withDetalles
       {
         placeholderData: keepPreviousData, // 🧈 paginación suave sin “parpadeo”
-        staleTime: 30_000, // ⏲️ evita refetchs agresivos
-        refetchOnWindowFocus: true,
-        // onError: () => toast.error("Error al cargar los datos de compras"),
+        staleTime: 0,
+        refetchOnWindowFocus: "always",
       }
     );
 

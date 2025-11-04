@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import SelectM from "react-select";
 import { TipoComprobante } from "./interfaces";
 import { MetodoPagoMainPOS } from "./interfaces/methodPayment";
+import { useMemo } from "react";
 
 enum RolPrecio {
   PUBLICO = "PUBLICO",
@@ -109,6 +110,7 @@ interface CartCheckoutProps {
   onUpdateQuantity: (uid: string, newQuantity: number) => void; // 👈
   onUpdatePrice: (uid: string, newPrice: number, newRole: RolPrecio) => void; // 👈
   onRemoveFromCart: (uid: string) => void;
+  userRol: string;
 }
 
 export default function CartCheckout({
@@ -142,6 +144,7 @@ export default function CartCheckout({
   formatCurrency,
   referenciaPago,
   setReferenciaPago,
+  userRol,
 }: CartCheckoutProps) {
   const calculateTotal = (): number => {
     return cart.reduce(
@@ -207,6 +210,22 @@ export default function CartCheckout({
   };
 
   const truncateButton: boolean = cart.length <= 0 || isCreditoVenta;
+  const processedCart = useMemo(() => {
+    return cart.map((item) => {
+      const preciosVisibles =
+        userRol === "VENDEDOR"
+          ? item.precios.filter(
+              (p) =>
+                p.rol !== RolPrecio.DISTRIBUIDOR &&
+                p.rol !== RolPrecio.PROMOCION &&
+                p.precio > 0
+            )
+          : item.precios.filter((p) => p.precio > 0);
+
+      return { ...item, preciosVisibles };
+    });
+  }, [cart, userRol]);
+  console.log("El rol legando es: ", userRol);
 
   return (
     <div className="space-y-3 min-w-[360px] max-w-[440px]">
@@ -273,88 +292,90 @@ export default function CartCheckout({
           </div>
           {/* Productos en el carrito */}
           <div className="overflow-y-auto max-h-[calc(100vh-430px)]">
-            {cart.length > 0 ? (
+            {processedCart.length > 0 ? (
               <div className="divide-y">
-                {cart.map((item) => (
-                  <div
-                    key={item.uid}
-                    className="
+                {processedCart.map((item) => {
+                  return (
+                    <div
+                      key={item.uid}
+                      className="
             grid items-center gap-x-2 px-4 py-2
             grid-cols-[minmax(0,1fr)_72px_100px_96px]
           "
-                  >
-                    <div className="text-sm pr-2 min-w-0">
-                      <div className="truncate">{item.nombre}</div>
-                    </div>
+                    >
+                      <div className="text-sm pr-2 min-w-0">
+                        <div className="truncate">{item.nombre}</div>
+                      </div>
 
-                    <div className="flex justify-center">
-                      <Input
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const val = Number.parseInt(e.target.value);
-                          if (!isNaN(val) && val > 0) {
-                            onUpdateQuantity(item.uid, val); // 👈 antes: item.id
-                          }
-                        }}
-                        min="1"
-                        max={item.stock.reduce((t, s) => t + s.cantidad, 0)}
-                        className="h-7 w-[72px] text-center"
-                      />
-                    </div>
+                      <div className="flex justify-center">
+                        <Input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const val = Number.parseInt(e.target.value);
+                            if (!isNaN(val) && val > 0) {
+                              onUpdateQuantity(item.uid, val); // 👈 antes: item.id
+                            }
+                          }}
+                          min="1"
+                          max={item.stock.reduce((t, s) => t + s.cantidad, 0)}
+                          className="h-7 w-[72px] text-center"
+                        />
+                      </div>
 
-                    <div className="flex justify-center">
-                      <Select
-                        value={item.selectedPriceId.toString()}
-                        onValueChange={(newPriceId) => {
-                          const p = item.precios.find(
-                            (x) => x.id === Number(newPriceId)
-                          );
-                          if (p) onUpdatePrice(item.uid, p.precio, p.rol);
-                        }}
-                      >
-                        <SelectTrigger className="h-7 w-[100px] justify-between">
-                          <SelectValue
-                            placeholder={formatCurrency(item.selectedPrice)}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {item.precios
-                            .filter((prec) => prec.precio > 0)
-                            .map((precio) => (
-                              <SelectItem
-                                key={precio.id}
-                                value={precio.id.toString()}
-                              >
-                                <div className="flex w-full items-center justify-between">
-                                  <span className="tabular-nums">
-                                    {formatCurrency(precio.precio)}
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground ml-2">
-                                    {precio.rol.toLowerCase()}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                      <div className="flex justify-center">
+                        <Select
+                          value={item.selectedPriceId.toString()}
+                          onValueChange={(newPriceId) => {
+                            const p = item.precios.find(
+                              (x) => x.id === Number(newPriceId)
+                            );
+                            if (p) onUpdatePrice(item.uid, p.precio, p.rol);
+                          }}
+                        >
+                          <SelectTrigger className="h-7 w-[100px] justify-between">
+                            <SelectValue
+                              placeholder={formatCurrency(item.selectedPrice)}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {item.preciosVisibles
+                              .filter((prec) => prec.precio > 0)
+                              .map((precio) => (
+                                <SelectItem
+                                  key={precio.id}
+                                  value={precio.id.toString()}
+                                >
+                                  <div className="flex w-full items-center justify-between">
+                                    <span className="tabular-nums">
+                                      {formatCurrency(precio.precio)}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground ml-2">
+                                      {precio.rol.toLowerCase()}
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium tabular-nums">
-                        {formatCurrency(item.selectedPrice * item.quantity)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-100/20 shrink-0"
-                        onClick={() => onRemoveFromCart(item.uid)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium tabular-nums">
+                          {formatCurrency(item.selectedPrice * item.quantity)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-100/20 shrink-0"
+                          onClick={() => onRemoveFromCart(item.uid)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="py-8 text-center text-muted-foreground flex flex-col items-center justify-center space-y-2">

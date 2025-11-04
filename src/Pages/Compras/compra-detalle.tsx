@@ -35,6 +35,11 @@ import PurchasePaymentFormDialog, {
 import { UICreditoCompra } from "./Credito/creditoCompraDisponible/interfaces/interfaces";
 import { normalizarDetalles } from "./Credito/helpers/normalizador";
 import { qk } from "./qk";
+import CostosAsociadosDialog, {
+  CostosAsociadosDialogResult,
+  MovimientoFinancieroDraft,
+  ProrrateoMeta,
+} from "./components/Costos Asociados Dialog";
 
 interface Option {
   label: string;
@@ -87,6 +92,7 @@ export default function CompraDetalle() {
   const [proveedorSelected, setProveedorSelected] = useState<
     string | undefined
   >(undefined);
+  const [openCostoDialog, setOpenCostoDialog] = useState(false);
 
   const [metodoPago, setMetodoPago] = useState<MetodoPago | "">("");
   const [cuentaBancariaSelected, setCuentaBancariaSelected] =
@@ -103,6 +109,14 @@ export default function CompraDetalle() {
     sucursalId: sucursalId,
     lineas: [],
   });
+
+  const [mfDraft, setMfDraft] = useState<MovimientoFinancieroDraft | null>(
+    null
+  );
+  const [prorrateoMeta, setProrrateoMeta] = useState<ProrrateoMeta | null>(
+    null
+  );
+  const [costoStepDone, setCostoStepDone] = useState(false); // para saber si lo completaron
 
   // === QUERIES ===============================================================
   const {
@@ -181,11 +195,9 @@ export default function CompraDetalle() {
       registroCajaId?: number;
     }
   >("post", `/compra-requisicion/${compraId}/recepcionar`, undefined, {
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["compra", compraId] }),
-        queryClient.invalidateQueries({ queryKey: ["compras"] }), // comodín por si hay listados cacheados
-      ]);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["compra", compraId] });
+      queryClient.invalidateQueries({ queryKey: ["compras"] });
     },
   });
 
@@ -478,17 +490,9 @@ export default function CompraDetalle() {
   const errorHard = isErrorRegistro && !registro;
   const onContinueFromPayment = useCallback(() => {
     setOpenFormPaymentDialog(false);
-    if (recepcionFlow === "PARCIAL") {
-      setOpenRecibirParcial(true);
-    } else {
-      setOpenSendStock(true);
-    }
-  }, [
-    recepcionFlow,
-    setOpenFormPaymentDialog,
-    setOpenRecibirParcial,
-    setOpenSendStock,
-  ]);
+    setCostoStepDone(false); // reset
+    setOpenCostoDialog(true); // 👉 abre el diálogo de costos asociados
+  }, [setOpenFormPaymentDialog]);
 
   console.log("El registro de compra: ", registroQ);
   const handleRefresAll = React.useCallback(async () => {
@@ -592,7 +596,7 @@ export default function CompraDetalle() {
         <TabsContent value="compra">
           <ComprasMain
             //STATES
-            openFormPaymentDialog={openFormPaymentDialog} // ✅ correcto
+            openFormPaymentDialog={openFormPaymentDialog}
             setOpenFormPaymentDialog={setOpenFormPaymentDialog}
             selectedItems={selectedItems}
             setSelectedItems={setSelectedItems}
@@ -640,7 +644,6 @@ export default function CompraDetalle() {
           />
         </TabsContent>
       </Tabs>
-
       {/* Confirmación (segunda pantalla) */}
       <AdvancedDialog
         type="warning"
@@ -663,7 +666,6 @@ export default function CompraDetalle() {
           onClick: () => setOpenSendStock(false),
         }}
       />
-
       {/* RECEPCION PARCIAL */}
       <AdvancedDialog
         type="confirmation"
@@ -686,7 +688,6 @@ export default function CompraDetalle() {
           onClick: () => setOpenRecibirParcial(false),
         }}
       />
-
       {/* Form previo a confirmar */}
       <PurchasePaymentFormDialog
         open={openFormDialog}
@@ -708,7 +709,6 @@ export default function CompraDetalle() {
         setCajaSelected={setCajaSelected}
         onContinue={() => setOpenSendStock(true)}
       />
-
       {/* FORM PREVIO A RECEPCION PARCIAL */}
       <PaymentMethodCompraDialogConfirm
         isBankMethod={isBankMethod}
@@ -734,6 +734,44 @@ export default function CompraDetalle() {
         canContinue={canContinue}
         onContinue={onContinueFromPayment}
         proveedores={proveedores}
+      />
+      <Button variant="secondary" onClick={() => setOpenCostoDialog(true)}>
+        Añadir costo asociado
+      </Button>
+      <CostosAsociadosDialog
+        open={openCostoDialog}
+        onOpenChange={(v) => {
+          setOpenCostoDialog(v);
+          // Si el usuario cierra sin guardar, continuamos al modal final (omitir costo)
+          if (!v && !costoStepDone) {
+            if (recepcionFlow === "PARCIAL") setOpenRecibirParcial(true);
+            else setOpenSendStock(true);
+          }
+        }}
+        compraId={compraId}
+        sucursalId={sucursalId}
+        proveedorId={registro.proveedor?.id ?? 1}
+        compraSubtotal={montoRecepcion}
+        cajasDisponibles={cajasDisponibles.map((c) => ({
+          id: c.id,
+          label: `Caja #${c.id}`,
+          disponibleEnCaja: c.disponibleEnCaja,
+        }))}
+        cuentasBancarias={cuentasBancarias}
+        // Defaults (opcional): hereda método de pago elegido para la compra
+        defaultMetodoPago={""}
+        defaultMotivo={"COSTO_ASOCIADO"}
+        defaultCostoVentaTipo={"FLETE"}
+        onSubmit={({ mf, prorrateo }: CostosAsociadosDialogResult) => {
+          setMfDraft(mf);
+          setProrrateoMeta(prorrateo ?? null);
+          setCostoStepDone(true);
+          setOpenCostoDialog(false);
+
+          // Ahora sí abrimos el modal final de confirmación
+          if (recepcionFlow === "PARCIAL") setOpenRecibirParcial(true);
+          else setOpenSendStock(true);
+        }}
       />
     </motion.div>
   );

@@ -107,7 +107,7 @@ function PaymentMethodCompraDialogConfirm({
   setCuentaBancariaSelected,
   cuentasBancarias,
   canContinue,
-  onContinue, // ✅ NUEVO
+  onContinue,
 }: PropsDialog) {
   return (
     <Dialog

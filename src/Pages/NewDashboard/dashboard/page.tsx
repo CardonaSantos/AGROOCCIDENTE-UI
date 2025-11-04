@@ -98,7 +98,6 @@ export default function DashboardPageMain() {
   const queryClient = useQueryClient();
 
   // Estado local (UI / datos)
-
   // Métricas / listas dashboard
   const [ventasMes, setVentasMes] = useState(0);
   const [ventasSemana, setVentasSemana] = useState(0);
@@ -794,7 +793,7 @@ export default function DashboardPageMain() {
         }
       />
 
-      {/* MOSTRAR LOS CRÉDITOS ACTIVOS */}
+      {/* MOSTRAR LOS CRÉDITOS VENTAS ACTIVOS */}
       <CreditCardList credits={credits} />
       {/* MOSTRAR LAS REPARACIONES ACTIVAS */}
       <RepairCardList

@@ -143,7 +143,6 @@ function CreditCardSimple({ credit }: CreditCardProps) {
       </CardContent>
 
       <CardFooter className="pt-0">
-        {/* Estado compacto con ícono */}
         <div className="flex items-center gap-2 text-xs">
           {estadoVencido ? (
             <>
@@ -156,9 +155,8 @@ function CreditCardSimple({ credit }: CreditCardProps) {
               <span className="text-emerald-600 font-medium">Al día</span>
             </>
           )}
-          {/* Comentario si existe */}
           {credit.comentario ? (
-            <span className="text-muted-foreground truncate max-w-[12rem] sm:max-w-none">
+            <span className="text-muted-foreground truncate max-w-[12rem] sm:max-w-none text-wrap">
               · {credit.comentario}
             </span>
           ) : null}

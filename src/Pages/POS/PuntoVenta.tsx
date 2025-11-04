@@ -169,6 +169,8 @@ function useDebounce<T>(value: T, delay = 400) {
 // =================== Componente ===================
 export default function PuntoVenta() {
   const userId = useStore((state) => state.userId) ?? 0;
+  const userRol = useStore((state) => state.userRol) ?? "";
+
   const sucursalId = useStore((state) => state.sucursalId) ?? 0;
 
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -768,6 +770,7 @@ export default function PuntoVenta() {
         <div className="min-w-0">
           {/* Carrito & Checkout (se mantiene) */}
           <CartCheckout
+            userRol={userRol}
             isCreditoVenta={isCreditoVenta}
             apellidos={apellidos}
             setApellidos={setApellidos}
@@ -813,6 +816,7 @@ export default function PuntoVenta() {
 
       {isCreditoVenta ? (
         <CreditoForm
+          userRol={userRol}
           openCreateRequest={openCreateRequest}
           setOpenCreateRequest={setOpenCreateRequest}
           value={creditoForm}

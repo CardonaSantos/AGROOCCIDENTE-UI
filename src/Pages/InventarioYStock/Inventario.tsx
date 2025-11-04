@@ -55,6 +55,7 @@ interface InventarioProps {
 
   handleSelectCat: (ids: number[]) => void;
   tiposPresentacion: TipoPresentacion[];
+  rolUser: string;
 }
 
 export default function Inventario({
@@ -70,6 +71,7 @@ export default function Inventario({
   tiposPresentacion,
   handleSelectCat,
   handleSelecTiposEmpaque,
+  rolUser,
 }: InventarioProps) {
   console.log("Las categorias son: ", categorias);
   console.log("proveedores: ", proveedores);
@@ -170,6 +172,7 @@ export default function Inventario({
       </div>
 
       <TableInventario
+        rolUser={rolUser}
         pagination={pagination}
         setPagination={setPagination}
         data={productsInventario.data}

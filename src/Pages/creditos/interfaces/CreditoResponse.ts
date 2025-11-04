@@ -83,15 +83,23 @@ export type NormCuota = {
   numero: number;
   fechaVencimientoISO: string | null;
   fechaPagoISO: string | null;
-  estado: CuotaEstado; // 'PENDIENTE' | 'PARCIAL' | 'PAGADA' | 'VENCIDA'
-  monto: number;
-  pagado: number;
-  saldoPendiente: number;
-  moraAcumulada: number;
-  abonos: {
-    count: number;
-    lastPagoISO: string | null;
+  estado: string;
+  monto: number; // monto "programado" de la cuota (capital+interés)
+  pagado: number; // total pagado aplicado a la cuota (cualquier concepto)
+  saldoPendiente: number; // respaldo (si el servidor aún no separa conceptos)
+  moraAcumulada: number; // mora almacenada e/o calculada
+  // NUEVO
+  diasAtraso: number; // >0 si pasó fechaVencimiento + diasGracia
+  capitalPendiente: number; // montoCapital - sum(abonos.capital)
+  interesPendiente: number; // montoInteres - sum(abonos.interes)
+  moraPendiente: number; // moraAcumulada "al día" (ver cálculo)
+  pagoSugerido: {
+    mora: number;
+    interes: number;
+    capital: number;
+    total: number;
   };
+  abonos: { count: number; lastPagoISO: string | null };
 };
 
 export type NormAbono = {

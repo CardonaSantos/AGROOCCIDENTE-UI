@@ -201,7 +201,7 @@ const menuItemsAdmin = [
       {
         icon: ListOrdered,
         label: "Registros de Cajas",
-        href: "/registros-cajas",
+        href: "/movimientos-financieros",
       },
     ],
   },

@@ -17,6 +17,7 @@ import { TipoPresentacion } from "../newCreateProduct/interfaces/DomainProdPress
 
 function InventarioStockPage() {
   const recibidoPorId = useStore((s) => s.userId) ?? 0;
+  const rolUser = useStore((s) => s.userRol) ?? "";
   const sucursalId = useStore((s) => s.sucursalId) ?? 0;
   //CATEGORIAS
   const [openCategory, setOpenCategory] = useState<boolean>(false);
@@ -134,6 +135,7 @@ function InventarioStockPage() {
   return (
     <motion.div {...DesvanecerHaciaArriba} className="w-full px-4">
       <Inventario
+        rolUser={rolUser}
         handleSelecTiposEmpaque={handleSelecTiposEmpaque}
         tiposPresentacion={tiposPresentacion}
         //filtrado-->

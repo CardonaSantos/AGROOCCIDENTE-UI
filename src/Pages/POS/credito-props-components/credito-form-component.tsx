@@ -49,7 +49,7 @@ import {
   PlanCuotaModoServer,
 } from "../interfaces/buildpayload.interface";
 import { toInt, toMoney } from "./helpers";
-import { formattMoneda } from "@/Pages/Utils/Utils";
+// import { formattMoneda } from "@/Pages/Utils/Utils";
 
 // ========================= Utils =========================
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -65,8 +65,8 @@ function repartirConPesos(total: number, pesos: number[]): number[] {
   return rounded;
 }
 
-// Genera cuotas considerando: enganche + interés simple (si aplica)
-// PRIMERA_MAYOR: solo habilita enganche y reparte el resto IGUAL.
+// Genera cuotas considerando: enganche, SIN aplicar interés al monto de cuotas.
+// PRIMERA_MAYOR: solo habilita enganche y reparte el resto según plan (iguales/crec/dec).
 function generarCuotas({
   totalProductos,
   enganche,
@@ -74,9 +74,9 @@ function generarCuotas({
   plan,
   fechaPrimeraCuota,
   diasEntrePagos,
-  interesTipo,
-  interesPorcentaje,
-}: {
+}: // interesTipo, // se ignora para el cálculo de montos; sólo metadato
+// interesPorcentaje, // se ignora para el cálculo de montos; sólo metadato
+{
   totalProductos: number;
   enganche: number;
   cuotasTotales: number;
@@ -101,10 +101,8 @@ function generarCuotas({
   const principalBase = Math.max(0, r2(totalProductos - enganche));
   const n = Math.max(1, Number(cuotasTotales) || 1);
 
-  const principalConInteres =
-    interesTipo === "SIMPLE"
-      ? r2(principalBase * (1 + (Number(interesPorcentaje) || 0) / 100))
-      : principalBase;
+  // El interés NO modifica el monto de las cuotas; sólo se guarda como número.
+  const principalParaRepartir = principalBase;
 
   let pesos: number[] = [];
   if (plan === "IGUALES" || plan === "PRIMERA_MAYOR") {
@@ -116,10 +114,11 @@ function generarCuotas({
     pesos = Array.from({ length: n }, (_, i) => n - i);
   }
 
-  const montos = repartirConPesos(principalConInteres, pesos);
+  const montos = repartirConPesos(principalParaRepartir, pesos);
 
+  const primera = fechaPrimeraCuota || hoy; // por defecto: HOY
   for (let i = 0; i < n; i++) {
-    const fecha = dayjs(fechaPrimeraCuota)
+    const fecha = dayjs(primera)
       .add(i * (Number(diasEntrePagos) || 30), "day")
       .format("YYYY-MM-DD");
 
@@ -133,6 +132,7 @@ function generarCuotas({
   return cuotas;
 }
 
+// ========================= Tipos Props =========================
 type PropsCreditoForm = {
   value: FormCreditoState;
   onChange: React.Dispatch<React.SetStateAction<FormCreditoState>>; // requerido
@@ -144,6 +144,7 @@ type PropsCreditoForm = {
 
   setOpenCreateRequest: React.Dispatch<React.SetStateAction<boolean>>;
   openCreateRequest: boolean;
+  userRol: string;
 };
 
 // ========================= Componente =========================
@@ -157,13 +158,16 @@ export default function CreditoForm({
   setOpenCreateRequest,
   autoRecalc = true,
   readOnly = false,
+  userRol,
 }: PropsCreditoForm) {
   const form = value;
   const setForm = onChange;
 
-  const [editingCuotas, setEditingCuotas] = React.useState(true);
+  const [editingCuotas, setEditingCuotas] = React.useState(false);
+
+  // Recalculo automático de cuotas (ignora interés) cuando NO estamos editando manualmente
   React.useEffect(() => {
-    if (!autoRecalc) return;
+    if (!autoRecalc || editingCuotas) return;
 
     setForm((prev) => {
       const enganche =
@@ -177,7 +181,7 @@ export default function CreditoForm({
         cuotasTotales: Number(prev.cuotasTotalesPropuestas || 1),
         plan: prev.planCuotaModo,
         fechaPrimeraCuota:
-          prev.fechaPrimeraCuota || dayjs().add(30, "day").format("YYYY-MM-DD"),
+          prev.fechaPrimeraCuota || dayjs().format("YYYY-MM-DD"), // HOY por defecto
         diasEntrePagos: Number(prev.diasEntrePagos || 30),
         interesTipo: prev.interesTipo,
         interesPorcentaje: Number(prev.interesPorcentaje || 0),
@@ -187,6 +191,7 @@ export default function CreditoForm({
     });
   }, [
     autoRecalc,
+    editingCuotas,
     form.totalPropuesto,
     form.cuotaInicialPropuesta,
     form.cuotasTotalesPropuestas,
@@ -225,6 +230,46 @@ export default function CreditoForm({
     });
   }
 
+  // Cambiar fecha de una cuota y REFLUIR las siguientes manteniendo el intervalo (diasEntrePagos)
+  function updateCuotaFecha(idx: number, nuevaFechaISO: string) {
+    setForm((prev) => {
+      const next = [...(prev.cuotasPropuestas || [])];
+      if (!next[idx]) return prev;
+
+      const isEnganche =
+        next[idx].etiqueta === "ENGANCHE" || next[idx].numero === 0;
+
+      // Siempre actualizamos la fecha de la cuota editada
+      next[idx] = { ...next[idx], fechaISO: nuevaFechaISO };
+
+      // Si es ENGANCHE, no arrastramos fechas
+      if (isEnganche) {
+        return { ...prev, cuotasPropuestas: next };
+      }
+
+      const intervalo = Math.max(1, Number(prev.diasEntrePagos || 30));
+      for (let j = idx + 1; j < next.length; j++) {
+        // No refluimos a través del enganche si existiera en medio (por diseño sólo está al inicio)
+        if (next[j].etiqueta === "ENGANCHE" || next[j].numero === 0) continue;
+        const fecha = dayjs(nuevaFechaISO)
+          .add((j - idx) * intervalo, "day")
+          .format("YYYY-MM-DD");
+        next[j] = { ...next[j], fechaISO: fecha };
+      }
+
+      // Mantener sincronizada la fechaPrimeraCuota si cambiamos la #1
+      if (next[idx].numero === 1) {
+        return {
+          ...prev,
+          fechaPrimeraCuota: nuevaFechaISO,
+          cuotasPropuestas: next,
+        };
+      }
+
+      return { ...prev, cuotasPropuestas: next };
+    });
+  }
+
   const handleRegenerarCuotas = React.useCallback(() => {
     setForm((prev) => {
       const enganche =
@@ -238,7 +283,7 @@ export default function CreditoForm({
         cuotasTotales: Number(prev.cuotasTotalesPropuestas || 1),
         plan: prev.planCuotaModo,
         fechaPrimeraCuota:
-          prev.fechaPrimeraCuota || dayjs().add(30, "day").format("YYYY-MM-DD"),
+          prev.fechaPrimeraCuota || dayjs().format("YYYY-MM-DD"), // HOY por defecto
         diasEntrePagos: Number(prev.diasEntrePagos || 30),
         interesTipo: prev.interesTipo,
         interesPorcentaje: Number(prev.interesPorcentaje || 0),
@@ -264,7 +309,6 @@ export default function CreditoForm({
     }
 
     const payload = buildSolicitudPayload(form);
-    // if (onSubmit) onSubmit(payload);//volver a usar, una de ambas con la firma del payload ya puesto para poder hacer verificaciones
     if (handleCreateCreditRequest) handleCreateCreditRequest(payload);
     else {
       console.log("Payload solicitud crédito (sin onSubmit):", payload);
@@ -294,10 +338,10 @@ export default function CreditoForm({
       .reduce((acc, c) => acc + r2(c?.monto), 0)
   );
 
-  const interesUI = r2(sumCuotasSinEnganche - principalUI);
-  const isConsistent =
-    Math.abs(sumCuotasSinEnganche - (principalUI + interesUI)) <= 0.01;
+  // Como el interés NO se aplica a cuotas, hay consistencia si la suma de cuotas == principal
+  const isConsistent = Math.abs(sumCuotasSinEnganche - principalUI) <= 0.01;
   const interesPct = Number(form?.interesPorcentaje || 0);
+  const isVendedor: boolean = userRol != "ADMIN" ? true : false;
 
   return (
     <div className="mx-auto w-full max-w-6xl mt-2">
@@ -491,6 +535,7 @@ export default function CreditoForm({
                   </span>
                 </div>
                 <Switch
+                  disabled={isVendedor}
                   checked={editingCuotas}
                   onCheckedChange={setEditingCuotas}
                 />
@@ -572,7 +617,7 @@ export default function CreditoForm({
                                 value={c.fechaISO}
                                 disabled={!editingCuotas}
                                 onChange={(e) =>
-                                  updateCuota(idx, { fechaISO: e.target.value })
+                                  updateCuotaFecha(idx, e.target.value)
                                 }
                                 className="h-9"
                               />
@@ -656,7 +701,7 @@ export default function CreditoForm({
                               value={c.fechaISO}
                               disabled={!editingCuotas}
                               onChange={(e) =>
-                                updateCuota(idx, { fechaISO: e.target.value })
+                                updateCuotaFecha(idx, e.target.value)
                               }
                               className="h-9"
                             />
@@ -711,8 +756,7 @@ export default function CreditoForm({
                 <span>· Suma cuotas = {sumCuotasSinEnganche.toFixed(2)}</span>
                 {interesPct > 0 && (
                   <span>
-                    · Interés = {interesPct.toFixed(2)}% que es igual a:{" "}
-                    {formattMoneda(interesUI)}
+                    · Interés (no aplicado a cuotas) = {interesPct.toFixed(2)}%
                   </span>
                 )}
                 {!isConsistent && (
@@ -749,8 +793,10 @@ export default function CreditoForm({
                     disabled: isPendingCreditRequest,
                     loading: isPendingCreditRequest,
                     loadingText: "Enviando petición...",
-                    onClick: () =>
+                    onClick: () => {
                       handleCreateCreditRequest(buildSolicitudPayload(form)),
+                        setOpenCreateRequest(false);
+                    },
                   }}
                   cancelButton={{
                     label: "Cancelar",
@@ -812,7 +858,7 @@ export function buildSolicitudPayload(form: FormCreditoState): BuildPayload {
   )
     .map((c) => ({
       numero: toInt(c.numero),
-      fechaISO: c.fechaISO, // ya viene como 'YYYY-MM-DD'
+      fechaISO: c.fechaISO, // 'YYYY-MM-DD'
       monto: toMoney(c.monto),
       etiqueta: c.etiqueta ?? (c.numero === 0 ? "ENGANCHE" : "NORMAL"),
       // origen/esManual: los omito; el server setea AUTO/false por default
@@ -841,7 +887,7 @@ export function buildSolicitudPayload(form: FormCreditoState): BuildPayload {
     cuotaInicialPropuesta, // opcional si 0
     cuotasTotalesPropuestas: toInt(form.cuotasTotalesPropuestas || 1),
     interesTipo: form.interesTipo as InteresTipoServer,
-    interesPorcentaje: toInt(form.interesPorcentaje || 0),
+    interesPorcentaje: toInt(form.interesPorcentaje || 0), // sólo se guarda
     planCuotaModo: form.planCuotaModo as PlanCuotaModoServer,
     diasEntrePagos: toInt(form.diasEntrePagos || 30),
     fechaPrimeraCuota: form.fechaPrimeraCuota || undefined, // 'YYYY-MM-DD'

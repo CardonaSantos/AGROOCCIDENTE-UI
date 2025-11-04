@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { motion } from "framer-motion";
 import type { ProductoInventarioResponse } from "../interfaces/InventaryInterfaces";
-import { columnsInventario } from "./column";
+import { makeColumnsInventario } from "./column";
 
 type Props = {
   data: ProductoInventarioResponse[];
@@ -31,33 +31,43 @@ type Props = {
     page: number;
     limit: number;
   };
+  rolUser: string;
 };
 
 function TableInventario({
   data,
-  columns = columnsInventario,
   setPagination,
   pagination,
   meta,
+  rolUser,
 }: Props) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
   const pageCount =
     meta?.totalPages ??
-    Math.ceil((meta?.totalCount ?? 0) / (meta?.limit ?? pagination.pageSize));
+    Math.max(
+      1,
+      Math.ceil((meta?.totalCount ?? 0) / (meta?.limit ?? pagination.pageSize))
+    );
+
+  const columns = React.useMemo(
+    () => makeColumnsInventario(rolUser),
+    [rolUser]
+  );
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, pagination },
-    onSortingChange: setSorting,
+    state: { pagination, sorting },
     onPaginationChange: setPagination,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
     manualPagination: true,
     pageCount,
+    manualSorting: true,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    meta: {},
   });
-
   console.log("inventario: ", data);
 
   return (

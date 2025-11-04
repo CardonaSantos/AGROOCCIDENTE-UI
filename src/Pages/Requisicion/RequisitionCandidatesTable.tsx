@@ -332,7 +332,7 @@ export default function RequisitionCandidatesTable(props: Props) {
             <div className="flex justify-center">
               <input
                 type="date"
-                className="h-8 w-36 text-center text-sm"
+                className="h-8 w-36 text-center text-sm text-black"
                 value={
                   sel.fechaExpiracion
                     ? dayjs(sel.fechaExpiracion).format("YYYY-MM-DD")

@@ -1,15 +1,13 @@
 // ============================================================================
 // File: src/Pages/Creditos/CreditoDetails.tsx
-// Descripción: Vista de detalles de un crédito (dark-mode friendly) + flujo de pago
-//  - Texto con tokens de shadcn (foreground/muted-foreground) para buen contraste
-//  - Pago por CUOTA mediante botón "Registrar pago" en cada fila (una a la vez)
-//  - Dialog compacto y responsivo; confirmación final por AdvancedDialog
+// Descripción: Vista de detalles de un crédito + flujo de pago y borrado de abonos
 // ============================================================================
 
 "use client";
-
 import * as React from "react";
+import { useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   CalendarDays,
@@ -39,16 +37,19 @@ import {
   useApiQuery,
 } from "@/hooks/genericoCall/genericoCallHook";
 
+import PurchasePaymentFormDialog from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
+import type { CajaConSaldo } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
+import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
+import { useStore } from "@/components/Context/ContextSucursal";
+import { toast } from "sonner";
+import { formattMonedaGT } from "@/utils/formattMoneda";
+import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
+
 // Tipos
 import type {
   NormalizedCredito,
   NormCuota,
 } from "../interfaces/CreditoResponse";
-import type { CajaConSaldo } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
-import PurchasePaymentFormDialog from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
-import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
-import DeleteAbonoButton from "./delete-abono-button";
-import { formattMonedaGT } from "@/utils/formattMoneda";
 
 // ============================================================================
 // Helpers
@@ -84,32 +85,60 @@ const estadoIcon: Record<NormalizedCredito["estado"], React.ReactNode> = {
 };
 
 // Front-end DTOs (alineados a tu backend)
-export type CreateAbonoCuotaDTO = {
+type CreateAbonoCuotaDTO = {
   cuotaId: number;
   montoCapital?: number;
   montoInteres?: number;
   montoMora?: number;
   montoTotal?: number;
 };
-export type CreateAbonoCreditoDTO = {
-  ventaCuotaId: number; // id del crédito (master)
+type CreateAbonoCreditoDTO = {
+  ventaCuotaId: number;
   sucursalId: number;
-  usuarioId: number; // TODO: obtén del contexto/auth
-  metodoPago: string; // Usa tu enum/union correspondiente
+  usuarioId: number;
+  metodoPago: string;
   referenciaPago?: string;
   montoTotal?: number;
   fechaAbono?: Date | string;
   detalles: CreateAbonoCuotaDTO[];
 };
 
+// Abono minimal para selección en la UI
+type NormAbonoLite = {
+  id: number;
+  fechaISO: string;
+  metodoPago: string;
+  referencia?: string | null;
+  montoTotal: number;
+};
+
+// Payload para eliminar (POST-delete)
+type DeleteAbonoPayload = {
+  abonoId: number;
+  ventaCuotaId: number;
+  usuarioId: number;
+  motivo?: string;
+};
+
 // ============================================================================
-// Page
+// Component
 // ============================================================================
 export default function CreditoDetails() {
+  // ------------------------------------------
+  // Contexto / params / query key
+  // ------------------------------------------
   const { id } = useParams();
+  const userId = useStore((s) => s.userId) ?? 0;
   const secureId = id ? parseInt(id) : 1;
-  const CREDIT_REGIST_QK = ["credito-details-qk", secureId];
+  const CREDIT_REGIST_QK = useMemo(
+    () => ["credito-details-qk", secureId],
+    [secureId]
+  );
+  const queryClient = useQueryClient();
 
+  // ------------------------------------------
+  // Query principal
+  // ------------------------------------------
   const {
     data: credito,
     isLoading: isLoadingCreditos,
@@ -121,7 +150,9 @@ export default function CreditoDetails() {
     { refetchOnMount: "always", staleTime: 0 }
   );
 
-  // Datos auxiliares (para el diálogo de movimiento financiero)
+  // ------------------------------------------
+  // Queries auxiliares (diálogo MF)
+  // ------------------------------------------
   const sucursalId = credito?.sucursal?.id;
   const proveedoresQ = useApiQuery<Array<{ id: number; nombre: string }>>(
     ["proveedores"],
@@ -142,23 +173,20 @@ export default function CreditoDetails() {
     { enabled: !!sucursalId, staleTime: 30_000, refetchOnWindowFocus: false }
   );
 
-  // ===== Pago por CUOTA (una a la vez) =====
+  // ------------------------------------------
+  // Estado: Pago de cuota
+  // ------------------------------------------
   const [selectedCuota, setSelectedCuota] = React.useState<NormCuota | null>(
     null
   );
   const [payAmount, setPayAmount] = React.useState<number>(0);
+  const [dist, setDist] = React.useState({ mora: 0, interes: 0, capital: 0 });
 
-  const openPagoFor = (c: NormCuota) => {
-    setSelectedCuota(c);
-    setPayAmount(c.saldoPendiente ?? c.monto ?? 0);
-    setOpenFormDialog(true);
-  };
-
-  // Dialogos para MF y confirmación final
+  // Diálogo MF + Confirmación
   const [openFormDialog, setOpenFormDialog] = React.useState(false);
   const [openConfirm, setOpenConfirm] = React.useState(false);
 
-  // Campos del dialog MF
+  // Campos del diálogo MF
   const [observaciones, setObservaciones] = React.useState("");
   const [proveedorSelected, setProveedorSelected] = React.useState<
     string | undefined
@@ -178,52 +206,168 @@ export default function CreditoDetails() {
   const [cajaSelected, setCajaSelected] = React.useState<string | null>(null);
   const [fechaPago, setFechaPago] = React.useState<string>(() =>
     new Date().toISOString().slice(0, 16)
-  ); // datetime-local
+  );
   const [referenciaPago, setReferenciaPago] = React.useState<string>("");
 
   const totalSeleccion = Number(payAmount || 0);
   const canPagar = !!selectedCuota && totalSeleccion > 0;
 
-  // Mutation crear abono
-  const postUrl = `credito/abonos`; // TODO: reemplazar por endpoint real
-  const { mutate: createAbono, isPending: isSaving } = useApiMutation<
+  // ------------------------------------------
+  // Estado: Eliminar abono
+  // ------------------------------------------
+  const [openDeletePago, setOpenDeletePago] = React.useState(false);
+  const [selectedPago, setSelectedPago] = React.useState<NormAbonoLite | null>(
+    null
+  );
+  const [deleteMotivo, setDeleteMotivo] = React.useState<string>("");
+
+  // ------------------------------------------
+  // Mutations
+  // ------------------------------------------
+  const postUrl = `abono-cuota`;
+  const deleteUrl = `abono-cuota/delete`;
+
+  const { mutateAsync: createAbono, isPending: isSaving } = useApiMutation<
     CreateAbonoCreditoDTO,
     any
-  >(
-    "post",
-    postUrl
-    // {
-    //   onSuccess: async () => {
-    //     setOpenConfirm(false);
-    //     setOpenFormDialog(false);
-    //     setSelectedCuota(null);
-    //     setPayAmount(0);
-    //     await refetch?.();
-    //   },
-    // }
+  >("post", postUrl, undefined, {
+    onSuccess: async () => {
+      // limpiar UI
+      setOpenConfirm(false);
+      setOpenFormDialog(false);
+      setSelectedCuota(null);
+      setPayAmount(0);
+      setDist({ mora: 0, interes: 0, capital: 0 });
+      setReferenciaPago("");
+      setMetodoPago("");
+      setCajaSelected(null);
+      setCuentaBancariaSelected("");
+
+      // re-fetch fuerte
+      queryClient.invalidateQueries({ queryKey: CREDIT_REGIST_QK });
+      await refetch?.();
+    },
+    onError: (err) => toast.error(getApiErrorMessageAxios(err)),
+  });
+
+  const { mutateAsync: deleteAbono, isPending: isDeleting } = useApiMutation<
+    DeleteAbonoPayload,
+    any
+  >("post", deleteUrl, undefined, {
+    onSuccess: async () => {
+      setOpenDeletePago(false);
+      setSelectedPago(null);
+      setDeleteMotivo("");
+
+      queryClient.invalidateQueries({ queryKey: CREDIT_REGIST_QK });
+      await refetch?.();
+    },
+    onError: (err) => toast.error(getApiErrorMessageAxios(err)),
+  });
+
+  // ------------------------------------------
+  // Handlers
+  // ------------------------------------------
+  const recomputeDist = useCallback((c: NormCuota, total: number) => {
+    // Regla: MORA -> INTERÉS -> CAPITAL
+    let rest = total;
+    const payMora = Math.min(c.moraPendiente, rest);
+    rest -= payMora;
+    const payInt = Math.min(c.interesPendiente, rest);
+    rest -= payInt;
+    const payCap = Math.min(c.capitalPendiente, rest);
+    return { mora: payMora, interes: payInt, capital: payCap };
+  }, []);
+
+  const openPagoFor = useCallback(
+    (c: NormCuota) => {
+      setSelectedCuota(c);
+      const sugerido = Math.max(0, c.pagoSugerido?.total ?? 0);
+      const base = c.saldoPendiente + (c.moraPendiente || 0);
+      const defecto = sugerido || base;
+      setPayAmount(defecto);
+      setDist(recomputeDist(c, defecto));
+      setOpenFormDialog(true);
+    },
+    [recomputeDist]
   );
 
-  const handleConfirmPago = () => {
+  const handleConfirmPago = useCallback(() => {
     if (!credito || !selectedCuota || !canPagar) return;
+
+    const suma = Number(
+      (dist.mora || 0) + (dist.interes || 0) + (dist.capital || 0)
+    );
     const payload: CreateAbonoCreditoDTO = {
       ventaCuotaId: credito.id,
       sucursalId: credito.sucursal.id,
-      usuarioId: 0, // TODO: inyectar del contexto auth
+      usuarioId: userId,
       metodoPago: metodoPago || "EFECTIVO",
       referenciaPago: referenciaPago || undefined,
-      montoTotal: totalSeleccion,
+      montoTotal: suma,
       fechaAbono: fechaPago ? new Date(fechaPago) : new Date(),
       detalles: [
         {
           cuotaId: selectedCuota.id,
-          montoTotal: totalSeleccion,
+          montoMora: dist.mora || 0,
+          montoInteres: dist.interes || 0,
+          montoCapital: dist.capital || 0,
+          montoTotal: suma,
         },
       ],
     };
-    createAbono(payload);
-    console.log("El payload es: ", payload);
-  };
 
+    toast.promise(createAbono(payload), {
+      loading: "Registrando pago...",
+      success: "Pago a crédito registrado",
+      error: (e) => getApiErrorMessageAxios(e),
+    });
+  }, [
+    credito,
+    selectedCuota,
+    canPagar,
+    dist,
+    metodoPago,
+    referenciaPago,
+    fechaPago,
+    userId,
+    createAbono,
+  ]);
+
+  const handleOpenDelete = useCallback((abono: NormAbonoLite) => {
+    setSelectedPago(abono);
+    setDeleteMotivo("");
+    setOpenDeletePago(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!selectedPago || !credito) return;
+
+    const payload: DeleteAbonoPayload = {
+      abonoId: selectedPago.id,
+      ventaCuotaId: credito.id,
+      usuarioId: userId,
+      motivo: deleteMotivo.trim() || undefined,
+    };
+
+    toast.promise(deleteAbono(payload), {
+      loading: "Eliminando abono...",
+      success: "Abono eliminado",
+      error: (e) => getApiErrorMessageAxios(e),
+    });
+  }, [selectedPago, credito, userId, deleteMotivo, deleteAbono]);
+
+  // ------------------------------------------
+  // Syncs
+  // ------------------------------------------
+  React.useEffect(() => {
+    if (!selectedCuota) return;
+    setDist(recomputeDist(selectedCuota, payAmount));
+  }, [selectedCuota, payAmount, recomputeDist]);
+
+  // ------------------------------------------
+  // Loading
+  // ------------------------------------------
   if (isLoadingCreditos || !credito) {
     return (
       <div className="p-4 space-y-3">
@@ -243,6 +387,9 @@ export default function CreditoDetails() {
     );
   }
 
+  // ------------------------------------------
+  // Derivados
+  // ------------------------------------------
   const numero = credito.numeroCredito ?? `#${credito.id}`;
   const fullName = [credito.cliente?.nombre, credito.cliente?.apellidos]
     .filter(Boolean)
@@ -251,6 +398,9 @@ export default function CreditoDetails() {
   const pagado = credito.montos.totalPagado ?? 0;
   const saldo = venta - pagado;
 
+  // ------------------------------------------
+  // Render
+  // ------------------------------------------
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -403,7 +553,7 @@ export default function CreditoDetails() {
         </Card>
       )}
 
-      {/* ===== Cuotas (botón Registrar pago en cada fila) ===== */}
+      {/* ===== Cuotas ===== */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -444,7 +594,7 @@ export default function CreditoDetails() {
         </CardContent>
       </Card>
 
-      {/* ===== Abonos (historial de pagos) ===== */}
+      {/* ===== Abonos ===== */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -468,30 +618,23 @@ export default function CreditoDetails() {
                 <span className="ml-auto text-sm font-medium">
                   {formattMonedaGT(a.montoTotal)}
                 </span>
+
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Eliminar abono"
-                  className="h-8 w-8"
-                  onClick={() => {}}
-                ></Button>
-                <DeleteAbonoButton
-                  abono={a}
-                  creditoId={credito.id}
-                  onDone={refetch}
-                />
+                  variant="destructive"
+                  size="sm"
+                  onClick={() =>
+                    handleOpenDelete({
+                      id: a.id,
+                      fechaISO: a.fechaISO,
+                      metodoPago: a.metodoPago,
+                      referencia: a.referencia,
+                      montoTotal: a.montoTotal,
+                    })
+                  }
+                >
+                  Eliminar
+                </Button>
               </div>
-              {/* <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
-                {(a.desglose ?? []).map((d, i) => (
-                  <div
-                    key={`${a.id}-${i}`}
-                    className="rounded bg-muted/40 px-2 py-1"
-                  >
-                    Cuota #{d.cuotaId} · Capital {Q(d.capital)} · Interés{" "}
-                    {Q(d.interes)} · Mora {Q(d.mora)} · Total {Q(d.total)}
-                  </div>
-                ))}
-              </div> */}
             </div>
           ))}
 
@@ -539,7 +682,6 @@ export default function CreditoDetails() {
         onOpenChange={(o) => {
           setOpenFormDialog(o);
           if (!o) {
-            // reset si se cierra sin continuar
             setSelectedCuota(null);
             setPayAmount(0);
           }
@@ -567,16 +709,17 @@ export default function CreditoDetails() {
         setCuentaBancariaSelected={setCuentaBancariaSelected}
         cajaSelected={cajaSelected}
         setCajaSelected={setCajaSelected}
-        // En pagos de crédito generalmente NO pedimos proveedor
         showProveedor={false}
         requireProveedor={false}
+        layout="two-column"
+        flow="IN"
+        requireObservaciones={false}
         onContinue={() => setOpenConfirm(true)}
         continueLabel="Confirmar pago"
         extraDisableReason={
           !canPagar ? "Ingrese el monto a pagar de la cuota." : null
         }
       >
-        {/* Slot extra: Monto/Fecha/Referencia (compacto) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div>
             <Label htmlFor="montoTotal">Monto a pagar</Label>
@@ -586,11 +729,16 @@ export default function CreditoDetails() {
               min={0}
               step={0.01}
               value={payAmount}
-              onChange={(e) => setPayAmount(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                const v = Math.max(0, Number(e.target.value) || 0);
+                setPayAmount(v);
+                if (selectedCuota) setDist(recomputeDist(selectedCuota, v));
+              }}
             />
             {selectedCuota && (
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Saldo pendiente: {Q(selectedCuota.saldoPendiente)}
+              <p className="text-[11px] text-muted-foreground mt-1 space-x-2">
+                <span>Saldo cuota: {Q(selectedCuota.saldoPendiente)}</span>
+                <span>· Mora pend: {Q(selectedCuota.moraPendiente ?? 0)}</span>
               </p>
             )}
           </div>
@@ -613,15 +761,146 @@ export default function CreditoDetails() {
             />
           </div>
         </div>
-        {selectedCuota &&
-          payAmount > Number(selectedCuota.saldoPendiente ?? Infinity) && (
-            <p className="text-[12px] text-amber-600 mt-2">
-              El monto supera el saldo de la cuota.
+
+        {/* Pendientes por concepto + días de atraso */}
+        {selectedCuota && (
+          <div className="mt-2 text-[12px] text-muted-foreground flex flex-wrap gap-2">
+            <span className="rounded border px-2 py-0.5">
+              Mora pend: <b>{Q(selectedCuota.moraPendiente ?? 0)}</b>
+            </span>
+            <span className="rounded border px-2 py-0.5">
+              Interés pend: <b>{Q(selectedCuota.interesPendiente ?? 0)}</b>
+            </span>
+            <span className="rounded border px-2 py-0.5">
+              Capital pend: <b>{Q(selectedCuota.capitalPendiente ?? 0)}</b>
+            </span>
+            {Number(selectedCuota.diasAtraso ?? 0) > 0 && (
+              <span className="rounded bg-amber-500/15 text-amber-700 px-2 py-0.5">
+                {selectedCuota.diasAtraso} días atraso
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Desglose editable (respeta prioridad) */}
+        {selectedCuota && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+            {/* MORA */}
+            <div>
+              <Label>Mora</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={dist.mora}
+                onChange={(e) => {
+                  const moraPend = Number(selectedCuota.moraPendiente ?? 0);
+                  let v = Number(e.target.value) || 0;
+                  v = Math.max(0, Math.min(v, moraPend, payAmount));
+                  const rest = Math.max(0, payAmount - v);
+
+                  const intPend = Number(selectedCuota.interesPendiente ?? 0);
+                  const capPend = Number(selectedCuota.capitalPendiente ?? 0);
+                  const payInt = Math.min(intPend, rest);
+                  const payCap = Math.min(capPend, Math.max(0, rest - payInt));
+                  setDist({ mora: v, interes: payInt, capital: payCap });
+                }}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Pendiente: {Q(selectedCuota.moraPendiente ?? 0)}
+              </p>
+            </div>
+
+            {/* INTERÉS */}
+            <div>
+              <Label>Interés</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={dist.interes}
+                onChange={(e) => {
+                  const intPend = Number(selectedCuota.interesPendiente ?? 0);
+                  let v = Number(e.target.value) || 0;
+                  const maxByMonto = Math.max(0, payAmount - (dist.mora || 0));
+                  v = Math.max(0, Math.min(v, intPend, maxByMonto));
+
+                  const rest = Math.max(0, payAmount - (dist.mora + v));
+                  const capPend = Number(selectedCuota.capitalPendiente ?? 0);
+                  const payCap = Math.min(capPend, rest);
+                  setDist({ mora: dist.mora, interes: v, capital: payCap });
+                }}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Pendiente: {Q(selectedCuota.interesPendiente ?? 0)}
+              </p>
+            </div>
+
+            {/* CAPITAL */}
+            <div>
+              <Label>Capital</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={dist.capital}
+                onChange={(e) => {
+                  const capPend = Number(selectedCuota.capitalPendiente ?? 0);
+                  const maxCap = Math.min(
+                    capPend,
+                    Math.max(0, payAmount - (dist.mora + dist.interes))
+                  );
+                  let v = Number(e.target.value) || 0;
+                  v = Math.max(0, Math.min(v, maxCap));
+                  setDist({ ...dist, capital: v });
+                }}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Pendiente: {Q(selectedCuota.capitalPendiente ?? 0)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Reglas / avisos */}
+        {selectedCuota && (
+          <>
+            <p className="text-[12px] mt-2">
+              <span className="text-muted-foreground">Suma desglose:</span>{" "}
+              <b>
+                {Q(
+                  (dist.mora || 0) + (dist.interes || 0) + (dist.capital || 0)
+                )}
+              </b>
             </p>
-          )}
+
+            {dist.capital > 0 &&
+              (Number(selectedCuota.moraPendiente ?? 0) - (dist.mora || 0) >
+                0 ||
+                Number(selectedCuota.interesPendiente ?? 0) -
+                  (dist.interes || 0) >
+                  0) && (
+                <p className="text-[12px] text-amber-600 mt-1">
+                  Regla: primero mora, luego interés y al final capital.
+                </p>
+              )}
+
+            {(() => {
+              const moraPend = Number(selectedCuota.moraPendiente ?? 0);
+              const intPend = Number(selectedCuota.interesPendiente ?? 0);
+              const capPend = Number(selectedCuota.capitalPendiente ?? 0);
+              const maxTotal = moraPend + intPend + capPend;
+              return totalSeleccion > maxTotal ? (
+                <p className="text-[12px] text-amber-600 mt-1">
+                  El monto supera el total pendiente.
+                </p>
+              ) : null;
+            })()}
+          </>
+        )}
       </PurchasePaymentFormDialog>
 
-      {/* ===== Diálogo: Confirmación final ===== */}
+      {/* ===== Confirmación de pago ===== */}
       <AdvancedDialog
         open={openConfirm}
         onOpenChange={setOpenConfirm}
@@ -635,10 +914,84 @@ export default function CreditoDetails() {
         }
         confirmButton={{
           label: "Sí, continuar y confirmar pago",
-          onClick: () => handleConfirmPago(),
+          onClick: handleConfirmPago,
           disabled: isSaving,
         }}
       />
+
+      {/* ===== Eliminar abono ===== */}
+      <AdvancedDialog
+        type="destructive"
+        open={openDeletePago}
+        onOpenChange={(o) => {
+          setOpenDeletePago(o);
+          if (!o) {
+            setSelectedPago(null);
+            setDeleteMotivo("");
+          }
+        }}
+        title="Eliminar abono"
+        description={
+          selectedPago
+            ? `Se eliminará el abono de ${formattMonedaGT(
+                selectedPago.montoTotal
+              )} realizado el ${fdt(selectedPago.fechaISO)}.`
+            : ""
+        }
+        confirmButton={{
+          label: "Sí, eliminar abono",
+          disabled: isDeleting || !selectedPago,
+          loading: isDeleting,
+          loadingText: "Eliminando...",
+          variant: "destructive",
+          onClick: handleConfirmDelete,
+        }}
+        cancelButton={{
+          label: "Cancelar",
+          onClick: () => setOpenDeletePago(false),
+        }}
+      >
+        <div className="space-y-2">
+          {selectedPago && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Esta acción revertirá los saldos de la cuota/crédito asociados a
+                este abono.
+              </p>
+              <div className="rounded-md border p-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Monto</span>
+                  <b>{formattMonedaGT(selectedPago.montoTotal)}</b>
+                </div>
+                <div className="flex justify-between">
+                  <span>Fecha</span>
+                  <span>{fdt(selectedPago.fechaISO)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Método</span>
+                  <span>{selectedPago.metodoPago}</span>
+                </div>
+                {selectedPago.referencia && (
+                  <div className="flex justify-between">
+                    <span>Referencia</span>
+                    <span>{selectedPago.referencia}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="motivoDelete">Motivo (opcional)</Label>
+                <Input
+                  id="motivoDelete"
+                  placeholder="Ej. error de digitación"
+                  value={deleteMotivo}
+                  onChange={(e) => setDeleteMotivo(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </AdvancedDialog>
     </motion.div>
   );
 }
