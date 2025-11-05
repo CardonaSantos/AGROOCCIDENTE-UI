@@ -1,4 +1,3 @@
-// utils/components/SelectMethodPayment/PurchasePaymentFormDialog.tsx
 import * as React from "react";
 import {
   Dialog,

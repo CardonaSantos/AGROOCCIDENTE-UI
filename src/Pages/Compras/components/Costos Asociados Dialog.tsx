@@ -64,6 +64,7 @@ export interface MovimientoFinancieroDraft {
 export interface ProrrateoMeta {
   aplicar: boolean;
   base: "COSTO" | "CANTIDAD"; // cómo distribuir el costo asociado
+  incluirAntiguos?: boolean; // <= NUEVO
 }
 
 export interface CostosAsociadosDialogResult {
@@ -167,6 +168,7 @@ export function CostosAsociadosDialog({
   const [baseProrrateo, setBaseProrrateo] = useState<"COSTO" | "CANTIDAD">(
     "COSTO"
   );
+  const [incluirAntiguos, setIncluirAntiguos] = useState<boolean>(false); // <= NUEVO
 
   // Prefill de descripción
   React.useEffect(() => {
@@ -227,7 +229,7 @@ export function CostosAsociadosDialog({
 
     const pr: ProrrateoMeta | undefined =
       motivo === "COSTO_ASOCIADO"
-        ? { aplicar: aplicarProrrateo, base: baseProrrateo }
+        ? { aplicar: aplicarProrrateo, base: baseProrrateo, incluirAntiguos } // <= NUEVO
         : undefined;
 
     onSubmit({ mf, prorrateo: pr });
@@ -285,25 +287,67 @@ export function CostosAsociadosDialog({
 
           {/* Tipo de costo-venta (si es costo asociado) */}
           {motivo === "COSTO_ASOCIADO" && (
-            <div className="space-y-1.5">
-              <Label>Tipo de costo asociado</Label>
-              <Select
-                value={costoVentaTipo as string}
-                onValueChange={(v) => setCostoVentaTipo(v as CostoVentaTipo)}
+            <div className="md:col-span-2 border rounded-md p-3">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label>Aplicar prorrateo a esta compra</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Distribuye este costo entre los productos de la compra.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={aplicarProrrateo}
+                    onCheckedChange={setAplicarProrrateo}
+                  />
+
+                  <div
+                    className={cn(
+                      "min-w-[220px]",
+                      !aplicarProrrateo && "opacity-50 pointer-events-none"
+                    )}
+                  >
+                    <Label className="sr-only">Base de prorrateo</Label>
+                    <Select
+                      value={baseProrrateo}
+                      onValueChange={(v) =>
+                        setBaseProrrateo(v as "COSTO" | "CANTIDAD")
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Base de prorrateo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="COSTO">
+                          Por costo (subtotal de línea)
+                        </SelectItem>
+                        <SelectItem value="CANTIDAD">Por cantidad</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* NUEVO: switch "Prorratear stocks anteriores" */}
+              <div
+                className={cn(
+                  "mt-3 flex items-center justify-between",
+                  !aplicarProrrateo && "opacity-50 pointer-events-none"
+                )}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione el tipo de costo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {COSTO_VENTA_TIPO_OPTIONS.filter(
-                    (x) => x.value !== "MERCADERIA"
-                  ).map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <div className="space-y-0.5">
+                  <Label>Prorratear stocks anteriores</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Si lo activas, también se distribuirá en lotes anteriores
+                    con existencia del mismo producto en esta sucursal.
+                  </p>
+                </div>
+                <Switch
+                  checked={incluirAntiguos}
+                  onCheckedChange={setIncluirAntiguos}
+                />
+              </div>
             </div>
           )}
 

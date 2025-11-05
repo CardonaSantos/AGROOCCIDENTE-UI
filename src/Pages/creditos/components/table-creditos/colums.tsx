@@ -6,7 +6,6 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  CalendarDays,
   Banknote,
   Wallet,
   Store,
@@ -17,9 +16,9 @@ import {
   XCircle,
   Clock,
   ReceiptText,
+  Trash,
 } from "lucide-react";
 import {
-  CuotaEstado,
   EstadoCuotaCredito,
   NormalizedCredito,
 } from "../../interfaces/CreditoResponse";
@@ -30,6 +29,11 @@ declare module "@tanstack/table-core" {
     onOpenCredit?: (c: NormalizedCredito) => void;
     onRegisterPayment?: (c: NormalizedCredito) => void;
     onOpenHistory?: (c: NormalizedCredito) => void;
+
+    /** NUEVO: dispara el diálogo de confirmar eliminación */
+    onRequestDelete?: (c: NormalizedCredito) => void;
+    /** NUEVO: permiso para ver el botón eliminar */
+    canDelete?: boolean;
   }
   interface ColumnMeta<TData extends unknown, TValue> {
     /** Clase opcional para <th> (ancho, etc.) */
@@ -62,13 +66,6 @@ const estadoIcon: Record<EstadoCuotaCredito, React.ReactNode> = {
   EN_MORA: <AlertTriangle className="h-3.5 w-3.5" />,
   REPROGRAMADA: <Clock className="h-3.5 w-3.5" />,
   PAUSADA: <PauseCircle className="h-3.5 w-3.5" />,
-};
-
-const cuotaEstadoTone: Record<CuotaEstado, string> = {
-  PENDIENTE: "bg-slate-100 text-slate-800",
-  PARCIAL: "bg-amber-100 text-amber-900",
-  PAGADA: "bg-emerald-100 text-emerald-800",
-  VENCIDA: "bg-rose-100 text-rose-800",
 };
 
 const columnHelper = createColumnHelper<NormalizedCredito>();
@@ -165,36 +162,6 @@ export const creditColumns: ColumnDef<NormalizedCredito, any>[] = [
     },
   }),
 
-  // ===== Próximo pago =====
-  columnHelper.display({
-    id: "proximo",
-    header: () => <span className="whitespace-nowrap">Próximo pago</span>,
-    meta: { thClass: "w-[20%] min-w-[200px]" },
-    cell: ({ row }) => {
-      const p = row.original.cuotas?.proxima ?? null;
-      if (!p) return <span className="text-xs text-slate-500">—</span>;
-
-      return (
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-medium truncate">
-              {fmt(p.fechaVencimientoISO)}
-            </span>
-            <Badge
-              className={`h-5 px-1.5 text-[10px] ${cuotaEstadoTone[p.estado]}`}
-            >
-              {p.estado}
-            </Badge>
-          </div>
-          <div className="text-xs text-slate-600 mt-1">
-            Monto: {Q(p.monto)} · Pagado: {Q(p.pagado)}
-          </div>
-        </div>
-      );
-    },
-  }),
-
   // ===== Estado del crédito =====
   columnHelper.accessor("estado", {
     id: "estado",
@@ -246,7 +213,9 @@ export const creditColumns: ColumnDef<NormalizedCredito, any>[] = [
       const creditId = row.original.id;
       const onOpen = table.options.meta?.onOpenCredit;
       const onPay = table.options.meta?.onRegisterPayment;
-      const onHistory = table.options.meta?.onOpenHistory;
+      const canDelete = table.options.meta?.canDelete;
+      const onRequestDelete = table.options.meta?.onRequestDelete;
+
       return (
         <div className="flex items-center justify-end gap-1">
           <Button
@@ -258,6 +227,7 @@ export const creditColumns: ColumnDef<NormalizedCredito, any>[] = [
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
+
           <Link to={`/credito-details/${creditId}`}>
             <Button
               variant="ghost"
@@ -270,15 +240,17 @@ export const creditColumns: ColumnDef<NormalizedCredito, any>[] = [
             </Button>
           </Link>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Historial"
-            onClick={() => onHistory?.(row.original)}
-            className="h-8 w-8"
-          >
-            <ReceiptText className="h-4 w-4" />
-          </Button>
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Eliminar"
+              onClick={() => onRequestDelete?.(row.original)}
+              className="h-8 w-8"
+            >
+              <Trash className="h-4 w-4 text-red-500" />
+            </Button>
+          )}
         </div>
       );
     },

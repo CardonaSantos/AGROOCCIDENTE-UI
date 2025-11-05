@@ -185,15 +185,7 @@ export default function CompraDetalle() {
   // === MUTATION: recepcionar compra =========================================
   const recepcionarM = useApiMutation<
     any, // respuesta del server
-    {
-      compraId: number;
-      usuarioId: number;
-      proveedorId: number;
-      observaciones?: string;
-      metodoPago: string;
-      cuentaBancariaId?: number;
-      registroCajaId?: number;
-    }
+    any //algo a enviar
   >("post", `/compra-requisicion/${compraId}/recepcionar`, undefined, {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compra", compraId] });
@@ -306,28 +298,71 @@ export default function CompraDetalle() {
       }
     }
 
+    // 🔴 Si el usuario saltó el paso de costos asociados, podemos seguir sin mf/prorrateo
+    // pero lo ideal es aprovecharlos si existen.
+    const mf = mfDraft
+      ? {
+          ...mfDraft,
+          // blindajes de tipos/ids:
+          sucursalId,
+          proveedorId: Number(proveedorSelected),
+          metodoPago: mfDraft.metodoPago as any,
+          costoVentaTipo: mfDraft.costoVentaTipo as any,
+          clasificacionAdmin: (mfDraft.clasificacionAdmin ??
+            "COSTO_VENTA") as any,
+          cuentaBancariaId: isBankMethod(metodoPago)
+            ? Number(cuentaBancariaSelected)
+            : undefined,
+          registroCajaId:
+            isCashMethod(metodoPago) && cajaSelected
+              ? Number(cajaSelected)
+              : undefined,
+        }
+      : undefined;
+
+    // Meta de prorrateo (opcional)
+    const prorrateo =
+      prorrateoMeta && mf?.motivo === "COSTO_ASOCIADO"
+        ? {
+            aplicar: prorrateoMeta.aplicar,
+            base: prorrateoMeta.base,
+            incluirAntiguos: prorrateoMeta.incluirAntiguos ?? false, // <= NUEVO
+          }
+        : undefined;
+
     const payload: {
-      compraId: number;
+      compraId?: number; // el controller lo rellena con :id
       usuarioId: number;
       proveedorId: number;
       observaciones?: string;
       metodoPago: string;
-      cuentaBancariaId?: number;
       registroCajaId?: number;
+      sucursalId: number;
+      cuentaBancariaId?: number;
+      lineas?: Array<{
+        fechaVencimiento: string;
+        compraDetalleId: number;
+        loteCodigo: string;
+      }>;
+      mf?: typeof mf;
+      prorrateo?: typeof prorrateo;
     } = {
-      compraId,
       usuarioId,
       proveedorId: Number(proveedorSelected),
       observaciones,
-      metodoPago,
+      metodoPago, // debe matchear enum backend
+      sucursalId, // 🔵 REQUERIDO POR DTO
+      // Sólo setear si aplica:
+      ...(isBankMethod(metodoPago) && {
+        cuentaBancariaId: Number(cuentaBancariaSelected),
+      }),
+      ...(isCashMethod(metodoPago) &&
+        cajaSelected && { registroCajaId: Number(cajaSelected) }),
+      // Overrides de líneas (para total no lo necesitas; para parcial ya tienes otra ruta)
+      // lineas: ...
+      ...(mf ? { mf } : {}),
+      ...(prorrateo ? { prorrateo } : {}),
     };
-
-    if (isBankMethod(metodoPago)) {
-      payload.cuentaBancariaId = parseInt(cuentaBancariaSelected);
-    }
-    if (isCashMethod(metodoPago) && cajaSelected) {
-      payload.registroCajaId = parseInt(cajaSelected);
-    }
 
     await toast.promise(recepcionarM.mutateAsync(payload), {
       loading: "Recepcionando compra...",
@@ -349,6 +384,9 @@ export default function CompraDetalle() {
     cajaSelected,
     cajasDisponibles,
     montoRecepcion,
+    sucursalId,
+    mfDraft,
+    prorrateoMeta,
   ]);
 
   // === UI Utils ==============================================================
@@ -708,6 +746,8 @@ export default function CompraDetalle() {
         cajaSelected={cajaSelected}
         setCajaSelected={setCajaSelected}
         onContinue={() => setOpenSendStock(true)}
+        layout="two-column"
+        flow="OUT"
       />
       {/* FORM PREVIO A RECEPCION PARCIAL */}
       <PaymentMethodCompraDialogConfirm

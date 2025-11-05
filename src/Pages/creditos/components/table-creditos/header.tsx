@@ -42,6 +42,12 @@ interface Props {
   // alturas opcionales
   maxDesktopHeightPx?: number;
   maxMobileHeightPx?: number;
+  //
+  /** Permite mostrar u ocultar el botón de eliminar (según rol). */
+  canDelete?: boolean;
+
+  /** Abrir diálogo de confirmación desde la fila seleccionada. */
+  onRequestDelete?: (c: NormalizedCredito) => void;
 }
 
 /** Barra de paginación compacta */
@@ -167,6 +173,9 @@ export default function CreditTable({
   onOpenHistory,
   maxDesktopHeightPx,
   maxMobileHeightPx,
+  //
+  canDelete,
+  onRequestDelete,
 }: Props) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "estado", desc: false },
@@ -180,7 +189,14 @@ export default function CreditTable({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getRowId: (row) => `${row.id}`,
-    meta: { onOpenCredit, onRegisterPayment, onOpenHistory },
+    meta: {
+      onOpenCredit,
+      onRegisterPayment,
+      onOpenHistory,
+      // NUEVO:
+      onRequestDelete,
+      canDelete,
+    },
   });
 
   const hasData = Array.isArray(data) && data.length > 0;
