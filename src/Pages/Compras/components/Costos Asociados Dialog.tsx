@@ -123,14 +123,6 @@ const MOTIVO_OPTIONS: { value: MotivoMovimiento; label: string }[] = [
   { value: "COMPRA_MERCADERIA", label: "Compra mercadería" },
 ];
 
-const COSTO_VENTA_TIPO_OPTIONS: { value: CostoVentaTipo; label: string }[] = [
-  { value: "FLETE", label: "Flete" },
-  { value: "ENCOMIENDA", label: "Encomienda" },
-  { value: "TRANSPORTE", label: "Transporte" },
-  { value: "OTROS", label: "Otros" },
-  { value: "MERCADERIA", label: "Mercadería (principal)" },
-];
-
 // ---------------------------------------------------------------------------
 // Componente principal (layout horizontal compacto)
 // ---------------------------------------------------------------------------

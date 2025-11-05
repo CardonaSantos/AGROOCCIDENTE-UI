@@ -58,7 +58,7 @@ dayjs.extend(isSameOrAfter);
 dayjs.locale("es");
 
 import { esTextSortingFn, numericStringSortingFn } from "../sortingFns";
-import { ddmmyyyyToTime, numFromStr, sumBy } from "../tableFormatters";
+import { ddmmyyyyToTime, sumBy } from "../tableFormatters";
 import { formattMoneda as fmt } from "@/Pages/Utils/Utils";
 import productPlaceHolder from "@/assets/PRODUCTPLACEHOLDER.png";
 import { Button } from "@/components/ui/button";
@@ -135,6 +135,147 @@ const COSTO_COL: ColumnDef<ProductoInventarioResponse, any> =
     enableSorting: true,
     sortingFn: numericStringSortingFn,
   });
+
+const PRORRATEO_COL = columnHelper.accessor(
+  (row) => {
+    const latest = [...(row.stocks ?? [])]
+      .filter((s) => s.prorrateo?.ultimaFecha)
+      .sort(
+        (a, b) =>
+          dayjs(b.prorrateo!.ultimaFecha).valueOf() -
+          dayjs(a.prorrateo!.ultimaFecha).valueOf()
+      )[0];
+
+    // Ordena por el costo final (lo que muestra el UI)
+    return latest?.prorrateo?.precioCostoFinal ?? null;
+  },
+  {
+    id: "prorrateo",
+    header: () => (
+      <div className="flex items-center gap-1 justify-end">
+        <span className="hidden md:inline">Prorrateo</span>
+      </div>
+    ),
+    cell: (info) => {
+      const stocks = info.row.original.stocks ?? [];
+      const prorrateados = [...stocks]
+        .filter((s) => s.prorrateo?.ultimaFecha)
+        .sort(
+          (a, b) =>
+            dayjs(b.prorrateo!.ultimaFecha).valueOf() -
+            dayjs(a.prorrateo!.ultimaFecha).valueOf()
+        );
+
+      const latest = prorrateados[0];
+      const v = latest?.prorrateo?.precioCostoFinal;
+
+      if (!prorrateados.length) {
+        return (
+          <div className="text-right tabular-nums">
+            <span className="text-xs">—</span>
+          </div>
+        );
+      }
+
+      return (
+        <div className="text-right tabular-nums">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="text-xs underline-offset-2 hover:underline text-right w-full">
+                {v != null ? fmt(v) : "—"}
+              </button>
+            </PopoverTrigger>
+
+            <PopoverContent className="w-96">
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm mb-1">
+                  Detalle de prorrateo
+                </h4>
+                <div className="max-h-60 overflow-y-auto divide-y">
+                  {prorrateados.map((s) => (
+                    <div
+                      key={s.id}
+                      className="py-1 text-[11px] flex flex-col space-y-0.5"
+                    >
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          ID stock #{s.id}
+                        </span>
+                        <span>{s.fechaIngreso || "—"}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-x-2">
+                        <div>
+                          <span className="text-muted-foreground">
+                            Por unidad:
+                          </span>{" "}
+                          {fmt(s.prorrateo?.porUnidad ?? 0)}
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">
+                            Costo final:
+                          </span>{" "}
+                          {fmt(s.prorrateo?.precioCostoFinal ?? 0)}
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">
+                            Asignado:
+                          </span>{" "}
+                          {fmt(s.prorrateo?.sumaAsignado ?? 0)}
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">
+                            Fecha última:
+                          </span>{" "}
+                          {dayjs(s.prorrateo?.ultimaFecha).format(
+                            "DD/MM/YYYY HH:mm"
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      );
+    },
+    enableSorting: true,
+    sortingFn: "basic",
+  }
+);
+
+const VALOR_INVENTARIO: ColumnDef<ProductoInventarioResponse, any> =
+  columnHelper.accessor(
+    (row) => {
+      // Usa SOLO la sucursal visible en la tabla:
+      const items = row.stocks ?? [];
+      const total = items.reduce((acc, s) => {
+        const costo = s.prorrateo?.precioCostoFinal ?? 0;
+        return acc + Number(s.cantidad ?? 0) * Number(costo);
+      }, 0);
+      return total;
+    },
+    {
+      id: "valorInventario",
+      header: () => (
+        <div className="flex items-center gap-1 justify-end">
+          <span className="hidden sm:inline">Valor</span>
+        </div>
+      ),
+      cell: (info) => {
+        const v = info.getValue<number>();
+        return (
+          <div className="text-right tabular-nums hidden sm:block">
+            <span className="text-xs">{Number.isFinite(v) ? fmt(v) : "—"}</span>
+          </div>
+        );
+      },
+      enableSorting: true,
+      sortingFn: "basic",
+    }
+  );
 
 export const makeColumnsInventario = (
   rolUser: string
@@ -274,35 +415,6 @@ export const makeColumnsInventario = (
             </span>
           </div>
         ),
-        enableSorting: true,
-        sortingFn: "basic",
-      }
-    ),
-
-    // VALOR INVENTARIO (se mantiene; si prefieres ocultarlo a vendedores, puedes condicionar igual que COSTO_COL)
-    columnHelper.accessor(
-      (row) => {
-        const precio = numFromStr(row.precioCosto);
-        const total = sumBy(row.stocksBySucursal ?? [], (s) => s.cantidad);
-        return Number.isFinite(precio) ? precio * total : NaN;
-      },
-      {
-        id: "valorInventario",
-        header: () => (
-          <div className="flex items-center gap-1 justify-end">
-            <span className="hidden sm:inline">Valor</span>
-          </div>
-        ),
-        cell: (info) => {
-          const v = info.getValue<number>();
-          return (
-            <div className="text-right tabular-nums hidden sm:block">
-              <span className="text-xs">
-                {Number.isFinite(v) ? fmt(v) : "—"}
-              </span>
-            </div>
-          );
-        },
         enableSorting: true,
         sortingFn: "basic",
       }
@@ -612,6 +724,14 @@ export const makeColumnsInventario = (
   if (rolUser !== "VENDEDOR") {
     // la insertamos después de "descripcion" (posición 2)
     cols.splice(2, 0, COSTO_COL);
+  }
+
+  if (rolUser !== "VENDEDOR") {
+    cols.splice(3, 0, PRORRATEO_COL);
+  }
+
+  if (rolUser !== "VENDEDOR") {
+    cols.splice(5, 0, VALOR_INVENTARIO);
   }
 
   return cols;

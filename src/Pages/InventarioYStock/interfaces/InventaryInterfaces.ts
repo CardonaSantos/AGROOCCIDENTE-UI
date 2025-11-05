@@ -48,6 +48,14 @@ export interface StocksProducto {
   cantidad: number;
   fechaIngreso: string;
   fechaVencimiento: string;
+  prorrateo: Prorrateo;
+}
+export interface Prorrateo {
+  porUnidad: number;
+  precioCostoFinal: number;
+  sumaAsignado: number;
+  ultimaFecha: string;
+  ultimaProrrateoId: number;
 }
 
 export enum RolPrecio {

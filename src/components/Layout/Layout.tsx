@@ -102,28 +102,27 @@ export default function Layout2({ children }: LayoutProps) {
 
   const secureNotifications = Array.isArray(notifications) ? notifications : [];
 
-  const deleteNoti = async (id: number) => {
-    try {
-      const { mutateAsync: deleteNotification } = useApiMutation(
-        "delete",
-        `notification/delete-noti-one-user/${userID}/${id}`
-      );
+  type DeleteNotiVars = {
+    userID: number;
+    notificacionId: number;
+  };
 
-      toast.promise(deleteNotification(id), {
-        loading: "Eliminando notifiación...",
-        success: "Notificación Eliminada",
-        error: (error) => getApiErrorMessageAxios(error),
-      });
+  const { mutateAsync: deleteNotification } = useApiMutation<
+    void,
+    DeleteNotiVars
+  >("post", `notification/delete-noti-one-user`);
 
-      await queryClient.invalidateQueries({
-        queryKey: NOTIFICATIONS_QK(userID),
-      });
-      toast.success("Notificación eliminada");
-    } catch (err) {
-      console.error("Error deleting notificacion:", err);
-      toast.error("Error al eliminar notificación");
-      throw err;
-    }
+  const deleteNoti = async (notificationId: number) => {
+    const payload: DeleteNotiVars = {
+      userID,
+      notificacionId: notificationId,
+    };
+    await toast.promise(deleteNotification(payload), {
+      loading: "Eliminando notificación...",
+      success: "Notificación eliminada",
+      error: getApiErrorMessageAxios,
+    });
+    await queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QK(userID) });
   };
 
   const handleLogout = () => {
