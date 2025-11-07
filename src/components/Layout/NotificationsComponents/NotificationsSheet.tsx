@@ -6,7 +6,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Bell } from "lucide-react";
+import { Bell, Trash2 } from "lucide-react";
 import NotificationList from "./NotificationList";
 import { UiNotificacionDTO } from "@/Web/realtime/notifications/notifications.type";
 
@@ -15,6 +15,9 @@ interface Props {
   isLoading?: boolean;
   onDelete?: (id: number) => void | Promise<void>;
   countBadge?: number;
+  deleteAllNotis: () => Promise<void>;
+  setOpenDeleteAllNoti: React.Dispatch<React.SetStateAction<boolean>>;
+  openDeleteAllNoti: boolean;
 }
 
 export default function NotificationsSheet({
@@ -22,7 +25,10 @@ export default function NotificationsSheet({
   isLoading,
   onDelete,
   countBadge,
+  setOpenDeleteAllNoti,
 }: Props) {
+  const hasNotis = (countBadge ?? 0) > 0;
+
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -48,12 +54,31 @@ export default function NotificationsSheet({
       >
         <div className="flex h-full flex-col">
           <div className="px-6 py-4 border-b">
-            <SheetTitle className="text-2xl font-bold text-center">
-              Notificaciones
-            </SheetTitle>
+            <div className="flex items-center justify-between gap-3">
+              <SheetTitle className="text-2xl font-bold">
+                Notificaciones
+              </SheetTitle>
+
+              {/* Acción alineada a la derecha, discreta */}
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setOpenDeleteAllNoti(true)}
+                disabled={!hasNotis}
+                className="gap-2"
+                aria-disabled={!hasNotis}
+                title={
+                  hasNotis
+                    ? "Eliminar todas las notificaciones"
+                    : "No hay notificaciones"
+                }
+              >
+                <Trash2 className="h-4 w-4" />
+                Eliminar todo
+              </Button>
+            </div>
           </div>
 
-          {/* El espacio restante se usa para la lista; sin zonas blancas */}
           <div className="flex-1 overflow-y-auto px-4 py-3">
             <NotificationList
               notifications={notifications}

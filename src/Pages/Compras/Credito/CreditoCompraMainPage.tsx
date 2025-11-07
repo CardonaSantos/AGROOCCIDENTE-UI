@@ -111,7 +111,6 @@ export default function CreditoCompraMainPage({
     useState<string>("");
   const [cajaSelected, setCajaSelected] = useState<string | null>(null);
 
-  // POST mutation (usa tu hook genérico). Ajusta el tipo TData según tu API.
   const { mutateAsync, isPending } = useApiMutation<
     any,
     CrearCreditoCompraPayload

@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 //================================================================>
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { User, LogOut, AtSign } from "lucide-react";
 
 import { Link, Outlet } from "react-router-dom";
@@ -34,6 +34,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import NotificationsSheet from "./NotificationsComponents/NotificationsSheet";
 import { NOTIFICATIONS_QK } from "./NotificationsComponents/Qk";
 import { getApiErrorMessageAxios } from "@/Pages/Utils/UtilsErrorApi";
+import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 
 dayjs.extend(localizedFormat);
 dayjs.extend(customParseFormat);
@@ -58,7 +59,7 @@ export default function Layout2({ children }: LayoutProps) {
   const posCorreo = useStore((state) => state.userCorreo);
   const sucursalId = useStore((state) => state.sucursalId);
   const userID = useStore((state) => state.userId) ?? 0;
-
+  const [openDeleteAllNoti, setOpenDeleteAllNoti] = useState<boolean>(false);
   // Local state
 
   // Decodificar y setear datos del POS al iniciar
@@ -125,6 +126,32 @@ export default function Layout2({ children }: LayoutProps) {
     await queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QK(userID) });
   };
 
+  const {
+    mutateAsync: deleteAllNotisUserAsync,
+    isPending: isPendingDeleteAll,
+  } = useApiMutation<void, void>(
+    "delete",
+    `notification/delete-all-notifications-user/${userID}`
+  );
+
+  const deleteAllNotis = async () => {
+    if (!userID) {
+      toast.info("Usuario no válido. Recarga la página.");
+      return;
+    }
+    await toast.promise(
+      deleteAllNotisUserAsync(), // 👈 ejecutar, no pasar la referencia
+      {
+        loading: "Eliminando notificaciones...",
+        success: "Se eliminaron todas las notificaciones.",
+        error: (err) => getApiErrorMessageAxios(err),
+      }
+    );
+
+    await queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QK(userID) });
+    setOpenDeleteAllNoti(false); // 👈 opcional: cierra el dialog de confirmación
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("authTokenPos");
     toast.info("Sesión cerrada");
@@ -172,6 +199,9 @@ export default function Layout2({ children }: LayoutProps) {
                 isLoading={isLoadingNotis}
                 onDelete={deleteNoti}
                 countBadge={secureNotifications.length}
+                deleteAllNotis={deleteAllNotis}
+                openDeleteAllNoti={openDeleteAllNoti}
+                setOpenDeleteAllNoti={setOpenDeleteAllNoti}
               />
 
               <DropdownMenu>
@@ -218,6 +248,24 @@ export default function Layout2({ children }: LayoutProps) {
           </footer>
         </div>
       </SidebarProvider>
+      <AdvancedDialog
+        open={openDeleteAllNoti}
+        onOpenChange={setOpenDeleteAllNoti}
+        title="Eliminar todas las notificaciones"
+        description="¿Seguro que deseas eliminar todas tus notificaciones? Esta acción no se puede deshacer."
+        confirmButton={{
+          label: "Sí, eliminar todo",
+          onClick: deleteAllNotis,
+          loading: isPendingDeleteAll,
+          loadingText: "Eliminando...",
+          variant: "destructive",
+        }}
+        cancelButton={{
+          label: "Cancelar",
+          disabled: isPendingDeleteAll,
+          onClick: () => setOpenDeleteAllNoti(false),
+        }}
+      />
     </div>
   );
 }

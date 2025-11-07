@@ -46,7 +46,7 @@ import PurchasePaymentFormDialog, {
   MetodoPagoOption,
   CajaConSaldo,
 } from "@/utils/components/SelectMethodPayment/PurchasePaymentFormDialog";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 
 import ReceptionPicker, {
@@ -66,9 +66,9 @@ dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
 dayjs.locale("es");
 
-// -----------------------------------------
+// ============================
 // Tipos y Props
-// -----------------------------------------
+// ============================
 type CuentaBancaria = { id: number; nombre: string };
 type ProveedorLite = { id: number; nombre: string };
 
@@ -79,16 +79,22 @@ interface PropsCuotas {
   documentoId: number;
   sucursalId: number;
   cajasDisponibles: CajaConSaldo[];
-  // NUEVOS / OPCIONALES
   compraId: number; // para crear recepción y asociar
   cuentasBancarias?: CuentaBancaria[];
   proveedores?: ProveedorLite[];
-  normalizados: DetalleNormalizado[]; // líneas de compra normalizadas (con pendiente/recibido si los tienes)
+  normalizados: DetalleNormalizado[];
 }
 
-// -----------------------------------------
-// Helpers
-// -----------------------------------------
+interface PayloadDeletePago {
+  cuotaId: number;
+  documentoId: number;
+  usuarioId: number;
+  observaciones: string;
+}
+
+// ============================
+// Helpers puros (fuera del componente)
+// ============================
 const EstadoCuotaBadge = ({ estado }: { estado: string }) => {
   const map: Record<string, { label: string; className: string }> = {
     PENDIENTE: {
@@ -141,9 +147,8 @@ function normalizeMetodoPagoUIToBackend(
       "CREDITO",
       "OTRO",
     ].includes(v)
-  ) {
+  )
     return v as any;
-  }
   return "OTRO";
 }
 
@@ -169,15 +174,15 @@ const metodoPagoOptions: MetodoPagoOption[] = [
   { value: "CHEQUE", label: "Cheque", canal: "BANCO" },
 ];
 
-// pendiente helper (si no traes recibido/pendiente, toma “cantidad” como todo pendiente)
 const getPendiente = (l: DetalleNormalizado) => {
   if (typeof l.pendiente === "number") return Math.max(0, l.pendiente);
   const recibido = typeof l.recibido === "number" ? l.recibido : 0;
   return Math.max(0, (l.cantidad ?? 0) - recibido);
 };
-// -----------------------------------------
+
+// ============================
 // Componente principal
-// -----------------------------------------
+// ============================
 function MapCuotasCreditoCompra({
   cuotas,
   handleRefresAll,
@@ -187,23 +192,40 @@ function MapCuotasCreditoCompra({
   cajasDisponibles,
   cuentasBancarias = [],
   proveedores = [],
-  // normalizados,
   compraId,
 }: PropsCuotas) {
+  // -----------------------------------------
+  // React Query: client + util invalidación
+  // -----------------------------------------
   const qc = useQueryClient();
-  console.log("las compras id son: ", compraId);
 
-  // --- dialogs / states
+  const invalidateCreditoData = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: qk.creditoFromCompra(compraId) }),
+      qc.invalidateQueries({ queryKey: qk.compraRecepcionable(compraId) }),
+      qc.invalidateQueries({ queryKey: qk.compra(compraId) }),
+      qc.invalidateQueries({ queryKey: ["detalles-recepcion", compraId] }),
+    ]);
+  };
+
+  // -----------------------------------------
+  // UI State
+  // -----------------------------------------
   const [openPay, setOpenPay] = useState(false); // dialog de pago
   const [openPicker, setOpenPicker] = useState(false); // dialog de recepción
+  const [openDelete, setOpenDelete] = useState(false); // dialog de eliminar pago
+
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState<UICuota | null>(
     null
   );
-
-  // selección del picker
   const [picked, setPicked] = useState<PickedItem[]>([]);
+  const [cuentaBancariaSelected, setCuentaBancariaSelected] =
+    useState<string>("");
+  const [cajaSelected, setCajaSelected] = useState<string | null>(null);
+  const [proveedorSelected, setProveedorSelected] = useState<
+    string | undefined
+  >(undefined);
 
-  // pago
   const [payloadPayment, setPayloadPayment] = useState<PagoCxPPayload>({
     documentoId,
     metodoPago: "EFECTIVO",
@@ -213,13 +235,10 @@ function MapCuotasCreditoCompra({
     observaciones: "",
     referencia: "",
   });
-  const [cuentaBancariaSelected, setCuentaBancariaSelected] =
-    useState<string>("");
-  const [cajaSelected, setCajaSelected] = useState<string | null>(null);
-  const [proveedorSelected, setProveedorSelected] = useState<
-    string | undefined
-  >(undefined);
 
+  // -----------------------------------------
+  // Queries (fresh-first policies)
+  // -----------------------------------------
   const { data: products = [], refetch: refetchProducts } = useApiQuery<
     DetalleNormalizado[]
   >(
@@ -227,38 +246,38 @@ function MapCuotasCreditoCompra({
     `compras-pagos-creditos/get-detalles-productos-recepcion/${compraId}`,
     undefined,
     {
-      enabled: !!compraId && openPicker, // 👈 carga solo cuando abres
-      staleTime: 0, // 👈 siempre fresco
-      refetchOnWindowFocus: false,
-      // refetchOnMount: "always",       // (si tu wrapper lo soporta)
+      enabled: !!compraId && openPicker, // carga cuando abres el picker
+      refetchOnWindowFocus: true, // siempre refrescar al enfocar
+      refetchOnMount: "always", // y al montar
+      refetchOnReconnect: "always", // y al reconectar
+      placeholderData: keepPreviousData,
     }
   );
 
-  // api mutations
+  // -----------------------------------------
+  // Mutations (todas invalidan los mismos QKs)
+  // -----------------------------------------
   const postPago = useApiMutation(
     "post",
     "/compras-pagos-creditos/",
     undefined,
     {
-      onSuccess: async () => {
-        await qc.invalidateQueries({
-          queryKey: qk.creditoFromCompra(compraId),
-        });
-        await qc.invalidateQueries({
-          queryKey: qk.compraRecepcionable(compraId),
-        });
-        await qc.invalidateQueries({ queryKey: qk.compra(compraId) });
-      },
+      onSuccess: invalidateCreditoData,
     }
   );
-  const deletePagoCuota = useApiMutation<{
-    documentoId: number;
-    cuotaId: number;
-    observaciones?: string;
-    usuarioId: number;
-  }>("delete", "compras-pagos-creditos/delete-cuota-payed");
 
-  // --- derived
+  const deletePagoCuota = useApiMutation<any, PayloadDeletePago>(
+    "post",
+    "compras-pagos-creditos/delete-cuota-payed",
+    undefined,
+    {
+      onSuccess: invalidateCreditoData,
+    }
+  );
+
+  // -----------------------------------------
+  // Derived values
+  // -----------------------------------------
   const saldoCuota = useMemo(
     () => cuotaSeleccionada?.saldo ?? cuotaSeleccionada?.monto ?? 0,
     [cuotaSeleccionada]
@@ -268,7 +287,9 @@ function MapCuotasCreditoCompra({
     () => parseFloat(String(payloadPayment.monto || 0)),
     [payloadPayment.monto]
   );
+
   const montoOk = !isNaN(montoN) && montoN > 0 && montoN <= (saldoCuota || 0);
+
   const fechaOk =
     !!payloadPayment.fechaPago &&
     dayjs(payloadPayment.fechaPago, "YYYY-MM-DD", true).isValid();
@@ -279,20 +300,26 @@ function MapCuotasCreditoCompra({
     ? `Monto inválido. Máximo permitido: ${formattMonedaGT(saldoCuota)}.`
     : null;
 
-  // --- handlers
   const allReceived = (rows: DetalleNormalizado[] = []) =>
     rows.every((n) => getPendiente(n) === 0);
 
-  // ⚠️ vuelve async
+  // -----------------------------------------
+  // Handlers
+  // -----------------------------------------
+  const resetPaymentState = () => {
+    setCuentaBancariaSelected("");
+    setCajaSelected(null);
+  };
+
+  // Abre flujo de pago (o picker si hay pendiente)
   const handleOpenPayFlow = async (cuota: UICuota) => {
     setCuotaSeleccionada(cuota);
     setPicked([]);
 
-    // 1) Trae estado fresco del servidor ANTES de decidir
+    // Estado fresco ANTES de decidir
     const { data: fresh = [] } = await refetchProducts();
 
     if (allReceived(fresh)) {
-      // Nada pendiente → ir directo al pago
       setPayloadPayment((prev) => ({
         ...prev,
         documentoId,
@@ -302,18 +329,15 @@ function MapCuotasCreditoCompra({
         observaciones: "",
         referencia: "",
       }));
-      setCuentaBancariaSelected("");
-      setCajaSelected(null);
+      resetPaymentState();
       setOpenPay(true);
     } else {
-      // Aún queda pendiente → abrir picker
       setOpenPicker(true);
     }
   };
 
   const handlePickerConfirm = (items: PickedItem[]) => {
     setPicked(items);
-    // abrir pago con defaults
     if (cuotaSeleccionada) {
       setPayloadPayment((prev) => ({
         ...prev,
@@ -326,20 +350,17 @@ function MapCuotasCreditoCompra({
         observaciones: "",
         referencia: "",
       }));
-      setCuentaBancariaSelected("");
-      setCajaSelected(null);
+      resetPaymentState();
       setOpenPicker(false);
       setOpenPay(true);
     }
-
-    // Opcional UX: si wasTotal, al cerrar este flujo podrías desactivar el botón
-    // “Pagar cuota + Recepción” y dejar solo “Pagar cuota”.
   };
 
   const handleRegistPayment = async () => {
     if (!cuotaSeleccionada) return;
-    // Bloque recepcion (opcional)
+
     let recepcionBlock: CreateRecepcionBlock | undefined = undefined;
+
     if ((picked?.length ?? 0) > 0) {
       if (!compraId) {
         toast.error("No se puede registrar recepción: falta compraId.");
@@ -357,10 +378,10 @@ function MapCuotasCreditoCompra({
       };
     }
 
-    // canal según método
     const metodo = normalizeMetodoPagoUIToBackend(
       String(payloadPayment.metodoPago)
     );
+
     const body: CreatePagoConRecepcionPayload = {
       documentoId,
       sucursalId,
@@ -373,7 +394,6 @@ function MapCuotasCreditoCompra({
       referencia: payloadPayment.referencia?.trim() || undefined,
       expectedCuotaSaldo: toAmountString(cuotaSeleccionada.saldo ?? 0),
 
-      // canal (marcar opcional y validar en backend)
       cajaId:
         metodo === "EFECTIVO"
           ? cajaSelected
@@ -387,10 +407,9 @@ function MapCuotasCreditoCompra({
             : undefined
           : undefined,
 
-      recepcion: recepcionBlock, // ← si no hay picked, va undefined
+      recepcion: recepcionBlock,
     };
 
-    console.log("El payload nuevo es: ", body);
     try {
       await toast.promise(postPago.mutateAsync(body), {
         loading: "Procesando…",
@@ -398,15 +417,13 @@ function MapCuotasCreditoCompra({
         error: (e) => getApiErrorMessageAxios(e),
       });
     } finally {
+      await invalidateCreditoData();
       await handleRefresAll();
       setOpenPay(false);
       setPicked([]);
     }
   };
 
-  console.log("Los picked son: ", picked);
-
-  const [openDelete, setOpenDelete] = useState<boolean>(false);
   const handleOpenDelete = (cuota: UICuota) => {
     setCuotaSeleccionada(cuota);
     setOpenDelete(true);
@@ -414,27 +431,23 @@ function MapCuotasCreditoCompra({
 
   const handleDeletePayment = async () => {
     if (!cuotaSeleccionada) return;
+    const payload: PayloadDeletePago = {
+      cuotaId: cuotaSeleccionada.id,
+      documentoId,
+      usuarioId: userId,
+      observaciones: "",
+    };
     try {
-      await toast.promise(
-        deletePagoCuota.mutateAsync({
-          cuotaId: cuotaSeleccionada.id,
-          documentoId,
-          usuarioId: userId,
-          observaciones: "",
-        }),
-        {
-          loading: "Eliminando registro de pago...",
-          success: "Registro de pago eliminado",
-          error: (e) => getApiErrorMessageAxios(e),
-        }
-      );
-
-      await qc.invalidateQueries({ queryKey: qk.creditoFromCompra(compraId) });
-      await handleRefresAll(); // por consistencia
-
+      await toast.promise(deletePagoCuota.mutateAsync(payload), {
+        loading: "Eliminando registro de pago...",
+        success: "Registro de pago eliminado",
+        error: (e) => getApiErrorMessageAxios(e),
+      });
+      await invalidateCreditoData();
+      await handleRefresAll();
       setOpenDelete(false);
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
   };
 
@@ -445,7 +458,6 @@ function MapCuotasCreditoCompra({
     const newValue = e.target.value;
     setPayloadPayment((prev) => ({ ...prev, [keyName]: newValue as any }));
   };
-
   if (!Array.isArray(cuotas) || cuotas.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
