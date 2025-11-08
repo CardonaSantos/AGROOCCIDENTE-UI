@@ -151,7 +151,7 @@ export default function CreditoCompraMainPage({
     form.planCuotaModo === PlanCuotaModo.PRIMERA_MAYOR;
 
   const adoptPreview = () => {
-    setCuotasOverride(preview.cuotas.map(ensureId)); // o .map(x => x) si ya traen id
+    setCuotasOverride(preview.cuotas.map(ensureId));
     setIsManual(true);
   };
 
@@ -237,13 +237,13 @@ export default function CreditoCompraMainPage({
           normalizados={normalizados}
           cajasDisponibles={cajasDisponibles}
           sucursalId={sucursalId}
-          documentoId={creditoFromCompra?.id ?? 0} // ← ver fix #3
+          documentoId={creditoFromCompra?.id ?? 0}
           userId={userId}
           handleRefresAll={handleRefresAll}
           creditoFromCompra={creditoFromCompra}
           cuentasBancarias={cuentasBancarias}
           proveedores={proveedores}
-          compraId={compraId} // ✅ pásalo aquí
+          compraId={compraId}
         />
       ) : (
         <>

@@ -58,6 +58,11 @@ import {
   CreateRecepcionBlock,
 } from "./interfaces/interfacess2";
 import { qk } from "../../qk";
+import CostosAsociadosDialog from "../../components/Costos Asociados Dialog";
+import {
+  MovimientoFinancieroDraft,
+  ProrrateoMeta,
+} from "../../CostoAsociadoTypes";
 
 dayjs.extend(customParseFormat);
 dayjs.extend(utc);
@@ -211,6 +216,17 @@ function MapCuotasCreditoCompra({
   // -----------------------------------------
   // UI State
   // -----------------------------------------
+
+  // === Prorrateo/Costo asociado (solo si hay recepción) =======================
+  const [openCostoDialog, setOpenCostoDialog] = useState(false);
+  const [mfDraft, setMfDraft] = useState<MovimientoFinancieroDraft | null>(
+    null
+  );
+  const [prorrateoMeta, setProrrateoMeta] = useState<
+    ProrrateoMeta | null | undefined
+  >(null);
+  const [costoStepDone, setCostoStepDone] = useState(false); // marcamos si el usuario completó el paso de costos
+
   const [openPay, setOpenPay] = useState(false); // dialog de pago
   const [openPicker, setOpenPicker] = useState(false); // dialog de recepción
   const [openDelete, setOpenDelete] = useState(false); // dialog de eliminar pago
@@ -225,6 +241,7 @@ function MapCuotasCreditoCompra({
   const [proveedorSelected, setProveedorSelected] = useState<
     string | undefined
   >(undefined);
+  const [openConfirmPayment, setOpenConfirmPayment] = useState<boolean>(false);
 
   const [payloadPayment, setPayloadPayment] = useState<PagoCxPPayload>({
     documentoId,
@@ -338,6 +355,16 @@ function MapCuotasCreditoCompra({
 
   const handlePickerConfirm = (items: PickedItem[]) => {
     setPicked(items);
+
+    // si hay algo para recepcionar, pasamos antes por el diálogo de costo/prorrateo
+    if (items.length > 0) {
+      setOpenPicker(false);
+      setCostoStepDone(false); // resetea bandera de paso completado
+      setOpenCostoDialog(true); // 👉 abre costo asociado
+      return;
+    }
+
+    // (fallback) si no hay nada seleccionado, vamos directo al pago como antes
     if (cuotaSeleccionada) {
       setPayloadPayment((prev) => ({
         ...prev,
@@ -356,11 +383,12 @@ function MapCuotasCreditoCompra({
     }
   };
 
+  //PAGAR CUOTA
+
   const handleRegistPayment = async () => {
     if (!cuotaSeleccionada) return;
-
+    // --- bloque de recepción (como ya lo tienes) ---
     let recepcionBlock: CreateRecepcionBlock | undefined = undefined;
-
     if ((picked?.length ?? 0) > 0) {
       if (!compraId) {
         toast.error("No se puede registrar recepción: falta compraId.");
@@ -378,9 +406,36 @@ function MapCuotasCreditoCompra({
       };
     }
 
+    // --- método/canales del pago de la cuota ---
     const metodo = normalizeMetodoPagoUIToBackend(
       String(payloadPayment.metodoPago)
     );
+
+    // --- NUEVO: prorrateo + mf (solo si hubo recepción Y el usuario confirmó el paso de costos) ---
+    const includeCostAndProrr =
+      !!recepcionBlock &&
+      !!prorrateoMeta?.aplicar &&
+      Number(mfDraft?.monto ?? 0) > 0;
+
+    const recepcionPayload = recepcionBlock
+      ? {
+          ...recepcionBlock,
+          ...(includeCostAndProrr
+            ? {
+                prorrateo: {
+                  aplicar: true,
+                  base: prorrateoMeta?.base ?? "",
+                  incluirAntiguos: prorrateoMeta?.incluirAntiguos ?? false,
+                },
+                mf: {
+                  ...mfDraft!,
+                  // por si acaso, garantiza sucursalId
+                  sucursalId,
+                },
+              }
+            : {}),
+        }
+      : undefined;
 
     const body: CreatePagoConRecepcionPayload = {
       documentoId,
@@ -394,6 +449,7 @@ function MapCuotasCreditoCompra({
       referencia: payloadPayment.referencia?.trim() || undefined,
       expectedCuotaSaldo: toAmountString(cuotaSeleccionada.saldo ?? 0),
 
+      // canal del PAGO de la cuota
       cajaId:
         metodo === "EFECTIVO"
           ? cajaSelected
@@ -407,13 +463,17 @@ function MapCuotasCreditoCompra({
             : undefined
           : undefined,
 
-      recepcion: recepcionBlock,
+      // recepción (con o sin costo/prorrateo embebido)
+      recepcion: recepcionPayload,
     };
 
     try {
       await toast.promise(postPago.mutateAsync(body), {
         loading: "Procesando…",
-        success: "Pago registrado" + (recepcionBlock ? " con recepción" : ""),
+        success:
+          "Pago registrado" +
+          (recepcionBlock ? " con recepción" : "") +
+          (includeCostAndProrr ? " + costo asociado prorrateado" : ""),
         error: (e) => getApiErrorMessageAxios(e),
       });
     } finally {
@@ -421,6 +481,10 @@ function MapCuotasCreditoCompra({
       await handleRefresAll();
       setOpenPay(false);
       setPicked([]);
+      setMfDraft(null);
+      setProrrateoMeta(null);
+      setCostoStepDone(false);
+      setOpenConfirmPayment(false);
     }
   };
 
@@ -467,6 +531,58 @@ function MapCuotasCreditoCompra({
   }
   console.log("Los pickeados son: ", picked);
   console.log("los productos fetcheados son: ", products);
+
+  // —— Resumen para el confirmador —— //
+  const willReceive = (picked?.length ?? 0) > 0;
+  const totalRecibir = (picked ?? []).reduce(
+    (s, x) => s + (Number(x.cantidad) || 0),
+    0
+  );
+  const lineasRecibir = picked?.length ?? 0;
+
+  const includeCostAndProrr =
+    Boolean(willReceive) &&
+    Boolean(costoStepDone) &&
+    !!mfDraft &&
+    (prorrateoMeta?.aplicar ?? true) &&
+    Number(mfDraft?.monto || 0) > 0;
+
+  const metodoLabel = String(payloadPayment.metodoPago || "").toUpperCase();
+  const canalLabel =
+    metodoLabel === "EFECTIVO"
+      ? cajaSelected
+        ? ` · Caja #${cajaSelected}`
+        : ""
+      : cuentaBancariaSelected
+      ? ` · Cta. #${cuentaBancariaSelected}`
+      : "";
+
+  const fechaLabel = payloadPayment.fechaPago || dayjs().format("YYYY-MM-DD");
+  const montoPagoN = Number(payloadPayment.monto || 0);
+  const saldoPostPago = Math.max(
+    0,
+    (saldoCuota || 0) - (isNaN(montoPagoN) ? 0 : montoPagoN)
+  );
+
+  // texto multilinea (solo string)
+  const confirmText = [
+    "Se realizará lo siguiente:",
+    willReceive
+      ? `• Recepción: ${totalRecibir} unidad(es) en ${lineasRecibir} línea(s). [IRREVERSIBLE]`
+      : "• No se crearán recepciones de productos.",
+    includeCostAndProrr
+      ? `• Costo asociado: ${formattMonedaGT(
+          mfDraft!.monto
+        )} y prorrateo por unidades. [IRREVERSIBLE AUTOMÁTICAMENTE]`
+      : null,
+    `• Pago: ${formattMonedaGT(
+      montoPagoN
+    )} (${metodoLabel}${canalLabel}) con fecha ${fechaLabel}.`,
+    `  Saldo de la cuota tras el pago: ${formattMonedaGT(saldoPostPago)}.`,
+    "Nota: “Deshacer pago” revierte solo el pago; no afecta stock ni prorrateos.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return (
     <div className="space-y-2">
@@ -576,6 +692,8 @@ function MapCuotasCreditoCompra({
 
       {/* Dialog de pago (igual que hoy) */}
       <PurchasePaymentFormDialog
+        layout="two-column"
+        flow="OUT"
         open={openPay}
         onOpenChange={setOpenPay}
         title={
@@ -615,7 +733,7 @@ function MapCuotasCreditoCompra({
           extraDisableReason || (postPago.isPending ? "Registrando..." : null)
         }
         continueLabel={postPago.isPending ? "Registrando…" : "Registrar pago"}
-        onContinue={handleRegistPayment}
+        onContinue={() => setOpenConfirmPayment(true)}
       >
         {/* Campos extra (Monto / Fecha / Referencia) */}
         <div className="space-y-4">
@@ -647,6 +765,26 @@ function MapCuotasCreditoCompra({
           </div>
         </div>
       </PurchasePaymentFormDialog>
+      <AdvancedDialog
+        title="Confirmación de pago de cuota"
+        description={confirmText} // 👈 string multilinea
+        question="¿Seguro que deseas continuar?"
+        open={openConfirmPayment}
+        onOpenChange={setOpenConfirmPayment}
+        confirmButton={{
+          label: "Sí, continuar y registrar",
+          onClick: handleRegistPayment,
+          variant: "destructive",
+          loading: postPago.isPending,
+          loadingText: "Registrando datos...",
+          disabled: !!extraDisableReason || postPago.isPending,
+        }}
+        cancelButton={{
+          label: "Cancelar",
+          disabled: postPago.isPending,
+          onClick: () => setOpenConfirmPayment(false),
+        }}
+      />
 
       {/* Deshacer pago */}
       <AdvancedDialog
@@ -670,6 +808,85 @@ function MapCuotasCreditoCompra({
             setOpenDelete(false);
             setCuotaSeleccionada(null);
           },
+        }}
+      />
+
+      <CostosAsociadosDialog
+        open={openCostoDialog}
+        onOpenChange={(v) => {
+          setOpenCostoDialog(v);
+          if (!v && !costoStepDone && picked.length > 0) {
+            // si cerró sin confirmar y SÍ había ítems, permitimos seguir sin costo/prorrateo
+            // (flujo: recepción sin costo adicional)
+            setMfDraft(null);
+            setProrrateoMeta(null);
+            // abrimos el pago
+            if (cuotaSeleccionada) {
+              setPayloadPayment((prev) => ({
+                ...prev,
+                documentoId,
+                monto: toAmountString(
+                  cuotaSeleccionada.saldo ?? cuotaSeleccionada.monto ?? 0
+                ),
+                fechaPago: dayjs().format("YYYY-MM-DD"),
+                metodoPago: "EFECTIVO",
+                observaciones: "",
+                referencia: "",
+              }));
+              resetPaymentState();
+              setOpenPay(true);
+            }
+          }
+        }}
+        sucursalId={sucursalId}
+        proveedorId={
+          undefined /* si no lo tienes aquí, déjalo undefined y que el server resuelva por compra */
+        }
+        compraId={compraId}
+        compraSubtotal={
+          // opcional: un estimado para mostrar en el diálogo
+          Array.isArray(products)
+            ? products.reduce(
+                (acc, r) =>
+                  acc + Number(r.costoUnitario || 0) * Number(r.cantidad || 0),
+                0
+              )
+            : undefined
+        }
+        // mapea tus cajas/cuentas a las opciones que espera el dialog
+        cajasDisponibles={(cajasDisponibles ?? []).map((c) => ({
+          id: c.id,
+          label: `Caja #${c.id} · Disponible ${formattMonedaGT(
+            c.disponibleEnCaja
+          )}`,
+          disponibleEnCaja: Number(c.disponibleEnCaja),
+        }))}
+        cuentasBancarias={(cuentasBancarias ?? []).map((c) => ({
+          id: c.id,
+          nombre: c.nombre,
+        }))}
+        onSubmit={({ mf, prorrateo }) => {
+          setMfDraft(mf);
+          setProrrateoMeta(prorrateo);
+          setCostoStepDone(true);
+          setOpenCostoDialog(false);
+
+          // ahora sí abrimos el diálogo de pago con defaults
+          if (cuotaSeleccionada) {
+            setPayloadPayment((prev) => ({
+              ...prev,
+              documentoId,
+              monto: toAmountString(
+                cuotaSeleccionada.saldo ?? cuotaSeleccionada.monto ?? 0
+              ),
+              fechaPago: dayjs().format("YYYY-MM-DD"),
+              metodoPago: "EFECTIVO",
+              observaciones: "",
+              referencia: "",
+            }));
+            resetPaymentState();
+            setOpenPay(true);
+          }
         }}
       />
     </div>
