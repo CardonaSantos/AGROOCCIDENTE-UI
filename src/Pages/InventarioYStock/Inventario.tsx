@@ -37,9 +37,7 @@ interface InventarioProps {
   //croper de imagenes
   setSearchQuery: React.Dispatch<React.SetStateAction<QueryTable>>;
   searchQuery: QueryTable;
-
   productsInventario: PaginatedInventarioResponse;
-
   setPagination: React.Dispatch<
     React.SetStateAction<{
       pageIndex: number;

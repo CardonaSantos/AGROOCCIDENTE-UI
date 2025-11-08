@@ -87,6 +87,8 @@ function InventarioStockPage() {
       },
     },
     {
+      staleTime: 0,
+      refetchOnWindowFocus: "always",
       placeholderData: {
         data: [],
         meta: { totalCount: 0, totalPages: 0, page: 1, limit: 10 },

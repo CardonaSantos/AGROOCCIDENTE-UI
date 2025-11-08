@@ -48,14 +48,22 @@ export interface StocksProducto {
   cantidad: number;
   fechaIngreso: string;
   fechaVencimiento: string;
-  prorrateo: Prorrateo;
+  costoUnitario: number;
+  prorrateo: Prorrateo[];
 }
 export interface Prorrateo {
-  porUnidad: number;
-  precioCostoFinal: number;
-  sumaAsignado: number;
-  ultimaFecha: string;
-  ultimaProrrateoId: number;
+  id: number;
+  costoFacturaUnitario: number;
+  costoProrrateadoTotalInversion: number;
+  costoUnitarioProrrateado: number;
+  costoUnitarioResultante: number;
+  creadoEn: Date;
+  existenciasPrevias: number;
+  gastoUnitarioAplicado: number;
+  gastoUnitarioBase: number;
+  inversionLinea: number;
+  inversionPrevias: number;
+  nuevasExistencias: number;
 }
 
 export enum RolPrecio {

@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, XCircle } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
-
 import { useStore } from "@/components/Context/ContextSucursal";
 import { formattMonedaGT } from "@/utils/formattMoneda";
 import { TZGT } from "../Utils/Utils";
@@ -35,11 +34,12 @@ import PurchasePaymentFormDialog, {
 import { UICreditoCompra } from "./Credito/creditoCompraDisponible/interfaces/interfaces";
 import { normalizarDetalles } from "./Credito/helpers/normalizador";
 import { qk } from "./qk";
-import CostosAsociadosDialog, {
+import {
   CostosAsociadosDialogResult,
   MovimientoFinancieroDraft,
   ProrrateoMeta,
-} from "./components/Costos Asociados Dialog";
+} from "./CostoAsociadoTypes";
+import CostosAsociadosDialog from "./components/Costos Asociados Dialog";
 
 interface Option {
   label: string;
@@ -69,23 +69,23 @@ type RecepcionFlow = "NORMAL" | "PARCIAL";
 
 export default function CompraDetalle() {
   const userId = useStore((state) => state.userId) ?? 0;
-  // === Helpers ===
+
+  // === Helpers (puros) ======================================================
   const isBankMethod = (m?: MetodoPago | "") =>
     m === "TRANSFERENCIA" || m === "TARJETA" || m === "CHEQUE";
   const isCashMethod = (m?: MetodoPago | "") =>
     m === "EFECTIVO" || m === "CONTADO";
 
-  // === Router / Store ===
+  // === Router / Store =======================================================
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const sucursalId = useStore((state) => state.sucursalId) ?? 0;
   const compraId = Number.isFinite(Number(id)) ? Number(id) : 0;
   const [recepcionFlow, setRecepcionFlow] = useState<RecepcionFlow>("NORMAL");
 
-  // === Dialog/UI states ===
+  // === UI / Dialog states ===================================================
   const [openSendStock, setOpenSendStock] = useState(false);
   const [openFormDialog, setOpenFormDialog] = useState(false);
-
   const [openFormPaymentDialog, setOpenFormPaymentDialog] = useState(false);
 
   const [observaciones, setObservaciones] = useState<string>("");
@@ -98,9 +98,12 @@ export default function CompraDetalle() {
   const [cuentaBancariaSelected, setCuentaBancariaSelected] =
     useState<string>("");
   const [cajaSelected, setCajaSelected] = useState<string | null>(null);
+
   const [isRecibirParcial, setIsRecibirParcial] = useState<boolean>(false);
   const [openRecibirParcial, setOpenRecibirParcial] = useState<boolean>(false);
+
   const queryClient = useQueryClient();
+
   const [selectedItems, setSelectedItems] = useState<PayloadRecepcionParcial>({
     compraId: compraId,
     fecha: dayjs().tz(TZGT).startOf("day").toISOString(),
@@ -116,9 +119,20 @@ export default function CompraDetalle() {
   const [prorrateoMeta, setProrrateoMeta] = useState<ProrrateoMeta | null>(
     null
   );
-  const [costoStepDone, setCostoStepDone] = useState(false); // para saber si lo completaron
+  const [costoStepDone, setCostoStepDone] = useState(false); // marcamos si el usuario completó el paso de costos
 
-  // === QUERIES ===============================================================
+  // ⚙️ Mantén lo elegido en el diálogo de costos; sólo completa sucursal/proveedor si falta.
+  const buildMf = useCallback(() => {
+    if (!mfDraft) return undefined;
+    return {
+      ...mfDraft,
+      sucursalId: mfDraft.sucursalId ?? sucursalId,
+      proveedorId: mfDraft.proveedorId ?? Number(proveedorSelected),
+      // Importante: NO sobreescribimos metodoPago / cuentaBancariaId / registroCajaId aquí.
+    };
+  }, [mfDraft, sucursalId, proveedorSelected]);
+
+  // === QUERIES ==============================================================
   const {
     data: registroQ,
     isPending: isPendingRegistro,
@@ -145,7 +159,6 @@ export default function CompraDetalle() {
       {
         staleTime: 0,
         refetchOnWindowFocus: false,
-        // refetchOnMount: "always",
       }
     );
 
@@ -169,7 +182,7 @@ export default function CompraDetalle() {
     }
   );
 
-  //Cajas abiertas por sucursal
+  // Cajas abiertas por sucursal
   const cajasQ = useApiQuery<CajaConSaldo[]>(
     ["cajas-disponibles", sucursalId],
     `/caja/cajas-disponibles/${sucursalId}`,
@@ -178,20 +191,21 @@ export default function CompraDetalle() {
       enabled: !!sucursalId,
       staleTime: 30_000,
       refetchOnWindowFocus: false,
-      // onError: () => toast.error("Error al cargar cajas disponibles"),
     }
   );
 
-  // === MUTATION: recepcionar compra =========================================
-  const recepcionarM = useApiMutation<
-    any, // respuesta del server
-    any //algo a enviar
-  >("post", `/compra-requisicion/${compraId}/recepcionar`, undefined, {
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["compra", compraId] });
-      queryClient.invalidateQueries({ queryKey: ["compras"] });
-    },
-  });
+  // === MUTATIONS ============================================================
+  const recepcionarM = useApiMutation<any, any>(
+    "post",
+    `/compra-requisicion/${compraId}/recepcionar`,
+    undefined,
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["compra", compraId] });
+        queryClient.invalidateQueries({ queryKey: ["compras"] });
+      },
+    }
+  );
 
   const {
     data: recepcionable = {
@@ -208,7 +222,7 @@ export default function CompraDetalle() {
     { params: { compraId } }
   );
 
-  // === DERIVED ===============================================================
+  // === DERIVED ==============================================================
   const registro = registroQ ?? null;
   const proveedores = proveedoresQ.data ?? [];
   const cuentasBancarias = cuentasQ.data ?? [];
@@ -217,21 +231,24 @@ export default function CompraDetalle() {
   const montoRecepcion = useMemo(() => {
     if (recepcionFlow === "PARCIAL") {
       return selectedItems.lineas.reduce(
-        (acc: number, item: ItemDetallesPayloadParcial) => {
-          return acc + item.cantidadRecibida * item.precioCosto;
-        },
+        (acc: number, item: ItemDetallesPayloadParcial) =>
+          acc + item.cantidadRecibida * item.precioCosto,
         0
       );
     }
     return Number(registro?.resumen?.subtotal ?? registro?.total ?? 0);
   }, [registro, recepcionFlow, selectedItems]);
 
+  // === EFFECTS ==============================================================
+
+  // Reset de banco si el método no es bancario
   useEffect(() => {
     if (!isBankMethod(metodoPago) && cuentaBancariaSelected) {
       setCuentaBancariaSelected("");
     }
   }, [metodoPago, cuentaBancariaSelected]);
 
+  // Autoselección de caja válida si pago en efectivo/contado
   useEffect(() => {
     if (!isCashMethod(metodoPago)) {
       setCajaSelected(null);
@@ -255,23 +272,25 @@ export default function CompraDetalle() {
     }
   }, [metodoPago, cajasDisponibles, montoRecepcion, cajaSelected]);
 
+  // Prefill proveedor del registro
   useEffect(() => {
     const idProv = registro?.proveedor?.id;
     setProveedorSelected(idProv ? String(idProv) : undefined);
   }, [registro?.proveedor?.id]);
 
-  // === Handlers ==============================================================
+  // === Handlers básicos =====================================================
   const onBack = () => navigate(-1);
-
   const handleSelectCaja = (option: Option | null) => {
     setCajaSelected(option ? option.value : null);
   };
 
+  // === Handler principal: Recepción total (enviar a stock) ==================
   const sendtToStock = useCallback(async () => {
     if (!registro || recepcionarM.isPending) return;
 
     const usuarioId = registro.usuario.id ?? 1;
 
+    // Validaciones UI
     if (!proveedorSelected) {
       toast.error("Seleccione un proveedor");
       return;
@@ -298,38 +317,14 @@ export default function CompraDetalle() {
       }
     }
 
-    // 🔴 Si el usuario saltó el paso de costos asociados, podemos seguir sin mf/prorrateo
-    // pero lo ideal es aprovecharlos si existen.
-    const mf = mfDraft
-      ? {
-          ...mfDraft,
-          // blindajes de tipos/ids:
-          sucursalId,
-          proveedorId: Number(proveedorSelected),
-          metodoPago: mfDraft.metodoPago as any,
-          costoVentaTipo: mfDraft.costoVentaTipo as any,
-          clasificacionAdmin: (mfDraft.clasificacionAdmin ??
-            "COSTO_VENTA") as any,
-          cuentaBancariaId: isBankMethod(metodoPago)
-            ? Number(cuentaBancariaSelected)
-            : undefined,
-          registroCajaId:
-            isCashMethod(metodoPago) && cajaSelected
-              ? Number(cajaSelected)
-              : undefined,
-        }
-      : undefined;
+    // ⛏️ Construye MF exactamente como vino del diálogo de costos (sin pisar método/ids).
+    const mf = buildMf();
 
-    // Meta de prorrateo (opcional)
-    const prorrateo =
-      prorrateoMeta && mf?.motivo === "COSTO_ASOCIADO"
-        ? {
-            aplicar: prorrateoMeta.aplicar,
-            base: prorrateoMeta.base,
-            incluirAntiguos: prorrateoMeta.incluirAntiguos ?? false, // <= NUEVO
-          }
-        : undefined;
+    // 🔁 Flag minimal de prorrateo: sólo si el MF es COSTO_ASOCIADO y el usuario lo activó
+    const aplicarProrrateo =
+      Boolean(prorrateoMeta?.aplicar) && mf?.motivo === "COSTO_ASOCIADO";
 
+    // Payload final (top-level = pago/flujo de la recepción; mf = costos asociados)
     const payload: {
       compraId?: number; // el controller lo rellena con :id
       usuarioId: number;
@@ -345,24 +340,25 @@ export default function CompraDetalle() {
         loteCodigo: string;
       }>;
       mf?: typeof mf;
-      prorrateo?: typeof prorrateo;
+      prorrateo?: { aplicar: true };
     } = {
       usuarioId,
       proveedorId: Number(proveedorSelected),
       observaciones,
       metodoPago, // debe matchear enum backend
-      sucursalId, // 🔵 REQUERIDO POR DTO
-      // Sólo setear si aplica:
+      sucursalId,
+      // Sólo setear si aplica (para el flujo principal)
       ...(isBankMethod(metodoPago) && {
         cuentaBancariaId: Number(cuentaBancariaSelected),
       }),
       ...(isCashMethod(metodoPago) &&
         cajaSelected && { registroCajaId: Number(cajaSelected) }),
-      // Overrides de líneas (para total no lo necesitas; para parcial ya tienes otra ruta)
-      // lineas: ...
+      // MF del costo asociado (como lo dejó el diálogo)
       ...(mf ? { mf } : {}),
-      ...(prorrateo ? { prorrateo } : {}),
+      // Prorrateo minimal
+      ...(aplicarProrrateo ? { prorrateo: { aplicar: true } } : {}),
     };
+    console.log("El payload es: ", payload);
 
     await toast.promise(recepcionarM.mutateAsync(payload), {
       loading: "Recepcionando compra...",
@@ -376,7 +372,6 @@ export default function CompraDetalle() {
   }, [
     registro,
     recepcionarM,
-    compraId,
     proveedorSelected,
     observaciones,
     metodoPago,
@@ -385,11 +380,11 @@ export default function CompraDetalle() {
     cajasDisponibles,
     montoRecepcion,
     sucursalId,
-    mfDraft,
-    prorrateoMeta,
+    buildMf,
+    prorrateoMeta?.aplicar,
   ]);
 
-  // === UI Utils ==============================================================
+  // === UI Utils =============================================================
   const optionsCajas: Option[] = cajasDisponibles.map((c) => ({
     label: `Caja #${c.id} · Inicial ${formattMonedaGT(
       c.saldoInicial
@@ -397,7 +392,7 @@ export default function CompraDetalle() {
     value: c.id.toString(),
   }));
 
-  //derivado del state principal
+  // === Selección de líneas (parcial) ========================================
   const selectedIds = useMemo(() => {
     return new Set(selectedItems.lineas.map((l) => l.compraDetalleId));
   }, [selectedItems]);
@@ -471,6 +466,7 @@ export default function CompraDetalle() {
     });
   };
 
+  // === Recepción parcial =====================================================
   const handleRecepcionarParcial = useApiMutation<
     void,
     PayloadRecepcionParcial
@@ -524,8 +520,10 @@ export default function CompraDetalle() {
     }
   };
 
+  // === Utilidades UI adicionales ============================================
   const loadingHard = isPendingRegistro;
   const errorHard = isErrorRegistro && !registro;
+
   const onContinueFromPayment = useCallback(() => {
     setOpenFormPaymentDialog(false);
     setCostoStepDone(false); // reset
@@ -533,6 +531,7 @@ export default function CompraDetalle() {
   }, [setOpenFormPaymentDialog]);
 
   console.log("El registro de compra: ", registroQ);
+
   const handleRefresAll = React.useCallback(async () => {
     await Promise.allSettled([
       reFetchDRP(),
@@ -549,6 +548,7 @@ export default function CompraDetalle() {
     Array.isArray(registro?.detalles) ? registro.detalles : []
   );
 
+  // === Guard Clauses (no hooks debajo de returns) ============================
   if (loadingHard) {
     return (
       <div className="min-h-screen bg-background p-2 sm:p-4 flex items-center justify-center">
@@ -592,6 +592,7 @@ export default function CompraDetalle() {
     );
   }
 
+  // === Derivados finales para los diálogos ==================================
   const cajaSel = cajasDisponibles.find(
     (c) => String(c.id) === String(cajaSelected)
   );
@@ -608,6 +609,7 @@ export default function CompraDetalle() {
     !!metodoPago &&
     (!requiereBanco || !!cuentaBancariaSelected) &&
     (!requiereCaja || (!!cajaSelected && cajaTieneSaldo));
+
   console.log("Los detalles de la compra son: ", registro.detalles);
 
   return (
@@ -775,9 +777,7 @@ export default function CompraDetalle() {
         onContinue={onContinueFromPayment}
         proveedores={proveedores}
       />
-      <Button variant="secondary" onClick={() => setOpenCostoDialog(true)}>
-        Añadir costo asociado
-      </Button>
+
       <CostosAsociadosDialog
         open={openCostoDialog}
         onOpenChange={(v) => {
@@ -798,10 +798,7 @@ export default function CompraDetalle() {
           disponibleEnCaja: c.disponibleEnCaja,
         }))}
         cuentasBancarias={cuentasBancarias}
-        // Defaults (opcional): hereda método de pago elegido para la compra
         defaultMetodoPago={""}
-        defaultMotivo={"COSTO_ASOCIADO"}
-        defaultCostoVentaTipo={"FLETE"}
         onSubmit={({ mf, prorrateo }: CostosAsociadosDialogResult) => {
           setMfDraft(mf);
           setProrrateoMeta(prorrateo ?? null);

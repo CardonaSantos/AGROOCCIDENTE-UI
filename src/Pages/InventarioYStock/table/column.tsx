@@ -115,7 +115,6 @@ const cmpVencProximas = (aStr?: string | null, bStr?: string | null) => {
   return (a ?? 0) - (b ?? 0);
 };
 
-// 🔧 Columna Costo (se añade solo si NO es vendedor)
 const COSTO_COL: ColumnDef<ProductoInventarioResponse, any> =
   columnHelper.accessor("precioCosto", {
     id: "precioCosto",
@@ -136,20 +135,8 @@ const COSTO_COL: ColumnDef<ProductoInventarioResponse, any> =
     sortingFn: numericStringSortingFn,
   });
 
-const PRORRATEO_COL = columnHelper.accessor(
-  (row) => {
-    const latest = [...(row.stocks ?? [])]
-      .filter((s) => s.prorrateo?.ultimaFecha)
-      .sort(
-        (a, b) =>
-          dayjs(b.prorrateo!.ultimaFecha).valueOf() -
-          dayjs(a.prorrateo!.ultimaFecha).valueOf()
-      )[0];
-
-    // Ordena por el costo final (lo que muestra el UI)
-    return latest?.prorrateo?.precioCostoFinal ?? null;
-  },
-  {
+const PRORRATEO_COL: ColumnDef<ProductoInventarioResponse, null> =
+  columnHelper.accessor(() => null, {
     id: "prorrateo",
     header: () => (
       <div className="flex items-center gap-1 justify-end">
@@ -157,105 +144,181 @@ const PRORRATEO_COL = columnHelper.accessor(
       </div>
     ),
     cell: (info) => {
-      const stocks = info.row.original.stocks ?? [];
-      const prorrateados = [...stocks]
-        .filter((s) => s.prorrateo?.ultimaFecha)
+      const row = info.row.original;
+      const stocks = row.stocks ?? [];
+
+      const prorrateosRegists = stocks.flatMap((stock) => {
+        const arr = Array.isArray(stock?.prorrateo)
+          ? stock.prorrateo
+          : stock?.prorrateo
+          ? [stock.prorrateo]
+          : [];
+        return arr.map((p) => ({
+          ...p,
+          _stockId: stock.id,
+          _stockFechaIngreso: stock.fechaIngreso,
+        }));
+      });
+
+      const sorted = prorrateosRegists
+        .slice()
         .sort(
-          (a, b) =>
-            dayjs(b.prorrateo!.ultimaFecha).valueOf() -
-            dayjs(a.prorrateo!.ultimaFecha).valueOf()
+          (a, b) => dayjs(b.creadoEn).valueOf() - dayjs(a.creadoEn).valueOf()
         );
 
-      const latest = prorrateados[0];
-      const v = latest?.prorrateo?.precioCostoFinal;
-
-      if (!prorrateados.length) {
-        return (
-          <div className="text-right tabular-nums">
-            <span className="text-xs">—</span>
-          </div>
-        );
-      }
+      const first = sorted[0];
+      const triggerValue = first
+        ? first.costoUnitarioResultante ?? first.costoUnitarioProrrateado
+        : null;
 
       return (
-        <div className="text-right tabular-nums">
+        <div className="text-right">
           <Popover>
-            <PopoverTrigger asChild>
-              <button className="text-xs underline-offset-2 hover:underline text-right w-full">
-                {v != null ? fmt(v) : "—"}
-              </button>
+            <PopoverTrigger className="inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs hover:bg-accent">
+              <span>
+                {triggerValue != null ? fmt(Number(triggerValue)) : "—"}
+              </span>
+              <span className="rounded-full border px-1.5 text-[10px]">
+                {sorted.length}
+              </span>
             </PopoverTrigger>
 
-            <PopoverContent className="w-96">
-              <div className="space-y-2">
-                <h4 className="font-medium text-sm mb-1">
-                  Detalle de prorrateo
-                </h4>
-                <div className="max-h-60 overflow-y-auto divide-y">
-                  {prorrateados.map((s) => (
+            <PopoverContent className="w-80 sm:w-[32rem] p-2">
+              {sorted.length ? (
+                <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                  {sorted.map((pro) => (
                     <div
-                      key={s.id}
-                      className="py-1 text-[11px] flex flex-col space-y-0.5"
+                      key={`${pro._stockId}-${pro.id}`}
+                      className="rounded-md border p-2"
                     >
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">
-                          ID stock #{s.id}
-                        </span>
-                        <span>{s.fechaIngreso || "—"}</span>
+                      {/* Encabezado registro */}
+                      <div className="mb-1 flex items-center justify-between text-[11px]">
+                        <div className="font-medium">
+                          Registro #{pro.id}
+                          {pro._stockId ? (
+                            <span className="ml-2 text-muted-foreground">
+                              • Lote {pro._stockId}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {dayjs(pro.creadoEn).format("DD/MM/YYYY HH:mm")}
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-x-2">
-                        <div>
-                          <span className="text-muted-foreground">
-                            Por unidad:
-                          </span>{" "}
-                          {fmt(s.prorrateo?.porUnidad ?? 0)}
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Costo final:
-                          </span>{" "}
-                          {fmt(s.prorrateo?.precioCostoFinal ?? 0)}
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Asignado:
-                          </span>{" "}
-                          {fmt(s.prorrateo?.sumaAsignado ?? 0)}
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Fecha última:
-                          </span>{" "}
-                          {dayjs(s.prorrateo?.ultimaFecha).format(
-                            "DD/MM/YYYY HH:mm"
-                          )}
-                        </div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] leading-tight">
+                        <span className="text-muted-foreground">
+                          Factura u.
+                        </span>
+                        <span className="text-right">
+                          {fmt(Number(pro.costoFacturaUnitario ?? 0))}
+                        </span>
+
+                        <span className="text-muted-foreground">Gasto u.</span>
+                        <span className="text-right">
+                          {fmt(Number(pro.gastoUnitarioAplicado ?? 0))}
+                        </span>
+
+                        <span className="text-muted-foreground">
+                          Prorrateo unidad.
+                        </span>
+                        <span className="text-right">
+                          {fmt(Number(pro.costoUnitarioProrrateado ?? 0))}
+                        </span>
+
+                        <span className="text-muted-foreground">
+                          Resultante
+                        </span>
+                        <span className="text-right font-medium">
+                          {fmt(Number(pro.costoUnitarioResultante ?? 0))}
+                        </span>
+
+                        <span className="text-muted-foreground">
+                          Exist. previas
+                        </span>
+                        <span className="text-right">
+                          {Number(pro.existenciasPrevias ?? 0)}
+                        </span>
+
+                        <span className="text-muted-foreground">
+                          Exist. nuevas
+                        </span>
+                        <span className="text-right">
+                          {Number(pro.nuevasExistencias ?? 0)}
+                        </span>
+
+                        <span className="text-muted-foreground">
+                          Inv. previas
+                        </span>
+                        <span className="text-right">
+                          {fmt(Number(pro.inversionPrevias ?? 0))}
+                        </span>
+
+                        <span className="text-muted-foreground">
+                          Inv. línea
+                        </span>
+                        <span className="text-right">
+                          {fmt(Number(pro.inversionLinea ?? 0))}
+                        </span>
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Sin prorrateo
+                </div>
+              )}
             </PopoverContent>
           </Popover>
         </div>
       );
     },
     enableSorting: true,
-    sortingFn: "basic",
-  }
-);
+    // Ordena por timestamp del prorrateo más reciente (sin mutar arrays)
+    sortingFn: (rowA, rowB) => {
+      const pickLastTs = (row: any) => {
+        const stocks = row.original.stocks ?? [];
+        const regs = stocks.flatMap((s: any) => {
+          const arr = Array.isArray(s?.prorrateo)
+            ? s.prorrateo
+            : s?.prorrateo
+            ? [s.prorrateo]
+            : [];
+          return arr;
+        });
+        return regs.reduce(
+          (max: number, r: any) => Math.max(max, dayjs(r.creadoEn).valueOf()),
+          0
+        );
+      };
+      return pickLastTs(rowA) - pickLastTs(rowB);
+    },
+  });
 
-const VALOR_INVENTARIO: ColumnDef<ProductoInventarioResponse, any> =
+const VALOR_INVENTARIO: ColumnDef<ProductoInventarioResponse, number> =
   columnHelper.accessor(
     (row) => {
-      // Usa SOLO la sucursal visible en la tabla:
-      const items = row.stocks ?? [];
-      const total = items.reduce((acc, s) => {
-        const costo = s.prorrateo?.precioCostoFinal ?? 0;
-        return acc + Number(s.cantidad ?? 0) * Number(costo);
-      }, 0);
-      return total;
+      // 1) Valorización por lotes visibles (sucursal)
+      const lots = row.stocks ?? [];
+      const valorLotes = lots.reduce(
+        (acc, l) =>
+          acc + Number(l.cantidad ?? 0) * Number(l.costoUnitario ?? 0),
+        0
+      );
+
+      // 2) Fallback: si no hay lotes, usa stock agregado * costo de producto
+      if (valorLotes === 0) {
+        const qtyAgg =
+          (row.stocksBySucursal ?? []).reduce(
+            (acc, s) => acc + Number(s.cantidad ?? 0),
+            0
+          ) || 0;
+        const costoProd = Number(row.precioCosto ?? 0); // viene como string en tu normalizer
+        return qtyAgg * costoProd;
+      }
+
+      return valorLotes;
     },
     {
       id: "valorInventario",
@@ -265,7 +328,7 @@ const VALOR_INVENTARIO: ColumnDef<ProductoInventarioResponse, any> =
         </div>
       ),
       cell: (info) => {
-        const v = info.getValue<number>();
+        const v = info.getValue() ?? 0;
         return (
           <div className="text-right tabular-nums hidden sm:block">
             <span className="text-xs">{Number.isFinite(v) ? fmt(v) : "—"}</span>
@@ -273,7 +336,6 @@ const VALOR_INVENTARIO: ColumnDef<ProductoInventarioResponse, any> =
         );
       },
       enableSorting: true,
-      sortingFn: "basic",
     }
   );
 
