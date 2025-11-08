@@ -467,26 +467,28 @@ export default function CompraDetalle() {
   };
 
   // === Recepción parcial =====================================================
-  const handleRecepcionarParcial = useApiMutation<
-    void,
-    PayloadRecepcionParcial
-  >("post", "compras/create-recepcion-parcial", undefined, {
-    onSuccess: () => {
-      reFetchRegistro();
-      reFetchDRP();
-      setSelectedItems({
-        compraId: compraId,
-        fecha: dayjs().tz(TZGT).startOf("day").toISOString(),
-        observaciones: "",
-        usuarioId: userId,
-        sucursalId: sucursalId,
-        lineas: [],
-      });
-      setOpenRecibirParcial(false);
-      setIsRecibirParcial(false);
-    },
-    onError: () => {},
-  });
+  const handleRecepcionarParcial = useApiMutation<void, any>(
+    "post",
+    "compras/create-recepcion-parcial",
+    undefined,
+    {
+      onSuccess: () => {
+        reFetchRegistro();
+        reFetchDRP();
+        setSelectedItems({
+          compraId: compraId,
+          fecha: dayjs().tz(TZGT).startOf("day").toISOString(),
+          observaciones: "",
+          usuarioId: userId,
+          sucursalId: sucursalId,
+          lineas: [],
+        });
+        setOpenRecibirParcial(false);
+        setIsRecibirParcial(false);
+      },
+      onError: () => {},
+    }
+  );
 
   const verifyTransaction = () => {
     if (
@@ -500,21 +502,51 @@ export default function CompraDetalle() {
     }
     return true;
   };
+  const buildProrrateo = useCallback(() => {
+    if (!prorrateoMeta?.aplicar) return undefined;
+    return {
+      aplicar: true,
+      base: prorrateoMeta.base ?? "COSTO",
+      incluirAntiguos: prorrateoMeta.incluirAntiguos ?? false,
+    } as const;
+  }, [prorrateoMeta]);
 
   const handleCreateRecepcionParcial = async () => {
     try {
-      console.log("El log del payload: ", selectedItems);
+      console.log("El log del payload (selectedItems): ", selectedItems);
 
       const isValid = verifyTransaction();
       if (!isValid) {
         toast.warning("Verifique los datos a enviar");
         return;
       }
-      toast.promise(handleRecepcionarParcial.mutateAsync(selectedItems), {
-        success: "Compra parcial recepcionada",
-        error: (error) => getApiErrorMessageAxios(error),
-        loading: "Registrando entrada...",
-      });
+
+      const mf = buildMf();
+
+      const pr = buildProrrateo();
+      const debeProrratear = Boolean(pr) && mf?.motivo === "COSTO_ASOCIADO";
+
+      const payloadParcial = {
+        ...selectedItems,
+        ...(mf ? { mf } : {}),
+        ...(debeProrratear
+          ? {
+              prorrateo: pr,
+              aplicarProrrateo: true,
+            }
+          : {}),
+      };
+
+      console.log("Payload parcial ENVIADO: ", payloadParcial);
+
+      await toast.promise(
+        handleRecepcionarParcial.mutateAsync(payloadParcial),
+        {
+          success: "Compra parcial recepcionada",
+          error: (error) => getApiErrorMessageAxios(error),
+          loading: "Registrando entrada...",
+        }
+      );
     } catch (error) {
       console.log("El error: ", error);
     }

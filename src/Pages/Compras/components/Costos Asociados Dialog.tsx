@@ -284,7 +284,7 @@ export function CostosAsociadosDialog({
             <Separator className="my-2" />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
+                No aplicar
               </Button>
               <Button onClick={handleConfirm} disabled={!canSave}>
                 Registrar
