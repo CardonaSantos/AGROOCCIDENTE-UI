@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
 import { SucursalOption } from "./interfaces/FlujoCajaHsitoricoTypes";
 import { FlujoGlobalDiaUI, FlujoSucursalDiaUI } from "./interfaces/interface2";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 // === NUEVOS TYPES ===
 
@@ -130,9 +131,12 @@ export default function FlujoHistoricoPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Caja histórico</h1>
-      </div>
+      <PageHeader
+        title="Flujo de Caja Histórico"
+        subtitle="Ingresos y egresos de cajas históricos"
+        sticky={false}
+        fallbackBackTo="/"
+      />
 
       <FiltersBar
         from={range.from}

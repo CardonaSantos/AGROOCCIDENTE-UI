@@ -119,7 +119,6 @@ export default function HistorialVentasMain() {
   const sucursalId = useStore((s) => s.sucursalId) ?? 0;
   const userId = useStore((s) => s.userId) ?? 0;
   const rol = useStore((s) => s.userRol) ?? "";
-
   // ---------- Estado de filtros ----------
   const [texto, setTexto] = useState<string>("");
   const [fechaDesde, setFechaDesde] = useState<Date | null>(null);
@@ -309,7 +308,7 @@ export default function HistorialVentasMain() {
     );
   }
   return (
-    <div className="max-w-7xl ">
+    <div className="max-w-7xl container mx-auto">
       {/* Header */}
       <PageHeader
         title="Historial de ventas"

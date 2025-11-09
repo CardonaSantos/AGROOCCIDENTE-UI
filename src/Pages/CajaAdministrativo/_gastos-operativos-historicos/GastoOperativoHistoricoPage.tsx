@@ -16,6 +16,7 @@ import { ResumenGridGO } from "./_components/ResumenGridGO";
 import { ChartsGO } from "./_components/ChartsGO";
 import { DetalleTableGO } from "./_components/DetalleTableGO";
 import useGetSucursales from "@/hooks/getSucursales/use-sucursales";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 const TZGT = "America/Guatemala";
 dayjs.extend(utc);
@@ -77,9 +78,12 @@ export default function GastoOperativoHistoricoPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Gastos Operativos — Histórico</h1>
-      </div>
+      <PageHeader
+        title="Gastos Operativos Históricos"
+        subtitle="Vea sus gastos operativos"
+        sticky={false}
+        fallbackBackTo="/"
+      />
 
       <FiltersBarGO
         from={range.from}

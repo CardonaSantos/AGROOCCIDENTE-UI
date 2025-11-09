@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formateDateWithMinutes } from "@/Crm/Utils/FormateDate";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 // Tipos
 type Producto = {
@@ -369,12 +370,14 @@ export default function EntregasStock() {
   };
 
   return (
-    <div className="container mx-auto py-10">
+    <div className="container mx-auto ">
+      <PageHeader
+        title="Registros de entregas de stock"
+        subtitle="Historiales"
+        sticky={false}
+        fallbackBackTo="/"
+      />
       <Card className="shadow-xl">
-        <CardHeader>
-          <CardTitle>Registros de entrada de Stocks</CardTitle>
-          <CardDescription>Historial de entrada </CardDescription>
-        </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>

@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 const API_URL = import.meta.env.VITE_API_URL;
 
 type Sucursal = {
@@ -123,9 +124,15 @@ export default function Sucursales() {
 
   return (
     <div className="container mx-auto p-4">
+      <PageHeader
+        title="Sucursales"
+        subtitle="Administre sus sucursales"
+        sticky={false}
+        fallbackBackTo="/"
+      />
+
       {/* Renderiza un spinner o algún indicador de carga */}
       {loading && <div>Cargando sucursales...</div>}
-      <h1 className="text-2xl font-bold mb-4">Sucursales</h1>
 
       {/* Tabla para pantallas grandes */}
       <div className="hidden md:block">

@@ -20,6 +20,7 @@ import { CuentaFormDialog } from "./_components/CreateEditCuentaDialog";
 import { useApiMutation } from "@/hooks/genericoCall/genericoCallHook";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 export default function CuentasBancariasPage() {
   const [search, setSearch] = useState("");
@@ -188,8 +189,14 @@ export default function CuentasBancariasPage() {
   return (
     <div className="space-y-4">
       {/* header */}
+      <PageHeader
+        title="Cuenta Bancaria"
+        subtitle="Administre sus cuentas bancarias"
+        sticky={false}
+        fallbackBackTo="/"
+      />
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Cuentas Bancarias</h1>
         <Button
           onClick={() => {
             setEditing(null);

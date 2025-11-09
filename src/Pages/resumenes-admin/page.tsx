@@ -28,6 +28,7 @@ import ReactSelectComponent from "react-select";
 import { Label } from "@/components/ui/label";
 import { es } from "date-fns/locale";
 import { ResumenDiarioAdminResponse } from "./interfaces/resumen";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 type Option = { value: string; label: string };
 type Sucursal = { id: number; nombre: string };
@@ -136,6 +137,12 @@ export default function ResumenDiarioPage() {
         transition={{ duration: 0.25 }}
         className="space-y-2"
       >
+        <PageHeader
+          title="Resumenes diarios de cajas"
+          subtitle="Visualice sus registros de cajas por sucursales diarios"
+          sticky={false}
+          fallbackBackTo="/"
+        />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold">

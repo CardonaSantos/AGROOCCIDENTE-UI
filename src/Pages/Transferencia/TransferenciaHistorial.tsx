@@ -49,6 +49,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 const API_URL = import.meta.env.VITE_API_URL;
 
 interface Producto {
@@ -173,12 +174,14 @@ export default function TransferenciaProductosHistorial() {
   );
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto">
+      <PageHeader
+        title="Historiales de transferencias"
+        subtitle="Tranfiera sus stocks entre sus sucursales"
+        sticky={false}
+        fallbackBackTo="/"
+      />
       <Card className="shadow-xl">
-        <CardHeader>
-          <CardTitle>Transferencias de productos</CardTitle>
-          <CardDescription>Historial de transferencias</CardDescription>
-        </CardHeader>
         <CardContent>
           <div className="">
             {/* {transferencias.map((transferencia) => ( */}

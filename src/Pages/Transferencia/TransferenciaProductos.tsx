@@ -25,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 const API_URL = import.meta.env.VITE_API_URL;
 
 interface Producto {
@@ -222,59 +223,15 @@ export default function TransferenciaProductos() {
   };
 
   return (
-    <div className="container mx-auto p-4 max-w-2xl">
-      <h1 className="text-2xl font-bold mb-4 text-center">
-        Transferencia de Productos
-      </h1>
-      <div className="space-y-4">
-        {/* <Popover open={openProduct} onOpenChange={setOpenProduct}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              aria-expanded={openProduct}
-              className="w-full justify-between"
-            >
-              {selectedProduct
-                ? selectedProduct.nombre
-                : "Seleccionar producto..."}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-full p-0">
-            <Command className="rounded-lg border shadow-md md:min-w-[450px]">
-              <CommandInput placeholder="Buscar producto..." />
-              <CommandList>
-                <CommandEmpty>No se encontraron productos.</CommandEmpty>
-                <CommandGroup heading="Producto a transferir stock">
-                  {productos &&
-                    productos.map((producto) => (
-                      <CommandItem
-                        key={producto.id}
-                        value={producto.nombre}
-                        onSelect={() => {
-                          setSelectedProduct(producto);
-                          setOpenProduct(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedProduct?.id === producto.id
-                              ? "opacity-100"
-                              : "opacity-0"
-                          )}
-                        />
-                        <Box />
-                        {producto.nombre}
-                      </CommandItem>
-                    ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover> */}
+    <div className="container mx-auto px-4">
+      <PageHeader
+        title="Transferencia de Stocks"
+        subtitle="Tranfiera sus stocks entre sus sucursales"
+        sticky={false}
+        fallbackBackTo="/"
+      />
 
+      <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="producto-select">Seleccionar Producto</Label>
           <SelectComponent
@@ -295,9 +252,6 @@ export default function TransferenciaProductos() {
 
         <Card className="">
           <CardHeader className="  p-4 rounded-t-md">
-            <CardTitle className="text-lg font-bold text-center">
-              Cantidad disponible
-            </CardTitle>
             <CardDescription className="text-md text-center">
               La cantidad a transferir no debe ser mayor a la disponible
             </CardDescription>

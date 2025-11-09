@@ -102,9 +102,9 @@ export function WarrantyList({
     <>
       <TooltipProvider>
         <div className="container mx-auto py-8 px-4 md:px-6">
-          <h1 className="text-3xl font-bold mb-6 text-center">
+          <h2 className="text-lg font-semibold mb-6 text-center">
             Gestión de Garantías
-          </h1>
+          </h2>
 
           <div className="flex justify-between items-center mb-4 gap-4 flex-wrap">
             <div className="relative flex-grow max-w-sm">

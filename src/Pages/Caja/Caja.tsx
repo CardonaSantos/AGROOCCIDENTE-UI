@@ -23,6 +23,7 @@ import CajaForm from "./caja-form";
 import { useApiQuery } from "@/hooks/genericoCall/genericoCallHook";
 import { CuentasBancariasSelect } from "@/Types/CuentasBancarias/CuentasBancariasSelect";
 import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 function Caja() {
   const sucursalID: number = useStore((state) => state.sucursalId) ?? 0;
   const userID: number = useStore((state) => state.userId) ?? 0;
@@ -291,6 +292,13 @@ function Caja() {
   return (
     <div className="container mx-auto">
       <motion.div {...DesvanecerHaciaArriba} className="w-full">
+        <PageHeader
+          title="Caja y Movimientos Financieros"
+          subtitle="Registre turnos en caja y movimientos financieros"
+          sticky={false}
+          fallbackBackTo="/"
+        />
+
         <Tabs className="w-full" defaultValue="registrarcaja">
           <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 h-auto p-1">
             <TabsTrigger

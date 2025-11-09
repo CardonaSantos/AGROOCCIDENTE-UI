@@ -17,6 +17,7 @@ import { MovimientoCajaItem } from "../movimientos-cajas/Interfaces/registroCaja
 import { PagedResponseMovimientos } from "../movimientos-cajas/Interfaces/types";
 import { getRegistrosMovimientos } from "../movimientos-cajas/API/api";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 const DesvanecerHaciaArriba = {
   initial: { opacity: 0, y: 20 },
@@ -121,18 +122,20 @@ function CajaRegistros() {
       initial="hidden"
       animate="visible"
     >
+      <PageHeader
+        title="Registros de cajas y movimientos financieros"
+        subtitle="Registre turnos en caja y movimientos financieros"
+        sticky={false}
+        fallbackBackTo="/"
+      />
       {/* Header compacto */}
       <motion.div variants={itemVariants}>
         <Card>
           <CardContent className="pt-4 pb-3">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="space-y-1">
-                <h1 className="text-lg font-bold tracking-tight">
-                  Registros de Cajas
-                </h1>
                 <p className="text-muted-foreground text-sm">
-                  Gestiona y monitorea tus registros de cajas de todas las
-                  sucursales
+                  Monitorea tus registros de cajas y movimientos financieros
                 </p>
               </div>
               <div className="flex items-center gap-2">

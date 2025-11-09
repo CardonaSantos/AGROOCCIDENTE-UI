@@ -6,7 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Eye, ShoppingBasket } from "lucide-react";
+import { Eye, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /** Meta que inyecta TablePOS a la tabla (para acciones) */
@@ -233,7 +233,7 @@ export const columnsTablePos: ColumnDef<ProductoData, any>[] = [
   /** Acciones */
   columnHelper.display({
     id: "accion",
-    header: "Acción",
+    header: "Añadir",
     meta: { thClass: "w-[96px]" }, // botón no se comprime
 
     cell: (info) => {
@@ -253,7 +253,7 @@ export const columnsTablePos: ColumnDef<ProductoData, any>[] = [
             className="h-8 w-9 p-0 bg-violet-600 hover:bg-violet-700"
             title={disabled ? "Sin stock" : `Agregar (disp. ${remaining})`}
           >
-            <ShoppingBasket className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
       );

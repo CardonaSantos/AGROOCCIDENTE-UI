@@ -35,6 +35,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { getHistoricoGlobal } from "../api/api";
 import { es } from "date-fns/locale";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -180,6 +181,13 @@ function HistoricoGlobal() {
   // ==================== UI ====================
   return (
     <div className="space-y-4 p-4 max-w-7xl mx-auto">
+      <PageHeader
+        title="Flujos de efectivos"
+        subtitle="Vea sus flujos de efectivos historicos"
+        sticky={false}
+        fallbackBackTo="/"
+      />
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">

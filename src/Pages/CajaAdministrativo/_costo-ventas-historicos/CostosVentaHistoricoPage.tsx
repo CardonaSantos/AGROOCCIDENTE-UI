@@ -17,6 +17,7 @@ import { ChartsCV } from "./components/ChartsCV";
 import { DetalleTable } from "./components/DetalleTable";
 import useGetSucursales from "@/hooks/getSucursales/use-sucursales";
 import { CostoVentaResponseUI } from "./costoVentasHistoricosTypes";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 const TZGT = "America/Guatemala";
 dayjs.extend(utc);
@@ -79,9 +80,12 @@ export default function CostosVentaHistoricoPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Costos de Ventas — Histórico</h1>
-      </div>
+      <PageHeader
+        title="Costos de Ventas Histórico"
+        subtitle="Vea sus costos de ventas"
+        sticky={false}
+        fallbackBackTo="/"
+      />
 
       <FiltersBarCV
         from={range.from}

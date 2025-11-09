@@ -14,6 +14,7 @@ import { ResumenGridFE } from "./_components/ResumenGridFE";
 import { ChartsFE } from "./_components/ChartsFE";
 import { DetalleTableFE } from "./_components/DetalleTableFE";
 import useGetSucursales from "@/hooks/getSucursales/use-sucursales";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 const TZGT = "America/Guatemala";
 dayjs.extend(utc);
@@ -78,9 +79,12 @@ export default function FlujoEfectivoPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Flujo de Efectivo</h1>
-      </div>
+      <PageHeader
+        title="Flujo de Efectivo"
+        subtitle="Vea sus flujos de efectivos"
+        sticky={false}
+        fallbackBackTo="/"
+      />
 
       <FiltersBarFE
         from={range.from}

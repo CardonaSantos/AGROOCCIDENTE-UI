@@ -46,6 +46,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formattFecha } from "../Utils/Utils";
+import { MetaDonut } from "./Charts/MetaDonut";
 dayjs.extend(utc);
 dayjs.extend(localizedFormat);
 dayjs.locale("es");
@@ -154,19 +156,12 @@ function MyGoals() {
 
   const fetchGoals = async () => {
     try {
-      // setLoadingMetas(true);
-
       const response = await axios.get<MetasResponse>(
         `${API_URL}/metas/get-all-my-goals/${userId}`
       ); // Tipar la respuesta de Axios
       setMetas(response.data); // Guardar las metas en el estado
-      // setLoadingMetas(false);
-
-      // setLoading(false);
     } catch (err) {
       console.error("Error al obtener las metas:", err);
-      // setError("Ocurrió un error al cargar las metas");
-      // setLoading(false);
     }
   };
   useEffect(() => {
@@ -253,10 +248,11 @@ function MyGoals() {
 
     return (diaActual / totalDiasMes) * 100; // Calcula el porcentaje del mes transcurrido
   };
+  console.log("Las metas son: ", metas);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Mis Metas</h1>
+    <div className="container mx-auto">
+      <h1 className="text-2xl font-bold mb-2">Mis Metas</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {metas?.metasCobros
@@ -295,23 +291,10 @@ function MyGoals() {
                 <CardContent>
                   <div className="space-y-4">
                     {/* Progress Bar */}
-                    <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full transition-all duration-300",
-                          percentageComplete >= 100
-                            ? "bg-green-500"
-                            : percentageComplete >= 75
-                            ? "bg-blue-500"
-                            : percentageComplete >= 50
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
-                        )}
-                        style={{
-                          width: `${Math.min(percentageComplete, 100)}%`,
-                        }}
-                      />
-                    </div>
+                    <MetaDonut
+                      value={(meta.montoActual / meta.montoMeta) * 100}
+                      label="Avance" // o "" si no quieres etiqueta
+                    />
 
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -326,10 +309,11 @@ function MyGoals() {
 
                         <div className="flex items-center text-sm">
                           <Calendar className="mr-2 h-4 w-4 text-gray-500" />
-                          <span>
-                            {formatearFecha(meta.fechaInicio)} -{" "}
-                            {formatearFecha(meta.fechaFin)}
-                          </span>
+                          Período:{" "}
+                          <p className="text-xs">
+                            {formattFecha(meta.fechaInicio)} hasta{" "}
+                            {formattFecha(meta.fechaFin)}
+                          </p>
                         </div>
 
                         <div className="flex items-center text-sm">
@@ -384,20 +368,7 @@ function MyGoals() {
                     </div>
 
                     {/* Performance Indicators */}
-                    <div className="grid grid-cols-3 gap-2 pt-2">
-                      <div
-                        className={cn(
-                          "rounded-lg p-2 text-center",
-                          percentageComplete >= referencia
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        )}
-                      >
-                        <div className="text-xs font-medium">Progreso</div>
-                        <div className="text-sm font-bold">
-                          {percentageComplete.toFixed(2)}%
-                        </div>
-                      </div>
+                    <div className="grid grid-cols-2 gap-2 pt-2">
                       <div className="rounded-lg bg-secondary p-2 text-center">
                         <div className="text-xs font-medium">Referencia</div>
                         <div className="text-sm font-bold">
@@ -486,23 +457,11 @@ function MyGoals() {
                 <CardContent>
                   <div className="space-y-4">
                     {/* Progress Bar */}
-                    <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full transition-all duration-300",
-                          percentageComplete >= 100
-                            ? "bg-green-500"
-                            : percentageComplete >= 75
-                            ? "bg-blue-500"
-                            : percentageComplete >= 50
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
-                        )}
-                        style={{
-                          width: `${Math.min(percentageComplete, 100)}%`,
-                        }}
-                      />
-                    </div>
+
+                    <MetaDonut
+                      value={(meta.montoActual / meta.montoMeta) * 100}
+                      label="Avance" // o "" si no quieres etiqueta
+                    />
 
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -517,10 +476,11 @@ function MyGoals() {
 
                         <div className="flex items-center text-sm">
                           <Calendar className="mr-2 h-4 w-4 text-gray-500" />
-                          <span>
-                            {formatearFecha(meta.fechaInicio)} -{" "}
-                            {formatearFecha(meta.fechaFin)}
-                          </span>
+                          Período:{" "}
+                          <p className="text-xs">
+                            {formattFecha(meta.fechaInicio)} hasta{" "}
+                            {formattFecha(meta.fechaFin)}
+                          </p>
                         </div>
 
                         <div className="flex items-center text-sm">
@@ -583,20 +543,7 @@ function MyGoals() {
                     </div>
 
                     {/* Performance Indicators */}
-                    <div className="grid grid-cols-3 gap-2 pt-2">
-                      <div
-                        className={cn(
-                          "rounded-lg p-2 text-center",
-                          percentageComplete >= referencia
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        )}
-                      >
-                        <div className="text-xs font-medium">Progreso</div>
-                        <div className="text-sm font-bold">
-                          {percentageComplete.toFixed(2)}%
-                        </div>
-                      </div>
+                    <div className="grid grid-cols-2 gap-2 pt-2">
                       <div className="rounded-lg bg-secondary p-2 text-center">
                         <div className="text-xs font-medium">Referencia</div>
                         <div className="text-sm font-bold">

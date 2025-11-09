@@ -42,6 +42,7 @@ import {
   SelectedLine,
 } from "./newMap/requisicion.interfaces";
 import RequisicionesList from "./newMap/mapRequisiciones";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -132,6 +133,13 @@ export default function RequisitionBuilder() {
 
   return (
     <div className="w-full">
+      <PageHeader
+        title="Requisiciones"
+        subtitle="Haga requisiciones de sus productos sin stock"
+        sticky={false}
+        fallbackBackTo="/"
+      />
+
       <Tabs defaultValue="requisiciones" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="requisiciones">Requisiciones</TabsTrigger>

@@ -79,6 +79,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 dayjs.extend(advancedFormat);
 dayjs.extend(dayOfYear);
@@ -607,6 +608,12 @@ function Metas() {
 
   return (
     <div className="container mx-auto p-4">
+      <PageHeader
+        title="Metas"
+        subtitle="Administre sus metas de ventas y cobros"
+        sticky={false}
+        fallbackBackTo="/"
+      />
       <Tabs defaultValue="asignar" className="w-full">
         <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 ">
           <TabsTrigger value="asignar">
@@ -1813,7 +1820,7 @@ export function EditMetaTiendaDialog({
             />
           </div>
 
-          {userRol == "SUPER_ADMIN" ? (
+          {userRol == "ADMIN" ? (
             <div>
               <label className="text-sm font-medium">Monto Actual</label>
               <Input

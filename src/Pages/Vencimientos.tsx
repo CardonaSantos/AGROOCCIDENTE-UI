@@ -50,6 +50,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 const API_URL = import.meta.env.VITE_API_URL;
 type DialogState = {
@@ -131,8 +132,14 @@ function Vencimientos() {
   console.log("los venciminetos son: ", vencimientos);
 
   return (
-    <div className="container mx-auto py-10">
-      <h2 className="text-3xl font-bold mb-6">Vencimientos</h2>
+    <div className="container mx-auto ">
+      <PageHeader
+        title="Vencimientos"
+        subtitle="Vea sus vencimientos próximos"
+        sticky={false}
+        fallbackBackTo="/"
+      />
+
       <div className="rounded-md border">
         <Card className="shadow-xl">
           <CardHeader>

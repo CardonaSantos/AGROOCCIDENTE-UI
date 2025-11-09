@@ -598,7 +598,7 @@ export default function PuntoVenta() {
     setIsDisableButton(true);
 
     const saleData = {
-      userRol: userRol,
+      actorRol: userRol,
       usuarioId: userId,
       sucursalId,
       clienteId: selectedCustomerID?.id ?? null,

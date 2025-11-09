@@ -202,10 +202,10 @@ function CardGarantiaCreate({
               </div>
 
               <div className="space-y-2">
-                <h3 className="font-semibold text-base flex items-center gap-2">
+                <h2 className="font-semibold lg flex items-center gap-2">
                   <ReceiptTextIcon className="w-4 h-4 text-primary dark:text-white" />
                   Detalles de Venta
-                </h3>
+                </h2>
                 <p>
                   <span className="font-medium">ID Venta:</span>{" "}
                   {ventaSelected.id}

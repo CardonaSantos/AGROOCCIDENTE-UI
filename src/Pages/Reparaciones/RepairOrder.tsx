@@ -60,6 +60,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 
 dayjs.extend(utc);
 dayjs.extend(localizedFormat);
@@ -645,157 +646,165 @@ export default function RepairOrderForm() {
   }
 
   return (
-    <Tabs defaultValue="reparaciones" className="w-full max-w-6xl mx-auto">
-      <TabsList className="flex justify-center w-full border-b border-muted">
-        <TabsTrigger className="w-full " value="reparaciones">
-          Reparaciones
-        </TabsTrigger>
-        <TabsTrigger className="w-full" value="regist-reparacion">
-          Registrar Reparación
-        </TabsTrigger>
-      </TabsList>
+    <div className="">
+      <PageHeader
+        title="Reparaciones"
+        subtitle="Administre sus registros de reparaciones"
+        sticky={false}
+        fallbackBackTo="/"
+      />
+      <Tabs defaultValue="reparaciones" className="w-full max-w-6xl mx-auto">
+        <TabsList className="flex justify-center w-full border-b border-muted">
+          <TabsTrigger className="w-full " value="reparaciones">
+            Reparaciones
+          </TabsTrigger>
+          <TabsTrigger className="w-full" value="regist-reparacion">
+            Registrar Reparación
+          </TabsTrigger>
+        </TabsList>
 
-      <TabsContent
-        value="reparaciones"
-        className=" border-t border-muted rounded-b-md  shadow-md"
-      >
-        <Card className="shadow-xl">
-          <CardContent>
-            <h2 className="text-center font-bold text-xl p-2">
-              Vea sus registros de reparaciones
-            </h2>
-            <RepairRecordsTable reparaciones={reparaciones} />
-          </CardContent>
-        </Card>
-      </TabsContent>
+        <TabsContent
+          value="reparaciones"
+          className=" border-t border-muted rounded-b-md  shadow-md"
+        >
+          <Card className="shadow-xl">
+            <CardContent>
+              <h2 className="text-center font-bold text-xl p-2">
+                Vea sus registros de reparaciones
+              </h2>
+              <RepairRecordsTable reparaciones={reparaciones} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <TabsContent
-        value="regist-reparacion"
-        className=" border-t border-muted rounded-b-md shadow-md"
-      >
-        <Card className="max-w-6xl mx-auto shadow-xl">
-          <CardContent>
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-6 max-w-5xl mx-auto p-8"
-            >
-              <h1 className="text-2xl font-bold text-center mb-6">
-                Formulario de Orden de Reparación
-              </h1>
+        <TabsContent
+          value="regist-reparacion"
+          className=" border-t border-muted rounded-b-md shadow-md"
+        >
+          <Card className="max-w-6xl mx-auto shadow-xl">
+            <CardContent>
+              <form
+                onSubmit={handleSubmit}
+                className="space-y-6 max-w-5xl mx-auto p-8"
+              >
+                <h1 className="text-2xl font-bold text-center mb-6">
+                  Formulario de Orden de Reparación
+                </h1>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="productoId">Cliente</Label>
-                  <SelectComponent
-                    className="bg-gray-100 text-black"
-                    options={clientesFormatoSelect}
-                    isClearable
-                    value={selectedOptionCustomer}
-                    onChange={handleChangeCliente}
-                    placeholder="Selecciona un cliente"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="clienteId">Producto</Label>
-                  <SelectComponent
-                    className="bg-gray-100 text-black"
-                    options={productosFormato}
-                    isClearable
-                    value={selectedOptionProduct}
-                    onChange={handleChangeProduct}
-                    placeholder="Selecciona un producto"
-                    isDisabled={!!formData.productoExterno}
-                  />
-                </div>
-
-                {!formData.productoId && (
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="productoExterno">Producto Externo</Label>
-                    <Input
-                      id="productoExterno"
-                      name="productoExterno"
-                      value={formData.productoExterno}
+                    <Label htmlFor="productoId">Cliente</Label>
+                    <SelectComponent
+                      className="bg-gray-100 text-black"
+                      options={clientesFormatoSelect}
+                      isClearable
+                      value={selectedOptionCustomer}
+                      onChange={handleChangeCliente}
+                      placeholder="Selecciona un cliente"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="clienteId">Producto</Label>
+                    <SelectComponent
+                      className="bg-gray-100 text-black"
+                      options={productosFormato}
+                      isClearable
+                      value={selectedOptionProduct}
+                      onChange={handleChangeProduct}
+                      placeholder="Selecciona un producto"
+                      isDisabled={!!formData.productoExterno}
+                    />
+                  </div>
+
+                  {!formData.productoId && (
+                    <div className="space-y-2">
+                      <Label htmlFor="productoExterno">Producto Externo</Label>
+                      <Input
+                        id="productoExterno"
+                        name="productoExterno"
+                        value={formData.productoExterno}
+                        onChange={handleChange}
+                        placeholder="Ingrese el nombre del producto externo"
+                        className=""
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="problemas">Problemas Reportados</Label>
+                    <Textarea
+                      id="problemas"
+                      name="problemas"
+                      value={formData.problemas}
                       onChange={handleChange}
-                      placeholder="Ingrese el nombre del producto externo"
+                      placeholder="Describa los problemas reportados"
+                      required
                       className=""
                     />
                   </div>
-                )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="problemas">Problemas Reportados</Label>
-                  <Textarea
-                    id="problemas"
-                    name="problemas"
-                    value={formData.problemas}
-                    onChange={handleChange}
-                    placeholder="Describa los problemas reportados"
-                    required
-                    className=""
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="observaciones">
-                    Observaciones (Opcional)
-                  </Label>
-                  <Textarea
-                    id="observaciones"
-                    name="observaciones"
-                    value={formData.observaciones}
-                    onChange={handleChange}
-                    placeholder="Detalles adicionales, accesorios, etc."
-                    className="0"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-4">
-                <Button
-                  onClick={() => setOpenConfirm(true)}
-                  type="button"
-                  variant="default"
-                  className="w-full sm:w-auto"
-                >
-                  Enviar Formulario
-                </Button>
-              </div>
-
-              <Dialog open={openConfirm} onOpenChange={setOpenConfirm}>
-                <DialogContent className="max-w-lg mx-auto">
-                  <DialogHeader>
-                    <DialogTitle className="text-center">
-                      Confirmación de Registro
-                    </DialogTitle>
-                    <DialogDescription className="text-center text-sm text-muted-foreground">
-                      ¿Deseas iniciar este registro de reparación con los datos
-                      ingresados? Una vez confirmado, podrás actualizar los
-                      detalles más adelante si es necesario.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="flex gap-4 mt-4">
-                    <Button
-                      onClick={() => setOpenConfirm(false)}
-                      className="w-full"
-                      variant="destructive"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleSubmit}
-                      className="w-full"
-                      variant="default"
-                    >
-                      Sí, continuar
-                    </Button>
+                  <div className="space-y-2">
+                    <Label htmlFor="observaciones">
+                      Observaciones (Opcional)
+                    </Label>
+                    <Textarea
+                      id="observaciones"
+                      name="observaciones"
+                      value={formData.observaciones}
+                      onChange={handleChange}
+                      placeholder="Detalles adicionales, accesorios, etc."
+                      className="0"
+                    />
                   </div>
-                </DialogContent>
-              </Dialog>
-            </form>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+                </div>
+
+                <div className="flex justify-end gap-4">
+                  <Button
+                    onClick={() => setOpenConfirm(true)}
+                    type="button"
+                    variant="default"
+                    className="w-full sm:w-auto"
+                  >
+                    Enviar Formulario
+                  </Button>
+                </div>
+
+                <Dialog open={openConfirm} onOpenChange={setOpenConfirm}>
+                  <DialogContent className="max-w-lg mx-auto">
+                    <DialogHeader>
+                      <DialogTitle className="text-center">
+                        Confirmación de Registro
+                      </DialogTitle>
+                      <DialogDescription className="text-center text-sm text-muted-foreground">
+                        ¿Deseas iniciar este registro de reparación con los
+                        datos ingresados? Una vez confirmado, podrás actualizar
+                        los detalles más adelante si es necesario.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-4 mt-4">
+                      <Button
+                        onClick={() => setOpenConfirm(false)}
+                        className="w-full"
+                        variant="destructive"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        onClick={handleSubmit}
+                        className="w-full"
+                        variant="default"
+                      >
+                        Sí, continuar
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }

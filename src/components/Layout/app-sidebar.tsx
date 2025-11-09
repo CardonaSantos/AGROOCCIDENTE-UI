@@ -90,7 +90,8 @@ const menuVendedor = [
   { icon: Users, label: "Clientes", href: "/clientes-manage" },
   { icon: CreditCard, label: "Créditos", href: "/creditos" },
 
-  { icon: Wallet, label: "Caja", href: "/registro-caja" },
+  // === Metas ===
+  { icon: Goal, label: "Mis Metas", href: "/mis-metas" },
 ];
 
 const menuItemsAdmin = [

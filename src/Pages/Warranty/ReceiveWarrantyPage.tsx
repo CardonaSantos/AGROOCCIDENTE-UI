@@ -26,6 +26,7 @@ import { WarrantyList } from "./garantiasMap/warranty-list";
 import { GarantiaDto } from "./interfacesTable";
 import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
 import { useApiMutation } from "@/hooks/genericoCall/genericoCallHook";
+import { PageHeader } from "@/utils/components/PageHeaderPos";
 // Sub-componentes para la sección de detalles
 type OptionType = { value: number; label: string };
 export default function ReceiveWarrantyPage() {
@@ -209,6 +210,13 @@ export default function ReceiveWarrantyPage() {
 
   return (
     <motion.div {...DesvanecerHaciaArriba} className="w-full">
+      <PageHeader
+        title="Garantías"
+        subtitle="Cree, visualice y edite sus garantías"
+        sticky={false}
+        fallbackBackTo="/"
+      />
+
       <Tabs defaultValue="regist" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="regist" className="w-full">

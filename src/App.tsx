@@ -13,7 +13,6 @@ import Login from "./Pages/Auth/Login";
 import RegisterView from "./Pages/Auth/Register";
 import { ProtectedRoute } from "./components/Auth/ProtectedRoute";
 import NotFoundPage from "./Pages/NotFount/NotFoundPage";
-import AgregarProveedor from "./Pages/Provider/AgregarProveedor";
 import CreateSucursal from "./Pages/Sucursal/CreateSucursal";
 import Sucursales from "./Pages/Sucursal/Sucursales";
 import TransferenciaProductos from "./Pages/Transferencia/TransferenciaProductos";
@@ -85,6 +84,7 @@ import CreditoMainPageManage from "./Pages/creditos/credito-main-page";
 import CreditoDetails from "./Pages/creditos/components/credito-details";
 import ProductEditorContainer from "./Pages/newCreateProduct/ProductEditorContainer";
 import TiposPresentaciones from "./Pages/tipos-presentaciones/tipos-presentaciones-main-page";
+import ProveedoresPage from "./Pages/Provider/AgregarProveedor";
 
 function App() {
   const { checkAuth } = useAuthStore();
@@ -178,7 +178,7 @@ function App() {
               path="/agregar-proveedor"
               element={
                 <ProtectRouteAdmin>
-                  <AgregarProveedor />
+                  <ProveedoresPage />
                 </ProtectRouteAdmin>
               }
             />
@@ -625,9 +625,9 @@ function App() {
             <Route
               path="/mis-metas"
               element={
-                <ProtectRouteAdmin>
+                <ProtectedRoute>
                   <MyGoals />
-                </ProtectRouteAdmin>
+                </ProtectedRoute>
               }
             />
 
