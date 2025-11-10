@@ -59,6 +59,7 @@ import {
   CategoriaWithCount,
   CATS_LIST_QK,
 } from "../Categorias/CategoriasMainPage";
+import { validateDpiNitEither } from "../Customers/helpers/regex.regex";
 
 // =================== Dayjs ===================
 dayjs.extend(localizedFormat);
@@ -130,6 +131,7 @@ type Client = {
   apellidos: string;
   telefono: string;
   dpi: string;
+  nit: string;
   iPInternet: string;
   direccion: string;
   actualizadoEn: Date;
@@ -153,6 +155,7 @@ interface Customer {
   nombre: string;
   telefono?: string;
   dpi?: string;
+  nit?: string;
 }
 
 // =================== Mappers ===================
@@ -201,6 +204,8 @@ export default function PuntoVenta() {
   const [nombre, setNombre] = useState<string>("");
   const [apellidos, setApellidos] = useState<string>("");
   const [dpi, setDpi] = useState<string>("");
+  const [nit, setNit] = useState<string>("");
+
   const [imei, setImei] = useState<string>("");
   const [telefono, setTelefono] = useState<string>("");
   const [direccion, setDireccion] = useState<string>("");
@@ -534,9 +539,9 @@ export default function PuntoVenta() {
         value: c.id,
         label: `${c.nombre} ${c?.apellidos ?? ""} ${
           c.telefono ? `(${c.telefono})` : ""
-        } ${c.dpi ? `DPI: ${c.dpi}` : ""} ${
-          c.iPInternet ? `IP: ${c.iPInternet}` : ""
-        }`,
+        } ${c.dpi ? `DPI: ${c.dpi}` : "DPI: N/A"} ${
+          c.nit ? `NIT: ${c.nit}` : "NIT: N/A"
+        } ${c.iPInternet ? `IP: ${c.iPInternet}` : ""}`,
       })),
     [customersResponse]
   );
@@ -597,6 +602,25 @@ export default function PuntoVenta() {
   const handleCompleteSale = async () => {
     setIsDisableButton(true);
 
+    if (!selectedCustomerID?.id) {
+      const cliente = {
+        nombre: nombre?.trim(),
+        apellidos: apellidos?.trim(),
+        direccion: direccion?.trim(),
+        dpi: dpi?.trim(),
+        nit: nit?.trim(),
+      };
+
+      if (cliente.nombre) {
+        const res = validateDpiNitEither(cliente.dpi, cliente.nit);
+        if (!res.ok) {
+          toast.warning(res.msg || "DPI o NIT no válidos");
+          setIsDisableButton(false);
+          return;
+        }
+      }
+    }
+
     const saleData = {
       actorRol: userRol,
       usuarioId: userId,
@@ -606,8 +630,8 @@ export default function PuntoVenta() {
         cantidad: item.quantity,
         selectedPriceId: item.selectedPriceId,
         ...(item.source === "presentacion"
-          ? { presentacionId: item.id } // 👈 cuando viene de presentaciones
-          : { productoId: item.id }), // 👈 cuando es producto base
+          ? { presentacionId: item.id }
+          : { productoId: item.id }),
       })),
       metodoPago: paymentMethod || "CONTADO",
       tipoComprobante: tipoComprobante,
@@ -619,6 +643,7 @@ export default function PuntoVenta() {
       telefono: telefono.trim(),
       direccion: direccion.trim(),
       dpi: dpi.trim(),
+      nit: nit.trim(),
       observaciones: observaciones.trim(),
       imei: imei.trim(),
     };
@@ -663,7 +688,7 @@ export default function PuntoVenta() {
       setDireccion("");
       setDpi("");
       setObservaciones("");
-
+      setNit("");
       // Refrescar productos
       refetchProducts();
 
@@ -756,7 +781,6 @@ export default function PuntoVenta() {
             setQueryOptions={setQueryOptions}
             data={productos}
             //NUEVO
-            // 👇 NUEVO: props de paginación
             page={meta.page}
             limit={meta.limit}
             totalPages={meta.totalPages}
@@ -771,6 +795,9 @@ export default function PuntoVenta() {
         <div className="min-w-0">
           {/* Carrito & Checkout (se mantiene) */}
           <CartCheckout
+            nit={nit}
+            setNit={setNit}
+            //
             userRol={userRol}
             isCreditoVenta={isCreditoVenta}
             apellidos={apellidos}

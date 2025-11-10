@@ -105,12 +105,13 @@ interface CartCheckoutProps {
 
   setApellidos: React.Dispatch<React.SetStateAction<string>>;
   apellidos: string;
-
   //NUEVOS
   onUpdateQuantity: (uid: string, newQuantity: number) => void; // 👈
   onUpdatePrice: (uid: string, newPrice: number, newRole: RolPrecio) => void; // 👈
   onRemoveFromCart: (uid: string) => void;
   userRol: string;
+  setNit: React.Dispatch<React.SetStateAction<string>>;
+  nit: string;
 }
 
 export default function CartCheckout({
@@ -145,6 +146,8 @@ export default function CartCheckout({
   referenciaPago,
   setReferenciaPago,
   userRol,
+  nit,
+  setNit,
 }: CartCheckoutProps) {
   const calculateTotal = (): number => {
     return cart.reduce(
@@ -534,19 +537,6 @@ export default function CartCheckout({
                           className="h-8 text-xs"
                         />
                       </div>
-
-                      <div>
-                        <Label htmlFor="telefono" className="text-xs">
-                          Teléfono
-                        </Label>
-                        <Input
-                          id="telefono"
-                          value={telefono}
-                          onChange={(e) => setTelefono(e.target.value)}
-                          placeholder="+502 5060 7080"
-                          className="h-8 text-xs"
-                        />
-                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -561,18 +551,31 @@ export default function CartCheckout({
                           className="h-8 text-xs"
                         />
                       </div>
+
                       <div>
-                        <Label htmlFor="direccion" className="text-xs">
-                          Dirección
+                        <Label htmlFor="nit" className="text-xs">
+                          NIT
                         </Label>
                         <Input
-                          id="direccion"
-                          value={direccion}
-                          onChange={(e) => setDireccion(e.target.value)}
-                          placeholder="Dirección (opcional)"
+                          id="nit"
+                          value={nit}
+                          onChange={(e) => setNit(e.target.value)}
+                          placeholder="Número de NIT (opcional)"
                           className="h-8 text-xs"
                         />
                       </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="telefono" className="text-xs">
+                        Teléfono
+                      </Label>
+                      <Input
+                        id="telefono"
+                        value={telefono}
+                        onChange={(e) => setTelefono(e.target.value)}
+                        placeholder="+502 5060 7080"
+                        className="h-8 text-xs"
+                      />
                     </div>
                     <div>
                       <Label htmlFor="observaciones" className="text-xs">
