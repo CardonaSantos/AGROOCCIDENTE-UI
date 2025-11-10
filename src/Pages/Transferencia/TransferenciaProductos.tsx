@@ -23,7 +23,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { PageHeader } from "@/utils/components/PageHeaderPos";
 const API_URL = import.meta.env.VITE_API_URL;
