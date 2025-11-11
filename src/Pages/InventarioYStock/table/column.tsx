@@ -495,21 +495,31 @@ export const makeColumnsInventario = (
         const items = [...(info.row.original.stocks ?? [])].sort((x, y) =>
           cmpDescNullsLast(parseDMY(x.fechaIngreso), parseDMY(y.fechaIngreso))
         );
+        const isProductStock = info.row.original.type === "PRODUCTO";
+
         const show = items.slice(0, 2);
         const extra = items.length - show.length;
-
         return (
           <div className="max-w-[220px]">
-            {show.map((s, i) => (
-              <div
-                key={s.id ?? i}
-                className="flex items-center gap-1 text-[11px]"
-              >
-                <span className="tabular-nums">{s.cantidad}</span>
-                <span className="opacity-60">•</span>
-                <span className="truncate">{s.fechaIngreso || "N/A"}</span>
-              </div>
-            ))}
+            {show.map((s, i) => {
+              return (
+                <div
+                  key={s.id ?? i}
+                  className="flex items-center gap-1 text-[11px]"
+                >
+                  <Link
+                    to={`/stock-edit/${s.id}?kind=${
+                      isProductStock ? "PRODUCTO" : "PRESENTACION"
+                    }`}
+                    className="hover:cursor-pointer hover:text-blue-600"
+                  >
+                    <span className="tabular-nums">{s.cantidad}</span>
+                    <span className="opacity-60">•</span>
+                    <span className="truncate">{s.fechaIngreso || "N/A"}</span>
+                  </Link>
+                </div>
+              );
+            })}
             {extra > 0 ? (
               <Popover>
                 <PopoverTrigger className="text-[11px] text-primary hover:underline dark:text-white">
@@ -749,6 +759,7 @@ export const makeColumnsInventario = (
                 <Dialog>
                   <DialogTrigger asChild>
                     <DropdownMenuItem
+                      disabled
                       className="text-red-600 focus:text-red-700 flex items-center gap-2"
                       onSelect={(e) => e.preventDefault()}
                     >
