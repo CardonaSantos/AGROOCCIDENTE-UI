@@ -24,6 +24,8 @@ import { PageHeader } from "@/utils/components/PageHeaderPos";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { buildFormData, debugFormData } from "./builder";
+import { QueryKey, useQueryClient } from "@tanstack/react-query";
+import { validateBeforeSubmit } from "./helpers/validators";
 
 // Estado inicial
 const initialProduct: ProductCreateDTO = {
@@ -43,46 +45,93 @@ const initialProduct: ProductCreateDTO = {
   presentations: [],
 };
 
+// -----------------------------
+// Query Keys centralizados
+// -----------------------------
+export const QK = {
+  CATEGORIES: ["categorias"] as const,
+  PACKAGING_TYPES: ["empaques"] as const,
+  PRODUCTS_LIST: ["products"] as const,
+  PRESENTATIONS_LIST: ["presentations"] as const,
+  PRODUCT_DETAIL: (id: number) => ["product", id] as const,
+  PRESENTATION_DETAIL: (id: number) => ["presentation", id] as const,
+};
+
+// Opciones comunes
+const QUERY_OPTIONS = {
+  staleTime: 0,
+  refetchOnWindowFocus: true as const,
+  refetchOnReconnect: true as const,
+};
+
 export default function ProductEditorContainer({
   mode = "product",
 }: {
   mode?: "product" | "presentation";
 }) {
-  const userId = useStore((state) => state.userId) ?? 0;
+  const userId = useStore((s) => s.userId) ?? 0;
+  const queryClient = useQueryClient();
+
+  // Params / estado edición
   const params = useParams<{ productId?: string; presentationId?: string }>();
   const idParam = mode === "product" ? params.productId : params.presentationId;
   const id = idParam ? Number(idParam) : undefined;
   const isEditing = Boolean(id);
 
-  // 1) Carga datos maestros
+  // Data
   const { data: catsData } = useApiQuery<Categoria[]>(
-    ["categorias"],
-    "categoria"
+    QK.CATEGORIES,
+    "categoria",
+    undefined,
+    { ...QUERY_OPTIONS }
   );
+
   const { data: packData } = useApiQuery<PaginatedResponse<TipoPresentacion>>(
-    ["empaques"],
-    "tipo-presentacion"
+    QK.PACKAGING_TYPES,
+    "tipo-presentacion",
+    undefined,
+    {
+      ...QUERY_OPTIONS,
+    }
   );
 
   const categories = catsData ?? [];
   const packagingTypes = packData?.data ?? [];
-  //  Carga detalle condicional
-  const detailKey = mode === "product" ? ["product", id] : ["presentation", id];
+
+  // Detalle condicional
+  const detailKey: QueryKey | undefined = isEditing
+    ? mode === "product"
+      ? QK.PRODUCT_DETAIL(id!)
+      : QK.PRESENTATION_DETAIL(id!)
+    : undefined;
+
   const detailUrl =
-    mode === "product" ? `products/${id}` : `presentations/${id}`;
+    mode === "product" ? `products/${id ?? ""}` : `presentations/${id ?? ""}`;
+
   const { data: detailData } = useApiQuery<
     ProductDetailDTO | PresentationDetailDTO
-  >(detailKey, detailUrl, undefined, { enabled: isEditing });
+  >(detailKey ?? ["_detail_disabled"], detailUrl, undefined, {
+    ...QUERY_OPTIONS,
+    enabled: isEditing && !!id,
+  });
 
-  //  Estado del formulario
+  // Estado de formulario
   const [formState, setFormState] = useState<ProductCreateDTO>(initialProduct);
+  const [originalDetail, setOriginalDetail] = useState<ProductDetailDTO | null>(
+    null
+  );
+
+  // Un solo efecto para mapear y guardar original
   useEffect(() => {
     if (!detailData) return;
-    const mapped =
-      mode === "product"
-        ? mapProductDto(detailData as ProductDetailDTO)
-        : mapPresentationDto(detailData as PresentationDetailDTO);
-    setFormState(mapped);
+    if (mode === "product") {
+      const mapped = mapProductDto(detailData as ProductDetailDTO);
+      setFormState(mapped);
+      setOriginalDetail(detailData as ProductDetailDTO);
+    } else {
+      const mapped = mapPresentationDto(detailData as PresentationDetailDTO);
+      setFormState(mapped);
+    }
   }, [detailData, mode]);
 
   // Update genérico
@@ -98,23 +147,32 @@ export default function ProductEditorContainer({
     isEditing ? `${submitBase}/${id}` : submitBase
   );
 
-  const [originalDetail, setOriginalDetail] = useState<ProductDetailDTO | null>(
-    null
-  );
-  useEffect(() => {
-    if (!detailData) return;
-    setFormState(mapProductDto(detailData as ProductDetailDTO));
-    setOriginalDetail(detailData as ProductDetailDTO);
-  }, [detailData]);
+  // Helper de invalidación centralizada
+  const invalidate = async (keys: QueryKey[]) => {
+    for (const k of keys) {
+      await queryClient.invalidateQueries({ queryKey: k });
+    }
+  };
 
   const handleSubmit = async () => {
+    const v = validateBeforeSubmit(formState, mode);
+    if (!v.ok) {
+      v.errors.forEach((msg) => toast.error(msg));
+      return;
+    }
+
     const formData = buildFormData(formState, userId, {
       isEditing,
       original: originalDetail ?? undefined,
     });
 
     try {
-      debugFormData(formData, isEditing ? "PATCH /products" : "POST /products");
+      debugFormData(
+        formData,
+        isEditing
+          ? `${mode === "product" ? "PATCH /products" : "PATCH /presentations"}`
+          : `${mode === "product" ? "POST /products" : "POST /presentations"}`
+      );
 
       await toast.promise(mutation.mutateAsync(formData), {
         loading: isEditing
@@ -127,8 +185,22 @@ export default function ProductEditorContainer({
           : `${mode === "product" ? "Producto" : "Presentación"} creado`,
         error: (err) => getErrorMessage(err),
       });
-      console.log("el form data es para actualizar o crear es: ", formData);
-    } catch {}
+
+      // Invalidaciones post-mutate
+      const keysToInvalidate: QueryKey[] = [QK.CATEGORIES, QK.PACKAGING_TYPES];
+
+      if (mode === "product") {
+        keysToInvalidate.push(QK.PRODUCTS_LIST);
+        if (isEditing && id) keysToInvalidate.push(QK.PRODUCT_DETAIL(id));
+      } else {
+        keysToInvalidate.push(QK.PRESENTATIONS_LIST);
+        if (isEditing && id) keysToInvalidate.push(QK.PRESENTATION_DETAIL(id));
+      }
+
+      await invalidate(keysToInvalidate);
+    } catch {
+      // manejado por toast.promise
+    }
   };
 
   return (

@@ -359,20 +359,6 @@ export default function DashboardPageMain() {
     }
   };
 
-  const getSolicitudesTransferencia = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/solicitud-transferencia-producto`
-      );
-      if (response.status === 200) {
-        // manejar si es necesario
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al conseguir solicitudes de transferencia");
-    }
-  };
-
   const getWarranties = async () => {
     try {
       const response = await axios.get(
@@ -408,7 +394,6 @@ export default function DashboardPageMain() {
 
   useEffect(() => {
     getSolicitudes();
-    getSolicitudesTransferencia();
     getWarranties();
     getReparacionesRegis();
   }, []);
@@ -423,8 +408,6 @@ export default function DashboardPageMain() {
 
   useSocketEvent("recibirSolicitudTransferencia", (s: any) => {
     console.log("La solicitud de transferencia es: ", s);
-
-    // if (s) invalidatePriceReqDebounced();
     queryClient.invalidateQueries({
       queryKey: TRANSFER_REQUESTS_QK(sucursalId),
     });
@@ -509,8 +492,10 @@ export default function DashboardPageMain() {
         userID,
       });
       toast.success("Tranferencia completada");
-      getSolicitudesTransferencia();
-      queryClient.invalidateQueries({ queryKey: TRANSFER_REQUESTS_QK() });
+      // queryClient.invalidateQueries({ queryKey: TRANSFER_REQUESTS_QK() });
+      queryClient.invalidateQueries({
+        queryKey: TRANSFER_REQUESTS_QK(sucursalId),
+      });
     } catch (error) {
       console.error("Error al aceptar la transferencia:", error);
       toast.error("Error");
@@ -526,8 +511,9 @@ export default function DashboardPageMain() {
       );
       if (response.status === 200) {
         toast.warning("Solicitud de transferencia rechazada");
-        getSolicitudesTransferencia();
-        queryClient.invalidateQueries({ queryKey: TRANSFER_REQUESTS_QK() });
+        queryClient.invalidateQueries({
+          queryKey: TRANSFER_REQUESTS_QK(sucursalId),
+        });
       }
     } catch (error) {
       console.error("Error al aceptar la transferencia:", error);
@@ -652,7 +638,6 @@ export default function DashboardPageMain() {
 
   // Hook de CXPs (queda al final para mantener jerarquía de dependencias)
   const { items, isLoading } = useCxpCreditosActivos();
-
   return (
     <motion.div {...DesvanecerHaciaArriba} className="container mx-auto">
       <h1 className="text-2xl font-semibold">Dashboard Administrador</h1>
@@ -675,14 +660,10 @@ export default function DashboardPageMain() {
       <CxpCreditCardList
         credits={items}
         loading={isLoading}
-        onRegistrarPago={() => {
-          // TODO: abre modal/route para registrar pago a proveedor
-          // e.g. navigate(`/cxp/registrar-pago/${docId}`)
-        }}
+        onRegistrarPago={() => {}}
       />
 
       {/* DIALOG DE PAGO PARA RECEPCION DE CRÉDITO */}
-      {/* 1) Diálogo de método de pago (siempre previo) */}
       <PurchasePaymentFormDialog
         open={openPaymentDialog}
         onOpenChange={setOpenPaymentDialog}
@@ -717,9 +698,8 @@ export default function DashboardPageMain() {
         // proveedor no aplica en este flujo
         requireProveedor={false}
         showProveedor={false}
-        // AHORA FINALIZA AQUÍ:
         onContinue={handleAcceptCredit}
-        continueLabel="Recepcionar y crear crédito" // <- nuevo copy
+        continueLabel="Recepcionar y crear crédito"
       />
 
       {/* ÚNICO diálogo global */}

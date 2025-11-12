@@ -746,12 +746,12 @@ export const makeColumnsInventario = (
                   className="flex items-center gap-2"
                   onClick={() => {
                     navigator.clipboard
-                      ?.writeText(String(info.row.original.id))
+                      ?.writeText(String(info.row.original.codigoProducto))
                       .catch(() => {});
                   }}
                 >
                   <Copy className="w-4 h-4" />
-                  Copiar ID
+                  Copiar Código
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator />
