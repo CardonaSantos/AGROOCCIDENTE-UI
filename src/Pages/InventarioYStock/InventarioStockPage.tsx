@@ -134,6 +134,8 @@ function InventarioStockPage() {
   }, [JSON.stringify(searchQuery)]);
   console.log("los productos inventario son: ", productsInventario);
 
+  console.log("los tiposPresentacion: ", tiposPresentacion);
+
   return (
     <motion.div {...DesvanecerHaciaArriba} className="w-full px-4">
       <Inventario

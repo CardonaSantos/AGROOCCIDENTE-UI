@@ -97,7 +97,6 @@ export default function DashboardPageMain() {
   //  Query Client
   const queryClient = useQueryClient();
 
-  // Estado local (UI / datos)
   // Métricas / listas dashboard
   const [ventasMes, setVentasMes] = useState(0);
   const [ventasSemana, setVentasSemana] = useState(0);
