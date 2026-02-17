@@ -29,6 +29,7 @@ import SelectM from "react-select";
 import { TipoComprobante } from "./interfaces";
 import { MetodoPagoMainPOS } from "./interfaces/methodPayment";
 import { useMemo } from "react";
+import { format } from "date-fns";
 
 enum RolPrecio {
   PUBLICO = "PUBLICO",
@@ -112,6 +113,9 @@ interface CartCheckoutProps {
   userRol: string;
   setNit: React.Dispatch<React.SetStateAction<string>>;
   nit: string;
+
+  setDate: React.Dispatch<React.SetStateAction<Date | undefined>>;
+  date: Date | undefined;
 }
 
 export default function CartCheckout({
@@ -148,11 +152,13 @@ export default function CartCheckout({
   userRol,
   nit,
   setNit,
+  date,
+  setDate,
 }: CartCheckoutProps) {
   const calculateTotal = (): number => {
     return cart.reduce(
       (total, item) => total + item.selectedPrice * item.quantity,
-      0
+      0,
     );
   };
 
@@ -221,7 +227,7 @@ export default function CartCheckout({
               (p) =>
                 p.rol !== RolPrecio.DISTRIBUIDOR &&
                 p.rol !== RolPrecio.PROMOCION &&
-                p.precio > 0
+                p.precio > 0,
             )
           : item.precios.filter((p) => p.precio > 0);
 
@@ -331,7 +337,7 @@ export default function CartCheckout({
                           value={item.selectedPriceId.toString()}
                           onValueChange={(newPriceId) => {
                             const p = item.precios.find(
-                              (x) => x.id === Number(newPriceId)
+                              (x) => x.id === Number(newPriceId),
                             );
                             if (p) onUpdatePrice(item.uid, p.precio, p.rol);
                           }}
@@ -411,83 +417,133 @@ export default function CartCheckout({
       </Card>
 
       {/* Método de Pago & Cliente */}
-      <Card className="border-0 ">
+      <Card className="border-0 shadow-none">
         <div className="p-4">
-          {/* Usando flexbox para dividir en dos columnas */}
-          <div className="flex flex-row gap-4">
-            {/* Columna izquierda: Método de Pago */}
-            <div className="flex-1">
-              <Label className="text-xs font-medium block mb-1.5">
-                Método de Pago
-              </Label>
-              <Select
-                disabled={!!referenciaPago}
-                value={paymentMethod}
-                onValueChange={(e: MetodoPagoMainPOS) => setPaymentMethod(e)}
-              >
-                <SelectTrigger className="w-full h-8 min-h-0 py-1 px-2 text-xs">
-                  <SelectValue placeholder="Método de Pago" />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectItem
-                    className="text-xs"
-                    value={MetodoPagoMainPOS.EFECTIVO}
+          <div className="flex flex-col md:flex-row gap-5">
+            {/* --- COLUMNA IZQUIERDA: Datos de la Venta (Fecha y Pago) --- */}
+            <div className="flex-1 flex flex-col gap-4">
+              {/* 1. Selector de Fecha */}
+              <div>
+                <Label className="text-xs font-medium block mb-1.5">
+                  Fecha de Emisión
+                </Label>
+
+                <Input
+                  type="datetime-local"
+                  className="w-full h-8 text-xs px-2 block bg-background"
+                  value={date ? format(date, "yyyy-MM-dd'T'HH:mm") : ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDate(val ? new Date(val) : undefined);
+                  }}
+                />
+              </div>
+
+              {/* 2. Método de Pago */}
+              <div>
+                <Label className="text-xs font-medium block mb-1.5">
+                  Método de Pago
+                </Label>
+                <Select
+                  disabled={!!referenciaPago}
+                  value={paymentMethod}
+                  onValueChange={(e: MetodoPagoMainPOS) => setPaymentMethod(e)}
+                >
+                  <SelectTrigger className="w-full h-8 min-h-0 py-1 px-2 text-xs">
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectItem
+                      className="text-xs"
+                      value={MetodoPagoMainPOS.EFECTIVO}
+                    >
+                      Contado
+                    </SelectItem>
+                    <SelectItem
+                      className="text-xs"
+                      value={MetodoPagoMainPOS.TARJETA}
+                    >
+                      Tarjeta
+                    </SelectItem>
+                    <SelectItem
+                      className="text-xs"
+                      value={MetodoPagoMainPOS.TRANSFERENCIA}
+                    >
+                      Transferencia Bancaria
+                    </SelectItem>
+                    <SelectItem
+                      className="text-xs"
+                      value={MetodoPagoMainPOS.CREDITO}
+                    >
+                      Crédito
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 3. Referencia (Movido aquí para mantener contexto financiero) */}
+              {paymentMethod === "TRANSFERENCIA" && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                  <Label
+                    className="text-xs font-medium block mb-1.5"
+                    htmlFor="referenciaPago"
                   >
-                    Contado
-                  </SelectItem>
-                  <SelectItem
-                    className="text-xs"
-                    value={MetodoPagoMainPOS.TARJETA}
-                  >
-                    Tarjeta
-                  </SelectItem>
-                  <SelectItem
-                    className="text-xs"
-                    value={MetodoPagoMainPOS.TRANSFERENCIA}
-                  >
-                    Transferencia Bancaria
-                  </SelectItem>
-                  <SelectItem
-                    className="text-xs"
-                    value={MetodoPagoMainPOS.CREDITO}
-                  >
-                    Credito
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                    No. Boleta / Referencia
+                  </Label>
+                  <Input
+                    className="h-8 text-xs"
+                    id="referenciaPago"
+                    value={referenciaPago}
+                    onChange={(e) => setReferenciaPago(e.target.value)}
+                    placeholder="Ej: 4572785..."
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Columna derecha: Selección de Cliente */}
-            <div className="flex-1">
+            {/* --- COLUMNA DERECHA: Datos del Cliente (Intacto) --- */}
+            <div className="flex-1 border-l pl-0 md:pl-5 border-dashed border-border/60">
+              <Label className="text-xs font-medium block mb-1.5 text-muted-foreground/80">
+                Datos del Cliente
+              </Label>
+
               <Tabs
                 value={activeTab}
                 onValueChange={handleTabChange}
                 className="w-full"
               >
-                <TabsList className="grid grid-cols-2 w-full">
+                <TabsList className="grid grid-cols-2 w-full h-8 mb-2">
                   <TabsTrigger
                     value="existing"
-                    disabled={hasNewCustomerData()} // Deshabilitar si hay datos de nuevo cliente
-                    className="flex items-center justify-center gap-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={hasNewCustomerData()}
+                    className="flex items-center justify-center gap-1 text-[10px] h-full"
                   >
-                    <User className="h-3.5 w-3.5" />
-                    Cliente Existente
+                    <User className="h-3 w-3" />
+                    Existente
                   </TabsTrigger>
                   <TabsTrigger
                     value="new"
-                    disabled={hasSelectedCustomer()} // Deshabilitar si hay cliente seleccionado
-                    className="flex items-center justify-center gap-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={hasSelectedCustomer()}
+                    className="flex items-center justify-center gap-1 text-[10px] h-full"
                   >
-                    <UserPlus className="h-3.5 w-3.5" />
-                    Nuevo Cliente
+                    <UserPlus className="h-3 w-3" />
+                    Nuevo
                   </TabsTrigger>
                 </TabsList>
-                <TabsContent value="existing" className="mt-2">
-                  <div className="space-y-2">
+
+                <TabsContent value="existing" className="mt-0">
+                  <div className="space-y-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">Seleccionar Cliente</Label>
                       <SelectM
-                        className="bg-transparent w-full text-xs text-black px-2 py-1"
+                        className="text-xs"
+                        styles={{
+                          control: (base) => ({
+                            ...base,
+                            minHeight: "32px",
+                            fontSize: "12px",
+                          }),
+                          input: (base) => ({ ...base, margin: 0, padding: 0 }),
+                        }}
                         options={customerOptions}
                         onChange={handleChange}
                         placeholder="Buscar cliente..."
@@ -503,95 +559,63 @@ export default function CartCheckout({
                       />
                     </div>
                     {selectedCustomerID && (
-                      <div className="text-xs font-semibold text-green-600 bg-green-50 p-2 rounded">
-                        Cliente seleccionado: {selectedCustomerID.nombre}
+                      <div className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 p-2 rounded flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                        {selectedCustomerID.nombre}
                       </div>
                     )}
                   </div>
                 </TabsContent>
-                <TabsContent value="new" className="mt-2">
+
+                <TabsContent value="new" className="mt-0">
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label htmlFor="nombre" className="text-xs">
-                          Nombre
-                        </Label>
                         <Input
-                          id="nombre"
                           value={nombre}
                           onChange={(e) => setNombre(e.target.value)}
                           placeholder="Nombre"
-                          className="h-8 text-xs"
+                          className="h-7 text-xs"
                         />
                       </div>
-
                       <div>
-                        <Label htmlFor="apellidos" className="text-xs">
-                          Apellidos
-                        </Label>
                         <Input
-                          id="apellidos"
                           value={apellidos}
                           onChange={(e) => setApellidos(e.target.value)}
                           placeholder="Apellidos"
-                          className="h-8 text-xs"
+                          className="h-7 text-xs"
                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Label htmlFor="dpi" className="text-xs">
-                          DPI
-                        </Label>
-                        <Input
-                          id="dpi"
-                          value={dpi}
-                          onChange={(e) => setDpi(e.target.value)}
-                          placeholder="Número de DPI (opcional)"
-                          className="h-8 text-xs"
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="nit" className="text-xs">
-                          NIT
-                        </Label>
-                        <Input
-                          id="nit"
-                          value={nit}
-                          onChange={(e) => setNit(e.target.value)}
-                          placeholder="Número de NIT (opcional)"
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="telefono" className="text-xs">
-                        Teléfono
-                      </Label>
                       <Input
-                        id="telefono"
-                        value={telefono}
-                        onChange={(e) => setTelefono(e.target.value)}
-                        placeholder="+502 5060 7080"
-                        className="h-8 text-xs"
+                        value={dpi}
+                        onChange={(e) => setDpi(e.target.value)}
+                        placeholder="DPI"
+                        className="h-7 text-xs"
+                      />
+                      <Input
+                        value={nit}
+                        onChange={(e) => setNit(e.target.value)}
+                        placeholder="NIT"
+                        className="h-7 text-xs"
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="observaciones" className="text-xs">
-                        Observaciones
-                      </Label>
-                      <Textarea
-                        id="observaciones"
-                        value={observaciones}
-                        onChange={(e) => setObservaciones(e.target.value)}
-                        placeholder="Observaciones (opcional)"
-                        className="text-xs h-16"
-                      />
-                    </div>
+                    <Input
+                      value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
+                      placeholder="Teléfono"
+                      className="h-7 text-xs"
+                    />
+                    <Textarea
+                      value={observaciones}
+                      onChange={(e) => setObservaciones(e.target.value)}
+                      placeholder="Observaciones..."
+                      className="text-xs h-14 min-h-0 resize-none"
+                    />
                     {hasNewCustomerData() && (
-                      <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                        Creando nuevo cliente...
+                      <div className="text-[10px] text-center text-blue-600 bg-blue-50 py-1 rounded border border-blue-100">
+                        Creando nuevo cliente
                       </div>
                     )}
                   </div>
@@ -599,21 +623,6 @@ export default function CartCheckout({
               </Tabs>
             </div>
           </div>
-
-          {paymentMethod === "TRANSFERENCIA" && (
-            <div>
-              <Label className="text-xs" htmlFor="referenciaPago">
-                Núm. boleta / transferencia único
-              </Label>
-              <Input
-                className="h-6 my-1"
-                id="referenciaPago"
-                value={referenciaPago}
-                onChange={(e) => setReferenciaPago(e.target.value)}
-                placeholder="457278567843"
-              />
-            </div>
-          )}
         </div>
       </Card>
     </div>

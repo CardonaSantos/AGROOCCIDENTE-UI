@@ -1,18 +1,16 @@
-// pages/ventas/HistorialVentasMain.tsx
 import { useDeferredValue, useMemo, useState } from "react";
 import { useStore } from "@/components/Context/ContextSucursal";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { es } from "date-fns/locale";
 import dayjs from "dayjs";
-
+registerLocale("es", es);
 import { Badge } from "@/components/ui/badge";
 import { formattMonedaGT } from "@/utils/formattMoneda";
 import {
@@ -32,14 +30,13 @@ import { AdvancedDialog } from "@/utils/components/AdvancedDialog";
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { ventasHistorialKeys } from "./Keys/query";
 import { getApiErrorMessageAxios } from "../Utils/UtilsErrorApi";
+import { useGetUsersToSelect } from "@/hooks/users/use-users";
+import { OptionSelected } from "@/Types/ReactSelect/types.interfaces";
+import ReactSelectComponent from "react-select";
 
-registerLocale("es", es);
-
-/** ---------- Filtros (UI) compatibles con QueryVentasTable ---------- */
 type QueryVentasUI = {
   page: number;
   limit: number;
-  // El backend sigue recibiendo estos nombres aunque los campos de data sean fecha/total
   sortBy: "fechaVenta" | "totalVenta" | "clienteNombre";
   sortDir: "asc" | "desc";
   sucursalId: number;
@@ -48,16 +45,16 @@ type QueryVentasUI = {
   telefonoCliente?: string;
   referenciaPago?: string;
   codigoItem?: string;
-  fechaDesde?: string; // 'YYYY-MM-DD'
-  fechaHasta?: string; // 'YYYY-MM-DD'
+  fechaDesde?: string;
+  fechaHasta?: string;
   montoMin?: number;
   montoMax?: number;
   tipoComprobante?: TipoComprobante[];
   cats?: number[];
-  //flags de filtrado ventas mias o global
   isVendedor: boolean;
   usuarioId: number;
   metodoPago?: string[];
+  user: number | null;
 };
 
 const defaultMeta: PaginationMeta = {
@@ -71,7 +68,6 @@ const defaultMeta: PaginationMeta = {
   sortDir: "desc",
 };
 
-/** Multi-select simple con checkboxes (para método de pago / comprobante) */
 function MultiChecks({
   label,
   options,
@@ -119,7 +115,7 @@ export default function HistorialVentasMain() {
   const sucursalId = useStore((s) => s.sucursalId) ?? 0;
   const userId = useStore((s) => s.userId) ?? 0;
   const rol = useStore((s) => s.userRol) ?? "";
-  // ---------- Estado de filtros ----------
+
   const [texto, setTexto] = useState<string>("");
   const [fechaDesde, setFechaDesde] = useState<Date | null>(null);
   const [fechaHasta, setFechaHasta] = useState<Date | null>(null);
@@ -134,7 +130,6 @@ export default function HistorialVentasMain() {
   const [isOpenDetalle, setIsOpenDetalle] = useState(false);
   const [ventaSeleccionada, setVentaSeleccionada] =
     useState<VentaResumen | null>(null);
-  // UI: Dialog eliminar
   const [isOpenDelete, setIsOpenDelete] = useState(false);
   const [ventaEliminar, setVentaEliminar] = useState<{
     venta: VentaResumen | null;
@@ -142,7 +137,10 @@ export default function HistorialVentasMain() {
     adminPassword: string;
   }>({ venta: null, motivo: "", adminPassword: "" });
   const textoDeferred = useDeferredValue(texto);
-  // Construimos objeto de query params compatibles con backend
+  const [userSelected, setUserSelected] = useState<number | null>(null);
+
+  const isVendedor = rol === "VENDEDOR";
+
   const queryParams: QueryVentasUI = useMemo(
     () => ({
       page,
@@ -164,7 +162,8 @@ export default function HistorialVentasMain() {
       tipoComprobante: comprobantes.length
         ? (comprobantes as TipoComprobante[])
         : undefined,
-      metodoPago: metodosPago.length ? metodosPago : undefined, // <--- AQUÍ
+      metodoPago: metodosPago.length ? metodosPago : undefined,
+      user: userSelected,
     }),
     [
       page,
@@ -181,13 +180,17 @@ export default function HistorialVentasMain() {
       userId,
       comprobantes,
       metodosPago,
-    ]
+      userSelected,
+    ],
   );
 
-  // ---------- Fetch con tu wrapper ----------
+  const handleSelectUserChange = (value: OptionSelected | null) => {
+    setUserSelected(value ? value.value : null);
+  };
+
   const {
     data: ventasPage,
-    isFetching, // 👈 usar este para spinners
+    isFetching,
     isError,
   } = useApiQuery<VentasApiResponse>(
     ventasHistorialKeys.listSucursal(sucursalId, queryParams),
@@ -195,13 +198,12 @@ export default function HistorialVentasMain() {
     { params: queryParams },
     {
       enabled: Number.isFinite(sucursalId) && sucursalId > 0,
-      placeholderData: keepPreviousData, // 👈 clave
+      placeholderData: keepPreviousData,
       staleTime: 30_000,
-      refetchOnWindowFocus: false, // 👈 evita “brincos”
-    }
+      refetchOnWindowFocus: false,
+    },
   );
 
-  // ---------- Mutación para eliminar venta ----------
   const deleteMutation = useApiMutation<
     any,
     {
@@ -229,8 +231,22 @@ export default function HistorialVentasMain() {
   });
 
   const meta = ventasPage?.meta ?? defaultMeta;
+  const { data: rawUsers } = useGetUsersToSelect();
+  const users = rawUsers ? rawUsers : [];
 
-  // ---------- Handlers ----------
+  const options: OptionSelected[] = users.map((u) => ({
+    label: u.nombre,
+    value: u.id,
+  }));
+
+  const totalVentas = useMemo(() => {
+    const total =
+      ventasPage?.data.reduce((acc, venta) => acc + venta.total, 0) ?? 0;
+
+    return formattMonedaGT(total);
+  }, [ventasPage]);
+
+  // Handlers
   const onChangePage = (next: number) => setPage(next);
   const onChangeLimit = (next: number) => {
     setLimit(next);
@@ -239,7 +255,7 @@ export default function HistorialVentasMain() {
 
   const onSortChange = (
     by: PaginationMeta["sortBy"],
-    dir: PaginationMeta["sortDir"]
+    dir: PaginationMeta["sortDir"],
   ) => {
     setSortBy(by as any);
     setSortDir(dir);
@@ -276,7 +292,7 @@ export default function HistorialVentasMain() {
     }));
 
     const payload = {
-      usuarioId: userId, // ahora sí enviamos el usuario actual
+      usuarioId: userId,
       motivo: ventaEliminar.motivo,
       totalVenta: v.total,
       productos,
@@ -284,7 +300,6 @@ export default function HistorialVentasMain() {
       sucursalId,
       adminPassword: ventaEliminar.adminPassword,
     };
-    console.log("El payload de eliminacion es: ", payload);
 
     toast.promise(deleteMutation.mutateAsync(payload), {
       loading: "Eliminando registro...",
@@ -309,7 +324,6 @@ export default function HistorialVentasMain() {
   }
   return (
     <div className="max-w-7xl container mx-auto">
-      {/* Header */}
       <PageHeader
         title="Historial de ventas"
         fallbackBackTo="/"
@@ -318,25 +332,47 @@ export default function HistorialVentasMain() {
       />
 
       {/* Filtros */}
-      <Card className="mb-4">
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="md:col-span-2">
-              <label className="text-xs text-muted-foreground mb-1 block">
-                Texto
+      <Card className="mb-6 border-none shadow-sm bg-card/50">
+        <CardContent className="p-5 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div className="col-span-12 md:col-span-4 lg:col-span-5">
+              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
+                Búsqueda general
               </label>
               <Input
                 value={texto}
                 onChange={(e) => {
                   setTexto(e.target.value);
-                  // setPage(1);
+                  setPage(1);
                 }}
-                placeholder="Buscar cliente, referencia, código, etc."
+                placeholder="Buscar cliente, referencia, código..."
+                className="bg-background"
               />
             </div>
 
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
+            <div className="col-span-12 md:col-span-4 lg:col-span-3">
+              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
+                Vendedor / Usuario
+              </label>
+              <ReactSelectComponent
+                isDisabled={isVendedor}
+                options={options}
+                value={
+                  userSelected
+                    ? (options.find((opt) => opt.value === userSelected) ??
+                      null)
+                    : null
+                }
+                onChange={handleSelectUserChange}
+                placeholder="Todos"
+                className="text-sm"
+                isClearable
+              />
+            </div>
+
+            {/* 3. Rango de Fechas */}
+            <div className="col-span-6 md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
                 Desde
               </label>
               <DatePicker
@@ -348,12 +384,11 @@ export default function HistorialVentasMain() {
                 }}
                 isClearable
                 placeholderText="Inicio"
-                className="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700"
+                className="w-full h-9 px-3 rounded-md border bg-background text-sm focus:ring-2 focus:ring-ring"
               />
             </div>
-
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
+            <div className="col-span-6 md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
                 Hasta
               </label>
               <DatePicker
@@ -365,74 +400,106 @@ export default function HistorialVentasMain() {
                 }}
                 isClearable
                 placeholderText="Fin"
-                className="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700"
+                className="w-full h-9 px-3 rounded-md border bg-background text-sm focus:ring-2 focus:ring-ring"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                Monto mínimo
-              </label>
-              <Input
-                inputMode="decimal"
-                value={montoMin}
-                onChange={(e) => {
-                  setMontoMin(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                Monto máximo
-              </label>
-              <Input
-                inputMode="decimal"
-                value={montoMax}
-                onChange={(e) => {
-                  setMontoMax(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="9999.00"
-              />
+          <div className="border-t border-border/50" />
+
+          {/* --- NIVEL 2: Filtros Financieros y TOTALES --- */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Columna Izquierda: Montos y Checks (8 columnas) */}
+            <div className="col-span-12 lg:col-span-8 space-y-4">
+              {/* Montos */}
+              <div className="flex gap-4 items-end">
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Monto Mín ($)
+                  </label>
+                  <Input
+                    inputMode="decimal"
+                    value={montoMin}
+                    onChange={(e) => {
+                      setMontoMin(e.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="0.00"
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Monto Max ($)
+                  </label>
+                  <Input
+                    inputMode="decimal"
+                    value={montoMax}
+                    onChange={(e) => {
+                      setMontoMax(e.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="Max"
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+              </div>
+
+              {/* Checks */}
+              <div className="flex flex-wrap gap-x-8 gap-y-2 pt-1">
+                <div className="min-w-[150px]">
+                  <MultiChecks
+                    label="Método de pago"
+                    options={[
+                      { value: "EFECTIVO", label: "Contado" },
+                      { value: "TARJETA", label: "Tarjeta" },
+                      { value: "TRANSFERENCIA", label: "Transferencia" },
+                      { value: "CREDITO", label: "Crédito" },
+                      { value: "OTRO", label: "Otro" },
+                    ]}
+                    values={metodosPago}
+                    onChange={(v) => {
+                      setMetodosPago(v);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+                <div className="min-w-[120px]">
+                  <MultiChecks
+                    label="Comprobante"
+                    options={[
+                      { value: "RECIBO", label: "Recibo" },
+                      { value: "FACTURA", label: "Factura" },
+                    ]}
+                    values={comprobantes}
+                    onChange={(v) => {
+                      setComprobantes(v);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+              </div>
             </div>
 
-            <MultiChecks
-              label="Método de pago"
-              options={[
-                { value: "EFECTIVO", label: "Contado" },
-                { value: "TARJETA", label: "Tarjeta" },
-                { value: "TRANSFERENCIA", label: "Transferencia" },
-                { value: "CREDITO", label: "Crédito" },
-                { value: "OTRO", label: "Otro" },
-              ]}
-              values={metodosPago}
-              onChange={(v) => {
-                setMetodosPago(v);
-                setPage(1);
-              }}
-            />
-
-            <MultiChecks
-              label="Comprobante"
-              options={[
-                { value: "RECIBO", label: "Recibo" },
-                { value: "FACTURA", label: "Factura" },
-              ]}
-              values={comprobantes}
-              onChange={(v) => {
-                setComprobantes(v);
-                setPage(1);
-              }}
-            />
+            {/* Columna Derecha: TOTALES (4 columnas) */}
+            {/* AQUÍ PONDRÁS TU TOTAL */}
+            <div className="col-span-12 lg:col-span-4 flex flex-col justify-center">
+              <div className="bg-muted/30 border border-dashed border-border rounded-lg p-4 flex flex-col items-center justify-center h-full min-h-[100px] text-center">
+                <span className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                  Total Filtrado
+                </span>
+                {/* Aquí renderizas tu variable de total */}
+                <span className="text-2xl font-bold text-primary">
+                  {totalVentas ? totalVentas : "--.--"}
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
+          {/* --- NIVEL 3: Acciones Footer --- */}
+          <div className="flex items-center justify-between pt-2">
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => {
                 setTexto("");
@@ -445,15 +512,18 @@ export default function HistorialVentasMain() {
                 setSortBy("fechaVenta");
                 setSortDir("desc");
                 setPage(1);
+                // Si necesitas limpiar el usuario también, agrégalo aquí:
+                // handleSelectUserChange(null);
               }}
+              className="text-muted-foreground hover:text-destructive text-xs"
             >
               Limpiar filtros
             </Button>
 
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Límite</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Filas:</span>
               <select
-                className="h-8 rounded-md border bg-background px-2 text-sm"
+                className="h-8 rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
                 value={limit}
                 onChange={(e) => onChangeLimit(Number(e.target.value))}
               >
