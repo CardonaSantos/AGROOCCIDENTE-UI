@@ -43,7 +43,7 @@ export type BuildPayload = {
   solicitadoPorId: number;
 
   lineas: LineaPayload[];
-
+  fecha?: string | undefined;
   // ===== NUEVO: calendario propuesto que el server persiste
   cuotasPropuestas: CuotaPropuestaPayload[];
 };

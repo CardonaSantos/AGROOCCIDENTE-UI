@@ -23,10 +23,8 @@ import { toast } from "sonner";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import localizedFormat from "dayjs/plugin/localizedFormat";
-
-import SelectM from "react-select";
+import AsyncSelect from "react-select/async";
 import { Link } from "react-router-dom";
-
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { formatearMoneda } from "@/Crm/CrmServices/crm-service.types";
@@ -60,6 +58,7 @@ import {
   CATS_LIST_QK,
 } from "../Categorias/CategoriasMainPage";
 import { validateDpiNitEither } from "../Customers/helpers/regex.regex";
+import { axiosClient } from "@/hooks/getClientsSelect/Queries/axiosClient";
 
 // =================== Dayjs ===================
 dayjs.extend(localizedFormat);
@@ -77,6 +76,11 @@ enum RolPrecio {
   PROMOCION = "PROMOCION",
   CLIENTE_ESPECIAL = "CLIENTE_ESPECIAL",
 }
+
+type ProductOption = {
+  value: string;
+  label: string;
+};
 
 type Stock = {
   id: number;
@@ -175,6 +179,9 @@ export default function PuntoVenta() {
   const userRol = useStore((state) => state.userRol) ?? "";
 
   const sucursalId = useStore((state) => state.sucursalId) ?? 0;
+  const [selectedProduct, setSelectedProduct] = useState<ProductOption | null>(
+    null,
+  );
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -325,7 +332,6 @@ export default function PuntoVenta() {
   // =================== Queries via wrapper ===================
   type NewQueryPOS = NewQueryDTO & { q?: string };
 
-  // 3) Memo de los filtros que viajan a la API (NO mutar aquí)
   const apiParams = React.useMemo<NewQueryPOS>(() => {
     const p: Partial<NewQueryPOS> = {
       sucursalId,
@@ -353,8 +359,6 @@ export default function PuntoVenta() {
     queryOptions.priceRange,
   ]);
 
-  // Productos para POS (nuevo contrato del servidor)
-  // 4) Usa SIEMPRE el memo en key y params
   const {
     data: productsResponse = {
       data: [],
@@ -380,6 +384,25 @@ export default function PuntoVenta() {
       staleTime: 0,
     },
   );
+
+  const loadProducts = async (inputValue: string): Promise<ProductOption[]> => {
+    const response = await axiosClient.get(
+      "products/get-products-presentations-for-pos",
+      {
+        params: {
+          ...apiParams,
+          q: inputValue,
+          page: 1,
+          limit: 100,
+        },
+      },
+    );
+
+    return response.data.data.map((p: any) => ({
+      value: String(p.id),
+      label: `${p.nombre} (${p.codigoProducto})`,
+    }));
+  };
 
   // Clientes
   const {
@@ -577,7 +600,8 @@ export default function PuntoVenta() {
         "Solicitud enviada, esperando respuesta del administrador...",
       );
       setPrecioRequest(null);
-      setSelectedProductId("");
+      setSelectedProductId(null);
+      setSelectedProduct(null);
       setOpenRequest(false);
     } catch (error) {
       toast.error(getApiErrorMessageAxios(error));
@@ -586,8 +610,6 @@ export default function PuntoVenta() {
 
   const handleCreateCreditRequest = async (payload: any) => {
     try {
-      //validar cliente, metodo de pago, monto, etc.
-
       toast.promise(createCreditRequest(payload), {
         success: "Crédito enviado para autorización, esperando respuesta...",
         loading: "Enviando solicitud de aprovación de crédito",
@@ -598,7 +620,6 @@ export default function PuntoVenta() {
     } catch (error) {
       toast.error(getApiErrorMessageAxios(error));
     } finally {
-      //limpiar campos, limpiar cart, cliente, etc... Y fetchear datos de nuevo, refresh
     }
   };
 
@@ -651,8 +672,6 @@ export default function PuntoVenta() {
       imei: imei.trim(),
       fechaVenta: date,
     };
-
-    console.log("EL payload es: ", saleData);
 
     const isCustomerInfoProvided =
       !!saleData.nombre && !!saleData.telefono && !!saleData.direccion;
@@ -737,8 +756,6 @@ export default function PuntoVenta() {
   };
 
   const isCreditoVenta = paymentMethod === MetodoPagoMainPOS.CREDITO;
-
-  // helper: uid consistente con la tabla
 
   const getRemainingForRow = React.useCallback(
     (p: ProductoData) => {
@@ -847,63 +864,53 @@ export default function PuntoVenta() {
           setOpenCreateRequest={setOpenCreateRequest}
           value={creditoForm}
           onChange={setCreditoForm}
-          handleCreateCreditRequest={handleCreateCreditRequest} //reemplazo temporal
+          handleCreateCreditRequest={handleCreateCreditRequest}
           isPendingCreditRequest={isPendingCreditRequest}
-          // opcional: onSubmit={(payload) => createCreditRequest(payload)}
+          date={date}
         />
       ) : null}
 
       {/* PETICIÓN DE PRECIO ESPECIAL */}
-      <div className="mt-10">
-        <Card className="shadow-md rounded-lg border overflow-hidden">
-          <CardHeader className=" p-6">
+      <div className="mt-12">
+        <Card className="shadow-md rounded-xl border overflow-visible">
+          <CardHeader className="p-6 pb-2">
             <CardTitle className="text-xl font-semibold">
               Petición de precio especial
             </CardTitle>
-            <CardDescription className="text-sm text-gray-600  dark:text-white">
+            <CardDescription className="text-sm text-gray-600 dark:text-white">
               Al solicitar un precio especial, esa instancia sólo se podrá usar
               en una venta.
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <CardContent className="p-6 pt-4 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
               {/* Producto */}
-              <div className="flex flex-col">
-                <Label className="text-sm font-medium mb-1">Producto</Label>
-                <SelectM
+              <div className="flex flex-col space-y-2 relative">
+                <Label className="text-sm font-medium">Producto</Label>
+
+                <AsyncSelect<ProductOption, false>
+                  cacheOptions
+                  defaultOptions
+                  value={selectedProduct}
+                  loadOptions={loadProducts}
+                  onChange={(opt) => {
+                    setSelectedProduct(opt ?? null);
+                    setSelectedProductId(opt?.value ?? null);
+                  }}
                   placeholder="Seleccionar producto"
-                  options={productos.map((p) => ({
-                    value: String(p.id),
-                    label: `${p.nombre} (${p.codigoProducto})`,
-                  }))}
-                  className="basic-select text-sm h-10 text-black"
-                  classNamePrefix="select"
-                  onChange={(opt) => setSelectedProductId(opt?.value ?? "")}
-                  value={
-                    selectedProductId
-                      ? {
-                          value: selectedProductId,
-                          label: `${
-                            productos.find(
-                              (p) => String(p.id) === selectedProductId,
-                            )?.nombre
-                          } (${
-                            productos.find(
-                              (p) => String(p.id) === selectedProductId,
-                            )?.codigoProducto
-                          })`,
-                        }
-                      : null
-                  }
+                  menuPortalTarget={document.body}
+                  isClearable
+                  styles={{
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                  }}
                 />
               </div>
 
               {/* Precio Requerido */}
-              <div className="flex flex-col">
-                <Label className="text-sm font-medium mb-1">
-                  Precio Requerido
-                </Label>
+              <div className="flex flex-col space-y-2">
+                <Label className="text-sm font-medium">Precio Requerido</Label>
+
                 <Input
                   type="number"
                   className="h-10 text-sm"
@@ -918,15 +925,19 @@ export default function PuntoVenta() {
               </div>
             </div>
 
-            <Button
-              onClick={() => setOpenRequest(true)}
-              variant="default"
-              className="w-full py-2 text-sm"
-              disabled={isCreatingPriceRequest}
-            >
-              Solicitar precio especial
-            </Button>
+            {/* Botón */}
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={() => setOpenRequest(true)}
+                variant="default"
+                className="px-6 py-2 text-sm"
+                disabled={isCreatingPriceRequest}
+              >
+                Solicitar precio especial
+              </Button>
+            </div>
 
+            {/* Dialog */}
             <Dialog open={openReques} onOpenChange={setOpenRequest}>
               <DialogContent className="w-full max-w-md">
                 <DialogHeader>
@@ -938,7 +949,8 @@ export default function PuntoVenta() {
                     ¿Continuar?
                   </DialogDescription>
                 </DialogHeader>
-                <div className="mt-4 flex justify-end">
+
+                <div className="mt-6 flex justify-end">
                   <Button
                     onClick={handleMakeRequest}
                     disabled={
