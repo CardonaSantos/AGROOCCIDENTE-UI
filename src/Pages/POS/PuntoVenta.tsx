@@ -23,10 +23,8 @@ import { toast } from "sonner";
 import dayjs from "dayjs";
 import "dayjs/locale/es";
 import localizedFormat from "dayjs/plugin/localizedFormat";
-
-import SelectM from "react-select";
+import AsyncSelect from "react-select/async";
 import { Link } from "react-router-dom";
-
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { formatearMoneda } from "@/Crm/CrmServices/crm-service.types";
@@ -60,6 +58,7 @@ import {
   CATS_LIST_QK,
 } from "../Categorias/CategoriasMainPage";
 import { validateDpiNitEither } from "../Customers/helpers/regex.regex";
+import { axiosClient } from "@/hooks/getClientsSelect/Queries/axiosClient";
 
 // =================== Dayjs ===================
 dayjs.extend(localizedFormat);
@@ -77,6 +76,11 @@ enum RolPrecio {
   PROMOCION = "PROMOCION",
   CLIENTE_ESPECIAL = "CLIENTE_ESPECIAL",
 }
+
+type ProductOption = {
+  value: string;
+  label: string;
+};
 
 type Stock = {
   id: number;
@@ -175,12 +179,15 @@ export default function PuntoVenta() {
   const userRol = useStore((state) => state.userRol) ?? "";
 
   const sucursalId = useStore((state) => state.sucursalId) ?? 0;
+  const [selectedProduct, setSelectedProduct] = useState<ProductOption | null>(
+    null,
+  );
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState<MetodoPagoMainPOS>(
-    MetodoPagoMainPOS.EFECTIVO
+    MetodoPagoMainPOS.EFECTIVO,
   );
   const [tipoComprobante, setTipoComprobante] =
     useState<TipoComprobante | null>(TipoComprobante.RECIBO);
@@ -189,7 +196,7 @@ export default function PuntoVenta() {
   const [openSection, setOpenSection] = useState(false);
   const [ventaResponse, setventaResponse] = useState<Venta | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
-    null
+    null,
   );
   const [precioReques, setPrecioRequest] = useState<number | null>(null);
   const [openReques, setOpenRequest] = useState(false);
@@ -197,7 +204,7 @@ export default function PuntoVenta() {
   const [imagesProduct, setImagesProduct] = useState<string[]>([]);
   const [isDisableButton, setIsDisableButton] = useState(false);
   const [selectedCustomerID, setSelectedCustomerID] = useState<Customer | null>(
-    null
+    null,
   );
   const [activeTab, setActiveTab] = useState("existing");
   // Datos del cliente ad-hoc (venta rápida)
@@ -210,12 +217,15 @@ export default function PuntoVenta() {
   const [telefono, setTelefono] = useState<string>("");
   const [direccion, setDireccion] = useState<string>("");
   const [observaciones, setObservaciones] = useState<string>("");
+
+  const [date, setDate] = useState<Date | undefined>(undefined);
+
   // Estado controlado del formulario de crédito
   const [openCreateRequest, setOpenCreateRequest] = useState<boolean>(false);
   const totalCarrito = useMemo(
     () =>
       cart.reduce((acc, prod) => acc + prod.selectedPrice * prod.quantity, 0),
-    [cart]
+    [cart],
   );
   const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -259,7 +269,7 @@ export default function PuntoVenta() {
           i.source === "presentacion" ? i.nombre : undefined,
         codigoBarrasSnapshot: undefined,
       })),
-    []
+    [],
   );
 
   useEffect(() => {
@@ -322,7 +332,6 @@ export default function PuntoVenta() {
   // =================== Queries via wrapper ===================
   type NewQueryPOS = NewQueryDTO & { q?: string };
 
-  // 3) Memo de los filtros que viajan a la API (NO mutar aquí)
   const apiParams = React.useMemo<NewQueryPOS>(() => {
     const p: Partial<NewQueryPOS> = {
       sucursalId,
@@ -350,8 +359,6 @@ export default function PuntoVenta() {
     queryOptions.priceRange,
   ]);
 
-  // Productos para POS (nuevo contrato del servidor)
-  // 4) Usa SIEMPRE el memo en key y params
   const {
     data: productsResponse = {
       data: [],
@@ -375,8 +382,27 @@ export default function PuntoVenta() {
       refetchOnWindowFocus: true,
       placeholderData: keepPreviousData,
       staleTime: 0,
-    }
+    },
   );
+
+  const loadProducts = async (inputValue: string): Promise<ProductOption[]> => {
+    const response = await axiosClient.get(
+      "products/get-products-presentations-for-pos",
+      {
+        params: {
+          ...apiParams,
+          q: inputValue,
+          page: 1,
+          limit: 100,
+        },
+      },
+    );
+
+    return response.data.data.map((p: any) => ({
+      value: String(p.id),
+      label: `${p.nombre} (${p.codigoProducto})`,
+    }));
+  };
 
   // Clientes
   const {
@@ -385,7 +411,7 @@ export default function PuntoVenta() {
     error: errorCustomers,
   } = useApiQuery<Client[]>(
     ["clients-all"],
-    "client/get-all-customers"
+    "client/get-all-customers",
     // { enabled: true }
   );
 
@@ -403,7 +429,7 @@ export default function PuntoVenta() {
     isPending: isPendingCreditRequest,
   } = useApiMutation<any, any>(
     "post",
-    "credito-authorization/create-authorization"
+    "credito-authorization/create-authorization",
   );
 
   const { data: tiposPresentacionesResponse } = useApiQuery<
@@ -417,7 +443,7 @@ export default function PuntoVenta() {
     {
       staleTime: 0,
       refetchOnMount: "always",
-    }
+    },
   );
   const categorias = Array.isArray(cats) ? cats : [];
   const tiposPresentacion = tiposPresentacionesResponse?.data ?? [];
@@ -471,8 +497,8 @@ export default function PuntoVenta() {
     if (existingItem) {
       setCart((prev) =>
         prev.map((item) =>
-          item.uid === uid ? { ...item, quantity: item.quantity + 1 } : item
-        )
+          item.uid === uid ? { ...item, quantity: item.quantity + 1 } : item,
+        ),
       );
       return;
     }
@@ -543,7 +569,7 @@ export default function PuntoVenta() {
           c.nit ? `NIT: ${c.nit}` : "NIT: N/A"
         } ${c.iPInternet ? `IP: ${c.iPInternet}` : ""}`,
       })),
-    [customersResponse]
+    [customersResponse],
   );
 
   // =================== Validaciones & helpers ===================
@@ -571,10 +597,11 @@ export default function PuntoVenta() {
         solicitadoPorId: userId,
       });
       toast.success(
-        "Solicitud enviada, esperando respuesta del administrador..."
+        "Solicitud enviada, esperando respuesta del administrador...",
       );
       setPrecioRequest(null);
-      setSelectedProductId("");
+      setSelectedProductId(null);
+      setSelectedProduct(null);
       setOpenRequest(false);
     } catch (error) {
       toast.error(getApiErrorMessageAxios(error));
@@ -583,8 +610,6 @@ export default function PuntoVenta() {
 
   const handleCreateCreditRequest = async (payload: any) => {
     try {
-      //validar cliente, metodo de pago, monto, etc.
-
       toast.promise(createCreditRequest(payload), {
         success: "Crédito enviado para autorización, esperando respuesta...",
         loading: "Enviando solicitud de aprovación de crédito",
@@ -595,7 +620,6 @@ export default function PuntoVenta() {
     } catch (error) {
       toast.error(getApiErrorMessageAxios(error));
     } finally {
-      //limpiar campos, limpiar cart, cliente, etc... Y fetchear datos de nuevo, refresh
     }
   };
 
@@ -646,9 +670,8 @@ export default function PuntoVenta() {
       nit: nit.trim(),
       observaciones: observaciones.trim(),
       imei: imei.trim(),
+      fechaVenta: date,
     };
-
-    console.log("EL payload es: ", saleData);
 
     const isCustomerInfoProvided =
       !!saleData.nombre && !!saleData.telefono && !!saleData.direccion;
@@ -659,7 +682,7 @@ export default function PuntoVenta() {
       !isCustomerInfoProvided
     ) {
       toast.warning(
-        "Para ventas mayores a 1000 es necesario ingresar o seleccionar un cliente"
+        "Para ventas mayores a 1000 es necesario ingresar o seleccionar un cliente",
       );
       setIsDisableButton(false);
       return;
@@ -702,14 +725,14 @@ export default function PuntoVenta() {
 
   const updateQuantityByUid = (uid: string, qty: number) => {
     setCart((prev) =>
-      prev.map((i) => (i.uid === uid ? { ...i, quantity: qty } : i))
+      prev.map((i) => (i.uid === uid ? { ...i, quantity: qty } : i)),
     );
   };
 
   const updatePriceByUid = (
     uid: string,
     newPrice: number,
-    newRole: RolPrecio
+    newRole: RolPrecio,
   ) => {
     setCart((prev) =>
       prev.map((i) =>
@@ -720,11 +743,11 @@ export default function PuntoVenta() {
               selectedPriceRole: newRole,
               selectedPriceId:
                 i.precios.find(
-                  (p) => p.precio === newPrice && p.rol === newRole
+                  (p) => p.precio === newPrice && p.rol === newRole,
                 )?.id ?? i.selectedPriceId,
             }
-          : i
-      )
+          : i,
+      ),
     );
   };
 
@@ -733,8 +756,6 @@ export default function PuntoVenta() {
   };
 
   const isCreditoVenta = paymentMethod === MetodoPagoMainPOS.CREDITO;
-
-  // helper: uid consistente con la tabla
 
   const getRemainingForRow = React.useCallback(
     (p: ProductoData) => {
@@ -746,16 +767,8 @@ export default function PuntoVenta() {
       // const live = liveStockByUid[uid] ?? totalStock;
       return Math.max(0, totalStock - reserved);
     },
-    [cart]
+    [cart],
   );
-
-  console.log("Los registro de productos son: ", productos);
-  console.log("El carrito es: ", cart);
-  console.log("el resultado del server es: ", productsResponse);
-  console.log("el cliente seleccionado es: ", selectedCustomerID);
-  console.log("el creditoForm es: ", creditoForm);
-  console.log("El query es: ", queryOptions);
-  console.log("los tipos de presentacion son: ", tiposPresentacion);
 
   return (
     <div className="container">
@@ -795,6 +808,8 @@ export default function PuntoVenta() {
         <div className="min-w-0">
           {/* Carrito & Checkout (se mantiene) */}
           <CartCheckout
+            date={date}
+            setDate={setDate}
             nit={nit}
             setNit={setNit}
             //
@@ -849,63 +864,53 @@ export default function PuntoVenta() {
           setOpenCreateRequest={setOpenCreateRequest}
           value={creditoForm}
           onChange={setCreditoForm}
-          handleCreateCreditRequest={handleCreateCreditRequest} //reemplazo temporal
+          handleCreateCreditRequest={handleCreateCreditRequest}
           isPendingCreditRequest={isPendingCreditRequest}
-          // opcional: onSubmit={(payload) => createCreditRequest(payload)}
+          date={date}
         />
       ) : null}
 
       {/* PETICIÓN DE PRECIO ESPECIAL */}
-      <div className="mt-10">
-        <Card className="shadow-md rounded-lg border overflow-hidden">
-          <CardHeader className=" p-6">
+      <div className="mt-12">
+        <Card className="shadow-md rounded-xl border overflow-visible">
+          <CardHeader className="p-6 pb-2">
             <CardTitle className="text-xl font-semibold">
               Petición de precio especial
             </CardTitle>
-            <CardDescription className="text-sm text-gray-600  dark:text-white">
+            <CardDescription className="text-sm text-gray-600 dark:text-white">
               Al solicitar un precio especial, esa instancia sólo se podrá usar
               en una venta.
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <CardContent className="p-6 pt-4 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
               {/* Producto */}
-              <div className="flex flex-col">
-                <Label className="text-sm font-medium mb-1">Producto</Label>
-                <SelectM
+              <div className="flex flex-col space-y-2 relative">
+                <Label className="text-sm font-medium">Producto</Label>
+
+                <AsyncSelect<ProductOption, false>
+                  cacheOptions
+                  defaultOptions
+                  value={selectedProduct}
+                  loadOptions={loadProducts}
+                  onChange={(opt) => {
+                    setSelectedProduct(opt ?? null);
+                    setSelectedProductId(opt?.value ?? null);
+                  }}
                   placeholder="Seleccionar producto"
-                  options={productos.map((p) => ({
-                    value: String(p.id),
-                    label: `${p.nombre} (${p.codigoProducto})`,
-                  }))}
-                  className="basic-select text-sm h-10 text-black"
-                  classNamePrefix="select"
-                  onChange={(opt) => setSelectedProductId(opt?.value ?? "")}
-                  value={
-                    selectedProductId
-                      ? {
-                          value: selectedProductId,
-                          label: `${
-                            productos.find(
-                              (p) => String(p.id) === selectedProductId
-                            )?.nombre
-                          } (${
-                            productos.find(
-                              (p) => String(p.id) === selectedProductId
-                            )?.codigoProducto
-                          })`,
-                        }
-                      : null
-                  }
+                  menuPortalTarget={document.body}
+                  isClearable
+                  styles={{
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                  }}
                 />
               </div>
 
               {/* Precio Requerido */}
-              <div className="flex flex-col">
-                <Label className="text-sm font-medium mb-1">
-                  Precio Requerido
-                </Label>
+              <div className="flex flex-col space-y-2">
+                <Label className="text-sm font-medium">Precio Requerido</Label>
+
                 <Input
                   type="number"
                   className="h-10 text-sm"
@@ -913,22 +918,26 @@ export default function PuntoVenta() {
                   value={precioReques ?? ""}
                   onChange={(e) =>
                     setPrecioRequest(
-                      e.target.value ? Number(e.target.value) : null
+                      e.target.value ? Number(e.target.value) : null,
                     )
                   }
                 />
               </div>
             </div>
 
-            <Button
-              onClick={() => setOpenRequest(true)}
-              variant="default"
-              className="w-full py-2 text-sm"
-              disabled={isCreatingPriceRequest}
-            >
-              Solicitar precio especial
-            </Button>
+            {/* Botón */}
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={() => setOpenRequest(true)}
+                variant="default"
+                className="px-6 py-2 text-sm"
+                disabled={isCreatingPriceRequest}
+              >
+                Solicitar precio especial
+              </Button>
+            </div>
 
+            {/* Dialog */}
             <Dialog open={openReques} onOpenChange={setOpenRequest}>
               <DialogContent className="w-full max-w-md">
                 <DialogHeader>
@@ -940,7 +949,8 @@ export default function PuntoVenta() {
                     ¿Continuar?
                   </DialogDescription>
                 </DialogHeader>
-                <div className="mt-4 flex justify-end">
+
+                <div className="mt-6 flex justify-end">
                   <Button
                     onClick={handleMakeRequest}
                     disabled={

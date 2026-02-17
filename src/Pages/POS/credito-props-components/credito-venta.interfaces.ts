@@ -33,23 +33,21 @@ export interface FormCreditoState {
   telefonoCliente?: string;
   direccionCliente?: string;
 
-  // Económico / plan propuesto
-  totalPropuesto: number; // total productos (puede venir del carrito)
-  cuotaInicialPropuesta: number; // enganche cuando PRIMERA_MAYOR
+  totalPropuesto: number;
+  cuotaInicialPropuesta: number;
   cuotasTotalesPropuestas: number;
   interesTipo: InteresTipoCreditoVenta;
-  interesPorcentaje: number; // 0..100
+  interesPorcentaje: number;
   planCuotaModo: PlanCuotaModo;
-  diasEntrePagos: number; // ej 30
-  fechaPrimeraCuota?: string; // YYYY-MM-DD
+  diasEntrePagos: number;
+  fechaPrimeraCuota?: string;
 
   comentario?: string;
   garantiaMeses: number;
   testigos?: Record<string, any>;
 
-  // Vista previa que mandaremos como planPropuesto (JSON)
   cuotasPropuestas: PropuestaCuota[];
-
+  fecha?: string | undefined;
   // Líneas (carrito)
   lineas: Array<{
     productoId?: number;
@@ -57,7 +55,7 @@ export interface FormCreditoState {
     cantidad: number;
     precioUnitario: number;
 
-    precioSeleccionadoId: number; //NUEVO
+    precioSeleccionadoId: number;
 
     descuento?: number;
     subtotal?: number;

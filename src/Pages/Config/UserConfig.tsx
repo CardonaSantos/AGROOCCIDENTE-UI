@@ -1,5 +1,22 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 import { useStore } from "@/components/Context/ContextSucursal";
+import { toast } from "sonner";
+import {
+  AtSign,
+  Building,
+  ChartNoAxesColumn,
+  Ghost,
+  Edit2,
+  Trash2,
+} from "lucide-react";
+
+// UI Components
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
   CardContent,
@@ -16,499 +33,457 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import axios from "axios";
-import {
-  AtSign,
-  Building,
-  ChartNoAxesColumn,
-  Ghost,
-  ToggleLeft,
-  UserIcon,
-} from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { toast } from "sonner";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// --- Interfaces ---
 interface User {
   id: number;
   nombre: string;
   activo: boolean;
   correo: string;
   rol: string;
-  contrasena?: string; // Opcional
-  contrasenaConfirm?: string; // Opcional
+  contrasena?: string;
+  contrasenaConfirm?: string;
+  telefono?: string;
+  sucursal?: { id: number; nombre: string }; // Unificado
+  totalVentas?: number; // Unificado
 }
 
-interface Sucursal {
-  id: number;
-  nombre: string;
-}
-
-interface UsuarioResponse {
-  id: number;
-  activo: boolean;
-  nombre: string;
-  correo: string;
-  sucursal: Sucursal;
-  rol: string;
-  totalVentas: number;
-}
-
-function UserConfig() {
-  const userId = useStore((state) => state.userId);
+// --- Componente 1: Formulario de "Mi Perfil" ---
+const MyProfileForm = ({ userId }: { userId: number | null }) => {
   const [user, setUser] = useState<User>({
-    activo: true,
-    correo: "",
     id: 0,
     nombre: "",
+    correo: "",
+    activo: true,
     rol: "",
+    telefono: "",
     contrasena: "",
     contrasenaConfirm: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const [userEdit, setUserEdit] = useState<User>({
-    id: 0,
-    activo: true,
-    correo: "",
-    nombre: "",
-    rol: "",
-    contrasena: "",
-    contrasenaConfirm: "",
-  });
-
-  const [users, setUsers] = useState<UsuarioResponse[]>([]);
-
-  const getUser = async () => {
+  const fetchUser = async () => {
+    if (!userId) return;
     try {
-      const response = await axios.get(`${API_URL}/user/fin-my-user/${userId}`);
-      if (response.status === 200) {
-        const userData = response.data;
-        setUser({
-          ...user,
-          ...userData,
-          contrasena: "", // Resetea valores no proporcionados
-          contrasenaConfirm: "",
-        });
-      }
+      const { data } = await axios.get(`${API_URL}/user/fin-my-user/${userId}`);
+      setUser({ ...data, contrasena: "", contrasenaConfirm: "" });
     } catch (error) {
-      console.error(error);
-      toast.error("Error al conseguir datos");
-    }
-  };
-
-  const getUsers = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/user/fin-all-users`);
-      if (response.status === 200) {
-        setUsers(response.data);
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al conseguir datos");
+      toast.error("Error al cargar perfil");
     }
   };
 
   useEffect(() => {
-    if (userId) {
-      getUser();
-    }
+    fetchUser();
   }, [userId]);
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUser({ ...user, [e.target.name]: e.target.value });
+  };
+
+  const handleUpdate = async () => {
+    if (user.contrasena && !user.contrasenaConfirm) {
+      return toast.info(
+        "Requerido: Contraseña actual para confirmar cambio de contraseña",
+      );
+    }
+    setLoading(true);
+    try {
+      await axios.patch(`${API_URL}/user/update-user/${userId}`, user);
+      toast.success("Perfil actualizado");
+      setConfirmOpen(false);
+      fetchUser();
+    } catch (error) {
+      toast.error("Error al actualizar. Verifique credenciales.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="max-w-2xl mx-auto border-0 shadow-sm md:border">
+      <CardHeader>
+        <CardTitle>Mi Perfil</CardTitle>
+        <CardDescription>
+          Gestiona tu información personal y seguridad.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="nombre">Nombre</Label>
+            <Input
+              id="nombre"
+              name="nombre"
+              value={user.nombre}
+              onChange={handleChange}
+              placeholder="Tu nombre"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="correo">Correo</Label>
+            <Input
+              id="correo"
+              name="correo"
+              value={user.correo}
+              onChange={handleChange}
+              placeholder="usuario@email.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="telefono">Teléfono</Label>
+            <Input
+              id="telefono"
+              name="telefono"
+              type="tel"
+              value={user.telefono}
+              onChange={handleChange}
+              placeholder="5555-5555"
+            />
+          </div>
+        </div>
+
+        <div className="pt-4 border-t">
+          <h3 className="text-sm font-medium mb-3 text-muted-foreground">
+            Seguridad
+          </h3>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="contrasena">Nueva Contraseña (Opcional)</Label>
+              <Input
+                id="contrasena"
+                name="contrasena"
+                type="password"
+                value={user.contrasena}
+                onChange={handleChange}
+                placeholder="••••••"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label
+                htmlFor="contrasenaConfirm"
+                className="text-primary font-semibold"
+              >
+                Confirmar con contraseña actual
+              </Label>
+              <Input
+                id="contrasenaConfirm"
+                name="contrasenaConfirm"
+                type="password"
+                value={user.contrasenaConfirm}
+                onChange={handleChange}
+                placeholder="Requerido para guardar"
+              />
+            </div>
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button
+          className="w-full sm:w-auto ml-auto"
+          onClick={() => setConfirmOpen(true)}
+        >
+          Guardar Cambios
+        </Button>
+      </CardFooter>
+
+      {/* Dialogo Confirmación */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Confirmar cambios?</DialogTitle>
+            <DialogDescription>
+              Esta acción actualizará tus datos inmediatamente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleUpdate} disabled={loading}>
+              {loading ? "Guardando..." : "Confirmar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+};
+
+const EditUserDialog = ({
+  open,
+  onClose,
+  userToEdit,
+  onSave,
+  currentUserRol,
+}: {
+  open: boolean;
+  onClose: (v: boolean) => void;
+  userToEdit: User;
+  onSave: (u: User, adminPass: string) => void;
+  currentUserRol: string | null;
+}) => {
+  const [formData, setFormData] = useState<User>(userToEdit);
+
   useEffect(() => {
-    getUsers();
+    setFormData(userToEdit);
+  }, [userToEdit]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Editar Usuario: {formData.nombre}</DialogTitle>
+          <DialogDescription>
+            Modificar datos como administrador.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Nombre</Label>
+              <Input
+                name="nombre"
+                value={formData.nombre}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Correo</Label>
+              <Input
+                name="correo"
+                value={formData.correo}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Nueva Contraseña (Usuario)</Label>
+            <Input
+              name="contrasena"
+              type="password"
+              value={formData.contrasena || ""}
+              onChange={handleChange}
+              placeholder="Dejar vacío para mantener"
+            />
+          </div>
+
+          {currentUserRol === "SUPER_ADMIN" && (
+            <div className="flex items-center justify-between border p-3 rounded-md">
+              <Label htmlFor="activo-switch" className="cursor-pointer">
+                Usuario Activo
+              </Label>
+              <Switch
+                id="activo-switch"
+                checked={formData.activo}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, activo: checked })
+                }
+              />
+            </div>
+          )}
+
+          <div className="space-y-2 bg-muted/30 p-3 rounded-md border border-dashed">
+            <Label className="text-xs uppercase text-muted-foreground">
+              Confirmación de Admin
+            </Label>
+            <Input
+              name="contrasenaConfirm"
+              type="password"
+              value={formData.contrasenaConfirm || ""}
+              onChange={handleChange}
+              placeholder="Tu contraseña de administrador"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={() => onSave(formData, formData.contrasenaConfirm || "")}
+          >
+            Actualizar Usuario
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const UsersGrid = ({
+  currentUserRol,
+  currentUserId,
+}: {
+  currentUserRol: string | null;
+  currentUserId: number | null;
+}) => {
+  const [users, setUsers] = useState<User[]>([]);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+
+  const fetchUsers = async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/user/fin-all-users`);
+      setUsers(data);
+    } catch {
+      toast.error("Error al cargar usuarios");
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
   }, []);
 
-  console.log(user);
-
-  //================================>
-  const [truncateClose, setTruncateClose] = useState(false); // Previene doble envío al cerrar
-  const [closeConfirm, setCloseConfirm] = useState(false); // Controla el dialog para cerrar
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (truncateClose) return; // Evitar doble clic
-    setTruncateClose(true);
-
-    if (!user.contrasenaConfirm) {
-      toast.info("Ingrese su contraseña para confirmar el cambio");
-      setTruncateClose(false);
-      return;
-    }
-
-    try {
-      const response = await axios.patch(
-        `${API_URL}/user/update-user/${userId}`,
-        user
-      );
-      if (response.status === 201 || response.status === 200) {
-        toast.success("Usuario actualizado correctamente");
-        getUser();
-        setCloseConfirm(false); // Cierra el diálogo explícitamente
-      }
-    } catch (error) {
-      toast.error("Error al registrar cambio, verifique sus credenciales.");
-    } finally {
-      setTruncateClose(false);
-    }
-  };
-
-  const handleChangeInputs = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target; //tomas las props del objeto target
-
-    setUser((datosPrevios) => ({
-      ...datosPrevios,
-      [name]: value,
-    }));
-  };
-
-  console.log("los usuarios son: ", users);
-  console.log("El usuario a enviar es: ", userEdit);
-
-  const [openEdit, setOpenEdit] = useState(false);
-
-  const handleToggleEditActivo = (key: keyof User) => {
-    setUserEdit((previaData) => ({
-      ...previaData,
-      [key]: !previaData[key],
-    }));
-  };
-
-  const handleChangeEditUser = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-
-    setUserEdit((datosPrevios) => ({
-      ...datosPrevios,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmitEditUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!userEdit.contrasenaConfirm) {
-      toast.info("Ingrese su contraseña para confirmar el cambio");
-      return;
-    }
+  const handleSaveEdit = async (updatedUser: User, adminPass: string) => {
+    if (!adminPass) return toast.info("Contraseña de admin requerida");
 
     try {
       const payload = {
-        userId: userEdit.id,
-        nombre: userEdit.nombre,
-        correo: userEdit.correo,
-        rol: userEdit.rol,
-        activo: userEdit.activo,
-        nuevaContrasena: userEdit.contrasena || undefined,
-        adminPassword: userEdit.contrasenaConfirm,
+        userId: updatedUser.id,
+        nombre: updatedUser.nombre,
+        correo: updatedUser.correo,
+        rol: updatedUser.rol,
+        telefono: updatedUser.telefono,
+        activo: updatedUser.activo,
+        nuevaContrasena: updatedUser.contrasena || undefined,
+        adminPassword: adminPass,
       };
 
-      const response = await axios.patch(
-        `${API_URL}/user/update-user/as-admin/${userId}`, // Enviar el ID del admin actual
-        payload
+      await axios.patch(
+        `${API_URL}/user/update-user/as-admin/${currentUserId}`,
+        payload,
       );
-
-      if (response.status === 200 || response.status === 201) {
-        getUsers();
-        toast.success("Usuario Actualizado");
-        setOpenEdit(false);
-      }
+      toast.success("Usuario actualizado");
+      setEditingUser(null);
+      fetchUsers();
     } catch (error) {
-      console.error(error);
-      toast.error("Error al editar usuario");
+      toast.error("Error al editar. Verifica permisos.");
     }
   };
 
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold tracking-tight">
+          Directorio de Usuarios
+        </h2>
+        <span className="text-sm text-muted-foreground">
+          {users.length} registros
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {users.map((u) => (
+          <Card
+            key={u.id}
+            className="group hover:shadow-md transition-all duration-200 border-l-4"
+            style={{ borderLeftColor: u.activo ? "#10b981" : "#ef4444" }}
+          >
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {u.nombre}
+                  </CardTitle>
+                  <CardDescription className="flex items-center gap-1 mt-1">
+                    <AtSign className="w-3 h-3" /> {u.correo}
+                  </CardDescription>
+                </div>
+                <div
+                  className={`text-xs px-2 py-1 rounded-full ${u.activo ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                >
+                  {u.activo ? "Activo" : "Inactivo"}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2 pb-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Building className="w-4 h-4" />
+                  <span className="truncate">
+                    {u.sucursal?.nombre || "N/A"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Ghost className="w-4 h-4" />
+                  <span>{u.rol}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground col-span-2">
+                  <ChartNoAxesColumn className="w-4 h-4" />
+                  <span>
+                    Ventas: <strong>{u.totalVentas || 0}</strong>
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="pt-0 flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                onClick={() => setEditingUser(u)}
+              >
+                <Edit2 className="w-3 h-3 mr-2" /> Editar
+              </Button>
+              {currentUserRol === "SUPER_ADMIN" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive/90"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+
+      {editingUser && (
+        <EditUserDialog
+          open={!!editingUser}
+          onClose={() => setEditingUser(null)}
+          userToEdit={editingUser}
+          onSave={handleSaveEdit}
+          currentUserRol={currentUserRol}
+        />
+      )}
+    </div>
+  );
+};
+
+export default function UserConfig() {
+  const userId = useStore((state) => state.userId);
   const userRol = useStore((state) => state.userRol);
 
   return (
-    <div className="container mx-auto flex justify-center items-center">
-      <Tabs defaultValue="usuario" className="w-full">
+    <div className="container mx-auto py-6 px-4 md:px-8 max-w-7xl">
+      <Tabs defaultValue="usuario" className="w-full space-y-6">
         <div className="flex justify-center">
-          <TabsList className="w-full max-w-4xl flex justify-center space-x-4">
-            <TabsTrigger value="usuario" className="flex-1 text-center">
-              Mi usuario
-            </TabsTrigger>
-            <TabsTrigger value="usuarios" className="flex-1 text-center">
-              Usuarios
-            </TabsTrigger>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="usuario">Mi Usuario</TabsTrigger>
+            <TabsTrigger value="usuarios">Gestión Usuarios</TabsTrigger>
           </TabsList>
         </div>
-        <TabsContent value="usuario">
-          <Card className="w-full max-w-4xl mx-auto shadow-xl">
-            <CardHeader>
-              <CardTitle className="text-center">
-                Editar Mi Usuario {user.nombre ? user.nombre : ""}
-              </CardTitle>
-              <CardDescription className="text-center">
-                Actualiza tu información personal.
-              </CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <CardContent className="space-y-4">
-                {/* Información personal */}
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="nombre">Nombre</Label>
-                    <Input
-                      id="nombre"
-                      name="nombre"
-                      type="text"
-                      value={user.nombre || ""}
-                      onChange={handleChangeInputs}
-                      placeholder="Ingresa tu nombre"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="correo">Correo</Label>
-                    <Input
-                      id="correo"
-                      name="correo"
-                      type="text"
-                      value={user.correo || ""}
-                      onChange={handleChangeInputs}
-                      placeholder="Ingresa tu correo"
-                    />
-                  </div>
-                </div>
-                {/* Cambio de contraseña */}
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="contrasena">Nueva Contraseña</Label>
-                    <Input
-                      id="contrasena"
-                      name="contrasena"
-                      type="password"
-                      value={user.contrasena || ""}
-                      onChange={handleChangeInputs}
-                      placeholder="Ingresa tu nueva contraseña"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="contrasenaConfirm">
-                      Confirmar Contraseña
-                    </Label>
-                    <Input
-                      id="contrasenaConfirm"
-                      name="contrasenaConfirm"
-                      type="password"
-                      value={user.contrasenaConfirm || ""}
-                      onChange={handleChangeInputs}
-                      placeholder="Confirma con tu contraseña de administrador"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end space-x-4">
-                <Button
-                  className="w-full"
-                  type="button"
-                  variant="default"
-                  onClick={() => setCloseConfirm(true)}
-                >
-                  Actualizar
-                </Button>
-              </CardFooter>
-            </form>
-            {/* Diálogo de confirmación */}
-            <Dialog open={closeConfirm} onOpenChange={setCloseConfirm}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle className="text-center">
-                    Confirmar Actualización
-                  </DialogTitle>
-                  <DialogDescription className="text-center">
-                    ¿Estás seguro de actualizar tu información?
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter className="flex space-x-4">
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={() => setCloseConfirm(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    className="w-full"
-                    type="button"
-                    onClick={handleSubmit}
-                  >
-                    Confirmar
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </Card>
+
+        <TabsContent
+          value="usuario"
+          className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+        >
+          <MyProfileForm userId={userId} />
         </TabsContent>
-        <TabsContent value="usuarios">
-          <div className="container mx-auto p-4">
-            <h1 className="text-2xl font-bold mb-4">Lista de Usuarios</h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {users &&
-                users.map((usuario) => (
-                  <div
-                    key={usuario.id}
-                    className="bg-white dark:bg-transparent shadow-md rounded-lg p-6 mb-4 flex flex-col gap-3 border-4"
-                  >
-                    <h2 className="text-xl font-semibold flex items-center gap-2">
-                      <UserIcon className="" />
-                      {usuario.nombre}
-                    </h2>
-                    <p className="text-gray-600 flex items-center gap-2">
-                      <AtSign className="" />
-                      <span className="font-medium">Correo:</span>{" "}
-                      {usuario.correo}
-                    </p>
-                    <p className="text-gray-600 flex items-center gap-2">
-                      <Building className="" />
-                      <span className="font-medium">Sucursal:</span>{" "}
-                      {usuario.sucursal.nombre}
-                    </p>
-                    <p className="text-gray-600 flex items-center gap-2">
-                      <ChartNoAxesColumn className="" />
-                      <span className="font-medium">Total Ventas:</span>{" "}
-                      {usuario.totalVentas}
-                    </p>
-                    <p className="text-gray-600 flex items-center gap-2">
-                      <ToggleLeft className="" />
-                      <span className="font-medium">Activo:</span>{" "}
-                      {usuario.activo == true ? "Activo" : "Desactivado"}
-                    </p>
-                    <p className="text-gray-600 flex items-center gap-2">
-                      <Ghost className="" />
-                      <span className="font-medium">Rol:</span> {usuario.rol}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        disabled={userRol !== "SUPER_ADMIN"}
-                        className="w-full"
-                        variant={"destructive"}
-                      >
-                        Eliminar
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setUserEdit({
-                            activo: usuario.activo,
-                            correo: usuario.correo,
-                            id: usuario.id,
-                            nombre: usuario.nombre,
-                            rol: usuario.rol,
-                          });
-                          setOpenEdit(true);
-                        }}
-                        className="w-full"
-                        variant={"default"}
-                      >
-                        Editar
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-            <Dialog onOpenChange={setOpenEdit} open={openEdit}>
-              <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle className="text-center">
-                    Editar Usuario {userEdit.nombre}
-                  </DialogTitle>
-                  <DialogDescription className="text-center">
-                    Editar mis usuarios en las sucursales
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="nombre" className="text-right">
-                      Nombre
-                    </Label>
-                    <Input
-                      name="nombre"
-                      onChange={handleChangeEditUser}
-                      id="nombre"
-                      value={userEdit.nombre}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="correo" className="text-right">
-                      Correo
-                    </Label>
-                    <Input
-                      name="correo"
-                      onChange={handleChangeEditUser}
-                      id="correo"
-                      value={userEdit.correo}
-                      className="col-span-3"
-                    />
-                  </div>
 
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="contrasena" className="text-right">
-                      Nueva contraseña
-                    </Label>
-                    <Input
-                      onChange={handleChangeEditUser}
-                      id="contrasena"
-                      name="contrasena"
-                      type="password"
-                      value={userEdit.contrasena}
-                      className="col-span-3"
-                    />
-                  </div>
-
-                  {userRol === "SUPER_ADMIN" ? (
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="activo" className="text-right">
-                        Activo
-                      </Label>
-                      <Switch
-                        id="activo"
-                        checked={userEdit.activo}
-                        onCheckedChange={() => handleToggleEditActivo("activo")}
-                      />
-                    </div>
-                  ) : null}
-
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="contrasenaConfirm" className="text-right">
-                      Confirmar contraseña de administrador
-                    </Label>
-                    <Input
-                      onChange={handleChangeEditUser}
-                      id="contrasenaConfirm"
-                      name="contrasenaConfirm"
-                      type="password"
-                      placeholder="Ingrese su contraseña como administrador para confirmar los cambios"
-                      value={userEdit.contrasenaConfirm}
-                      className="col-span-3"
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    className="w-full"
-                    type="button"
-                    onClick={handleSubmitEditUser}
-                  >
-                    Guardar cambios
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
+        <TabsContent
+          value="usuarios"
+          className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+        >
+          <UsersGrid currentUserRol={userRol} currentUserId={userId} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
-
-export default UserConfig;
